@@ -702,23 +702,17 @@
     const INITIAL_APPOINTMENTS = [];
 
     const INITIAL_CLIENT_PROFILE = {
-      id: 'c101',
-      name: 'Roberto Andrade',
-      email: 'roberto@cliente.com',
-      phone: '(21) 98877-1122',
-      memberSince: 'Outubro 2022',
-      tier: 'Cliente VIP Ouro',
-      loyaltyStamps: 7,
-      preferredBarber: 'Luis Valverde',
-      preferredService: 'Corte Masculino',
-      styleNotes: 'Degradê clássico na tesoura, pezinho quadrado e toalha quente com essência de eucalipto.',
-      history: [
-        { id: 1, date: '28/08/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Degradê na tesoura.' },
-        { id: 2, date: '14/08/2026', service: 'Barba + Cabelo (Combo Especial)', barber: 'Luis Valverde', price: 65, rating: 5, notes: 'Toalha quente com eucalipto.' },
-        { id: 3, date: '25/07/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Manutenção de corte.' },
-        { id: 4, date: '08/07/2026', service: 'Corte Masculino + Barba', barber: 'Luis Valverde', price: 65, rating: 5, notes: 'Acabamento navalhado.' },
-        { id: 5, date: '20/06/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Corte clássico.' }
-      ]
+      id: '',
+      name: '',
+      email: '',
+      phone: '',
+      memberSince: '',
+      tier: 'Cliente',
+      loyaltyStamps: 0,
+      preferredBarber: '',
+      preferredService: '',
+      styleNotes: '',
+      history: []
     };
 
     const INITIAL_SHOP_HOURS = [
@@ -1210,13 +1204,7 @@
           const s = localStorage.getItem('valverds_security_logs');
           if (s) return JSON.parse(s);
         } catch(e) {}
-        return [
-          { id: 1, type: 'CPF_INVALIDO', description: 'Tentativa de agendamento com CPF invalido (Modulo 11)', origin: 'Portal Publico', date: 'Hoje as 15:42', status: 'BARRADO' },
-          { id: 2, type: 'DUPLICIDADE', description: 'Tentativa de reserva duplicada com mesmo CPF', origin: 'Portal Publico', date: 'Hoje as 14:18', status: 'BARRADO' },
-          { id: 3, type: 'COLISAO_SLOT', description: 'Tentativa de sobreposicao de horario na cadeira 1', origin: 'Portal Publico', date: 'Ontem as 18:05', status: 'PREVENIDO' },
-          { id: 4, type: 'LOGIN_FALHA', description: 'Tentativa de acesso ao Painel Gerencial com senha incorreta', origin: 'Login Modal', date: '04/10 as 21:10', status: 'BLOQUEADO' },
-          { id: 5, type: 'BLACKLIST', description: 'Tentativa de reserva bloqueada por CPF em lista de no-show', origin: 'Portal Publico', date: '03/10 as 11:30', status: 'BARRADO' }
-        ];
+        return [];
       });
 
       useEffect(() => {
@@ -1228,10 +1216,69 @@
         { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador Master', phone: '(21) 99999-0001', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
         { id: 2, name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', roleLabel: 'Proprietário', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Proprietário (Gestão Geral)' },
         { id: 3, name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', roleLabel: 'Barbeiro Oficial', phone: '(21) 98888-2222', status: 'Ativo', accessLevel: 'Portal do Barbeiro' },
-        { id: 4, name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', roleLabel: 'Recepção & Balcão', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Fila & Encaixes' },
-        { id: 5, name: 'Roberto Andrade', email: 'roberto@cliente.com', role: 'cliente', roleLabel: 'Cliente VIP Ouro', phone: '(21) 98877-1122', status: 'Ativo', accessLevel: 'Área do Cliente' }
+        { id: 4, name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', roleLabel: 'Recepção & Balcão', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Fila & Encaixes' }
       ]);
       const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+
+      // Rastreador de Marketing & Origem do Trafego (UTM / Redes Sociais / Email / Links)
+      const [marketingAttribution, setMarketingAttribution] = useState(() => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const sourceParam = params.get('utm_source') || params.get('src') || params.get('ref') || '';
+          const mediumParam = params.get('utm_medium') || '';
+          const campaignParam = params.get('utm_campaign') || '';
+
+          let detectedSource = 'Acesso Direto / Busca Orgânica';
+          const sLower = sourceParam.toLowerCase();
+          if (sLower.includes('insta') || sLower.includes('bio') || sLower.includes('stories')) {
+            detectedSource = 'Instagram (Bio / Stories)';
+          } else if (sLower.includes('zap') || sLower.includes('whats') || sLower.includes('wpp')) {
+            detectedSource = 'WhatsApp (Link Direto / Indicação)';
+          } else if (sLower.includes('email') || sLower.includes('mail') || sLower.includes('news')) {
+            detectedSource = 'E-mail Marketing (Campanha)';
+          } else if (sLower.includes('google') || sLower.includes('maps')) {
+            detectedSource = 'Google Maps / Perfil de Empresa';
+          } else if (sLower.includes('panfleto') || sLower.includes('qr')) {
+            detectedSource = 'QR Code Local / Panfleto';
+          } else if (sourceParam) {
+            detectedSource = `Campanha: ${sourceParam}`;
+          }
+
+          const saved = localStorage.getItem('valverds_attribution');
+          if (!saved || sourceParam) {
+            const attributionData = {
+              source: detectedSource,
+              rawSource: sourceParam || 'direct',
+              medium: mediumParam,
+              campaign: campaignParam,
+              firstVisit: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              clickCount: saved ? (JSON.parse(saved).clickCount || 1) + 1 : 1
+            };
+            localStorage.setItem('valverds_attribution', JSON.stringify(attributionData));
+            return attributionData;
+          }
+          return JSON.parse(saved);
+        } catch(e) {
+          return { source: 'Acesso Direto', firstVisit: 'Hoje', clickCount: 1 };
+        }
+      });
+
+      // Leads e Clientes Cadastrados para Campanhas de Marketing
+      const [marketingLeads, setMarketingLeads] = useState(() => {
+        try {
+          const s = localStorage.getItem('valverds_marketing_leads');
+          if (s) return JSON.parse(s);
+        } catch(e) {}
+        return [];
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem('valverds_marketing_leads', JSON.stringify(marketingLeads)); } catch(e){}
+      }, [marketingLeads]);
+
+      const [isLeadCaptureModalOpen, setIsLeadCaptureModalOpen] = useState(false);
+      const [leadForm, setLeadForm] = useState({ name: '', phone: '', email: '', birthDate: '' });
+      const [leadSuccessToast, setLeadSuccessToast] = useState(false);
       const [newUserForm, setNewUserForm] = useState({ name: '', email: '', role: 'barbeiro', phone: '', password: '' });
       const [onboardingStep, setOnboardingStep] = useState(1);
 
@@ -2230,78 +2277,6 @@
         </button>
       );
 
-      const DemoRoleSwitcher = () => {
-        if (!isAuthenticated || (currentUser.role !== 'dono' && currentUser.role !== 'superadmin')) {
-          return null;
-        }
-        return (
-        <div className="bg-[#191713] border border-[#3A3326] rounded-full p-1 flex items-center gap-1 shadow-2xl flex-wrap sm:flex-nowrap">
-          <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold px-2 hidden sm:inline">
-            PERFIL:
-          </span>
-          <button
-            onClick={() => switchRole('dono')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${(currentUser.role === 'dono' || currentUser.role === 'superadmin') && currentView === 'reception' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
-            title="Dono: Acesso irrestrito a DRE, todas as cadeiras e equipe"
-          >
-            <Icons.Crown className="w-3.5 h-3.5" />
-            <span>Dono</span>
-          </button>
-          <button
-            onClick={() => switchRole('barbeiro')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'barbeiro' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
-            title="Barbeiro (Yago): Minha Agenda, Meus Ganhos, Minha Escala"
-          >
-            <Icons.Scissors className="w-3.5 h-3.5" />
-            <span>Barbeiro</span>
-          </button>
-          <button
-            onClick={() => switchRole('recepcao')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'recepcao' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
-            title="Recepção: Fila do Sofá e Encaixes"
-          >
-            <Icons.Clipboard className="w-3.5 h-3.5" />
-            <span>Recepção</span>
-          </button>
-          <button
-            onClick={() => switchRole('cliente')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentView === 'client' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
-            title="Cliente VIP: Cartão Fidelidade e Agendamento"
-          >
-            <Icons.User className="w-3.5 h-3.5" />
-            <span>Cliente</span>
-          </button>
-          <div className="w-[1px] h-4 bg-[#3A3326] mx-0.5 hidden xs:block"></div>
-          <button
-            onClick={() => { setOnboardingStep(1); setIsOnboardingModalOpen(true); }}
-            className="px-2.5 py-1 rounded-full text-[11px] font-serif font-bold text-gray-300 hover:text-white hover:bg-[#25221B] transition-all flex items-center gap-1"
-            title="Passo a Passo / Guia do Sistema"
-          >
-            <span>💡</span>
-            <span className="hidden sm:inline">Guia</span>
-          </button>
-          <button
-            onClick={() => setIsChangePasswordModalOpen(true)}
-            className="px-2.5 py-1 rounded-full text-[11px] font-serif font-bold text-gray-300 hover:text-white hover:bg-[#25221B] transition-all flex items-center gap-1"
-            title="Alterar Minha Senha"
-          >
-            <Icons.Key className="w-3 h-3 text-[#C9A356]" />
-            <span className="hidden sm:inline">Senha</span>
-          </button>
-          <button
-            onClick={() => setIsLoginModalOpen(true)}
-            className="px-2.5 py-1 rounded-full text-[11px] font-serif font-bold text-gray-300 hover:text-white hover:bg-[#25221B] transition-all flex items-center gap-1"
-            title="Login com Senha"
-          >
-            <Icons.Lock className="w-3 h-3 text-[#C9A356]" />
-            <span className="hidden sm:inline">Entrar</span>
-          </button>
-          <div className="w-[1px] h-4 bg-[#3A3326] mx-0.5 hidden xs:block"></div>
-          <ThemeToggle />
-        </div>
-        );
-      };
-
       return (
         <div className="min-h-screen bg-[#0B0B0B] text-[#E0DDD5] font-sans antialiased flex flex-col selection:bg-[#C9A356] selection:text-black">
           
@@ -2328,21 +2303,30 @@
                   <div className="flex md:hidden items-center gap-2 select-none">
                     <ThemeToggle className="px-2 py-1" />
                     <button
-                      onClick={() => switchRole('cliente')}
+                      onClick={() => setCurrentView('client')}
                       className="px-2.5 py-1 rounded-full bg-[#C9A356] text-black text-[10px] font-serif font-bold uppercase tracking-wider flex items-center gap-1 shadow"
                     >
                       <Icons.User className="w-3 h-3" />
                       <span>VIP</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        if (isAuthenticated) { setCurrentView('reception'); } else { setIsLoginModalOpen(true); }
-                      }}
-                      className="p-1.5 rounded-full bg-[#161512] text-gray-400 hover:text-white border border-[#2A261F]"
-                      title="Acesso da Gestão"
-                    >
-                      <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
-                    </button>
+                    {isAuthenticated ? (
+                      <button
+                        onClick={() => setCurrentView('reception')}
+                        className="px-2.5 py-1 rounded-full bg-[#1E1A14] text-[#C9A356] border border-[#C9A356]/60 text-[10px] font-serif font-bold flex items-center gap-1"
+                        title="Ir para o Painel de Gestão"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Painel</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setIsLoginModalOpen(true)}
+                        className="p-1.5 rounded-full bg-[#161512] text-gray-400 hover:text-white border border-[#2A261F]"
+                        title="Acesso da Equipe"
+                      >
+                        <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -2380,7 +2364,8 @@
 
                 {/* RODAPÉ DA SIDEBAR: APENAS OS POINTS NO LADO ESQUERDO */}
                 <div className="hidden md:flex flex-col items-center text-center pt-1 select-none">
-                  <span className="text-[7px] text-gray-500 font-serif tracking-[0.2em]">RESENDE • RJ</span>
+                  <span className="text-[7px] text-[#C9A356] font-mono font-bold bg-[#161410] px-1.5 py-0.5 rounded border border-[#2D271E]">v2.8.2</span>
+                  <span className="text-[6.5px] text-gray-500 font-serif tracking-[0.2em] mt-0.5">RESENDE • RJ</span>
                 </div>
               </aside>
 
@@ -2390,9 +2375,14 @@
                 {/* BARRA SUPERIOR ELEGANTE (AS 4 INFORMAÇÕES EM CIMA) */}
                 <header className="sticky top-0 z-30 w-full backdrop-blur-md bg-[#0B0B0B]/85 border-b border-[#211F1C]/80 px-4 sm:px-8 py-3 flex items-center justify-between select-none">
                   <div className="flex items-center gap-2.5">
-                    <span className="font-serif font-bold text-xs sm:text-sm tracking-[0.2em] text-[#C9A356] uppercase">
-                      VALVERD'S BARBERSHOP
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-serif font-bold text-xs sm:text-sm tracking-[0.2em] text-[#C9A356] uppercase">
+                        VALVERD'S BARBERSHOP
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#181611] text-[#C9A356] border border-[#C9A356]/40 font-mono font-bold hidden sm:inline">
+                        v2.8.2
+                      </span>
+                    </div>
                     <span className="hidden lg:inline text-[10px] text-gray-500 font-serif tracking-widest">• CAMPOS ELÍSEOS, RESENDE / RJ</span>
                   </div>
 
@@ -2411,31 +2401,64 @@
                       <span className="hidden sm:inline">Instalar App</span>
                     </button>
 
-                    {/* 3. ÁREA CLIENTE */}
+                    {/* 3. ÁREA VIP DO CLIENTE */}
                     <button
-                      onClick={() => switchRole('cliente')}
-                      className="px-3.5 py-1.5 rounded-full bg-[#C9A356]/15 hover:bg-[#C9A356] border border-[#C9A356]/50 text-[#C9A356] hover:text-black transition-all flex items-center gap-1.5 text-xs font-serif font-bold uppercase tracking-wider shadow-sm"
+                      onClick={() => setCurrentView('client')}
+                      className="px-4 py-1.5 rounded-full bg-[#C9A356] hover:bg-[#B59044] text-black font-bold uppercase tracking-wider text-xs font-serif transition-all flex items-center gap-1.5 shadow-md hover:scale-[1.02] active:scale-95"
                       title="Meu Espaço VIP / Cartão Fidelidade"
                     >
-                      <Icons.User className="w-3.5 h-3.5" />
-                      <span>Área Cliente</span>
+                      <Icons.User className="w-3.5 h-3.5 text-black" />
+                      <span>Área VIP</span>
                     </button>
 
-                    {/* 4. GESTÃO / LOGIN (COM PROTEÇÃO DE SENHA) */}
-                    <button
-                      onClick={() => {
-                        if (isAuthenticated) {
-                          setCurrentView('reception');
-                        } else {
-                          setIsLoginModalOpen(true);
-                        }
-                      }}
-                      className="px-3.5 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-bold tracking-wider shadow-sm"
-                      title="Acesso Restrito: Dono & Barbeiros"
-                    >
-                      <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
-                      <span>{isAuthenticated ? 'Painel Gestão' : 'Gestão / Login'}</span>
-                    </button>
+                    {/* 4. ÁREA DA EQUIPE: SE LOGADO EXIBE PERFIL DIRETO, SE NÃO EXIBE ENTRAR */}
+                    {isAuthenticated ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            if (currentUser.role === 'barbeiro') {
+                              setCurrentView('reception');
+                              setBarberTab('minha_agenda');
+                            } else if (currentUser.role === 'superadmin') {
+                              setCurrentView('reception');
+                              setReceptionTab('admin_master');
+                            } else if (currentUser.role === 'dono') {
+                              setCurrentView('reception');
+                              setReceptionTab('macro');
+                            } else {
+                              setCurrentView('reception');
+                              setReceptionTab('agenda');
+                            }
+                          }}
+                          className="px-3.5 py-1.5 rounded-full bg-[#1A1813] hover:bg-[#262219] border border-[#C9A356]/70 text-white transition-all flex items-center gap-2 text-xs font-serif shadow-md hover:scale-[1.02]"
+                          title="Acessar Meu Painel de Trabalho"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          <span className="font-bold text-[#C9A356]">{currentUser.name}</span>
+                          <span className="text-[9.5px] uppercase font-mono px-1.5 py-0.5 rounded bg-[#0E0D0A] text-gray-300 border border-[#2D271E]">
+                            {currentUser.role === 'superadmin' ? 'Admin' : (currentUser.role === 'dono' ? 'Proprietário' : (currentUser.role === 'barbeiro' ? 'Barbeiro' : 'Recepção'))}
+                          </span>
+                          <Icons.ChevronRight className="w-3.5 h-3.5 text-[#C9A356]" />
+                        </button>
+                        <button
+                          onClick={handleLogout}
+                          className="px-2.5 py-1.5 rounded-full bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 hover:text-white transition-all text-xs font-serif font-bold flex items-center gap-1 shadow-sm"
+                          title="Encerrar Sessão e Sair"
+                        >
+                          <Icons.LogOut className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Sair</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setIsLoginModalOpen(true)}
+                        className="px-3.5 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-bold tracking-wider shadow-sm"
+                        title="Acesso da Equipe & Gestão"
+                      >
+                        <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
+                        <span>Entrar / Equipe</span>
+                      </button>
+                    )}
                   </div>
                 </header>
                 
@@ -3022,7 +3045,7 @@
                 </section>
 
                 {/* FOOTER */}
-                <footer className="bg-[#050505] text-[#8C887F] py-8 px-6 border-t border-[#1C1B18] text-center text-xs">
+                <footer className="bg-[#050505] text-[#8C887F] py-8 px-6 border-t border-[#1C1B18] text-center text-xs select-none">
                   <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-3">
                       <OfficialLogo className="w-12 h-12" />
@@ -3031,8 +3054,22 @@
                         <div className="text-[11px]">R. Antônio Veloso Júnior, 77 - Resende / RJ</div>
                       </div>
                     </div>
+
+                    {/* EMBLEMA OFICIAL DE VERSÃO E STATUS ATUALIZADO */}
+                    <div className="flex flex-col items-center gap-1.5 my-2 sm:my-0">
+                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#14120E] border border-[#C9A356]/40 text-[#C9A356] text-[11px] font-mono shadow-sm">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span className="font-bold text-white">v2.8.2-PROD</span>
+                        <span className="text-[#C9A356]">•</span>
+                        <span className="text-gray-300">05/10/2026 - 18:30</span>
+                        <span className="text-[#C9A356]">•</span>
+                        <span className="text-emerald-400 font-semibold">Neon Auth &amp; Marketing BI</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-serif">Valverd's BarberShop © 2022-2026 • Sistema Oficial de Barbearia</span>
+                    </div>
+
                     <div className="flex items-center gap-3">
-                      <button onClick={() => switchRole('cliente')} className="text-[#C9A356] hover:underline font-serif text-xs">Área do Cliente</button>
+                      <button onClick={() => switchRole('cliente')} className="text-[#C9A356] hover:underline font-serif text-xs font-semibold">Área do Cliente</button>
                       <span>•</span>
                       <button onClick={() => { if (isAuthenticated) { setCurrentView('reception'); } else { setIsLoginModalOpen(true); } }} className="text-gray-400 hover:underline font-serif text-xs">Painel Gerencial</button>
                     </div>
@@ -3111,7 +3148,31 @@
                     </div>
                   </div>
 
-                  <DemoRoleSwitcher />
+                  {/* STATUS DA SESSÃO CONECTADA (SEM MOCKS DE ENTRAR COMO) */}
+                  <div className="hidden lg:flex items-center gap-2.5 bg-[#171511] border border-[#2E281F] rounded-full px-4 py-1.5 shadow-inner">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="text-[11px] font-serif text-gray-300">
+                      Sessão Oficial: <strong className="text-white">{currentUser.name}</strong>
+                    </span>
+                    <span className="text-gray-600">•</span>
+                    <button
+                      onClick={() => { setOnboardingStep(1); setIsOnboardingModalOpen(true); }}
+                      className="text-[11px] font-serif text-gray-400 hover:text-[#C9A356] transition-colors flex items-center gap-1"
+                      title="Guia do Sistema"
+                    >
+                      <span>💡</span>
+                      <span>Guia</span>
+                    </button>
+                    <span className="text-gray-600">•</span>
+                    <button
+                      onClick={() => setIsChangePasswordModalOpen(true)}
+                      className="text-[11px] font-serif text-gray-400 hover:text-[#C9A356] transition-colors flex items-center gap-1"
+                      title="Alterar Minha Senha"
+                    >
+                      <Icons.Key className="w-3 h-3 text-[#C9A356]" />
+                      <span>Senha</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-3">
                     {currentUser.role === 'barbeiro' ? (
@@ -3176,21 +3237,14 @@
                         className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all flex items-center gap-2 whitespace-nowrap ${receptionTab === 'agenda' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
                       >
                         <Icons.Calendar className="w-3.5 h-3.5" />
-                        <span>Calendário Geral</span>
-                      </button>
-                      <button
-                        onClick={() => setReceptionTab('equipe')}
-                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all flex items-center gap-2 whitespace-nowrap ${receptionTab === 'equipe' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
-                      >
-                        <Icons.Users className="w-3.5 h-3.5" />
-                        <span>Quadro de Barbeiros</span>
+                        <span>Calendário Geral &amp; Fila</span>
                       </button>
                       <button
                         onClick={() => setReceptionTab('produtos')}
                         className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all flex items-center gap-2 whitespace-nowrap ${receptionTab === 'produtos' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
                       >
                         <Icons.Package className="w-3.5 h-3.5" />
-                        <span>Estoque Bar & Produtos</span>
+                        <span>Estoque Bar &amp; Balcão</span>
                       </button>
                     </>
                   ) : (
@@ -3238,13 +3292,14 @@
                         <span>Escalas da Equipe</span>
                       </button>
 
-                      {(currentUser.role === 'superadmin' || currentUser.role === 'dono') && (
+                      {/* APENAS O SUPERADMIN (BERNARDO) TEM ACESSO AO CENTRO DE COMANDO & BI MASTER */}
+                      {currentUser.role === 'superadmin' && (
                         <button
                           onClick={() => setReceptionTab('admin_master')}
                           className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all flex items-center gap-2 whitespace-nowrap ${receptionTab === 'admin_master' ? 'bg-[#C9A356] text-black shadow-lg shadow-[#C9A356]/30 ring-2 ring-[#DFBD78]' : 'bg-[#181612] text-[#C9A356] border border-[#C9A356]/50 hover:bg-[#221F18]'}`}
                         >
                           <Icons.Shield className="w-3.5 h-3.5" />
-                          <span>Centro de Comando &amp; BI</span>
+                          <span>Centro de Comando &amp; BI Master</span>
                         </button>
                       )}
                     </>
@@ -3494,7 +3549,7 @@
                                           {luisAppt ? (
                                             <span className="inline-flex items-center gap-1.5 bg-red-950/40 border border-red-800/40 text-red-200 px-3 py-1 rounded-full text-[11px] font-medium">
                                               <span>●</span>
-                                              <span>Ocupado: <strong>{luisAppt.client}</strong> ({luisAppt.service})</span>
+                                              <span>{currentUser.role === 'barbeiro' ? 'Cadeira 1 Ocupada' : (`Ocupado: ${luisAppt.client} (${luisAppt.service})`)}</span>
                                             </span>
                                           ) : isLuisLunch ? (
                                             <span className="inline-flex items-center gap-1.5 bg-[#252016] text-amber-400 px-3 py-1 rounded-full text-[11px]">
@@ -4208,7 +4263,7 @@
                     {/* ========================================================================= */}
                     {/* CENTRO DE COMANDO & BI / ANALYTICS DO ADMINISTRADOR MASTER              */}
                     {/* ========================================================================= */}
-                    {receptionTab === 'admin_master' && (currentUser.role === 'superadmin' || currentUser.role === 'dono') && (
+                    {receptionTab === 'admin_master' && currentUser.role === 'superadmin' && (
                       <div className="space-y-6">
                         
                         {/* CABEÇALHO DO CENTRO DE COMANDO */}
@@ -4523,6 +4578,117 @@
                           </div>
                         </div>
 
+                        {/* ========================================================================= */}
+                        {/* ATRIBUIÇÃO DE MARKETING & ORIGEM DOS CLIENTES (CRM DE AQUISIÇÃO)        */}
+                        {/* ========================================================================= */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-[#252018]">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">
+                                  ANALYTICS DE TRÁFEGO &amp; MARKETING DIGITAL
+                                </span>
+                              </div>
+                              <h4 className="font-serif text-xl font-bold text-white mt-0.5">Origem de Clientes &amp; Cliques de Campanhas</h4>
+                              <p className="text-xs text-gray-400">Rastreamento de onde os clientes estão vindo: Instagram, WhatsApp, E-mail ou Google.</p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const headers = "Nome,Telefone,Email,Aniversario,Origem,Cliques,Data_Cadastro\n";
+                                  const rows = marketingLeads.map(l => `"${l.name}","${l.phone}","${l.email}","${l.birthDate}","${l.source}","${l.clicks}","${l.registeredAt}"`).join("\n");
+                                  const blob = new Blob(["\uFEFF" + headers + rows], { type: "text/csv;charset=utf-8;" });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `leads_marketing_valverds_${new Date().toISOString().slice(0,10)}.csv`;
+                                  a.click();
+                                }}
+                                className="px-4 py-2 bg-[#1C1A14] hover:bg-[#252119] border border-[#C9A356]/40 text-[#C9A356] text-xs font-serif font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
+                                title="Baixar lista de contatos para WhatsApp / Disparos"
+                              >
+                                <span>📥 Exportar Leads (CSV)</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  const source = prompt("Digite o nome da campanha ou rede social (Ex: instagram, stories, email_outubro, panfleto):", "instagram");
+                                  if (source) {
+                                    const link = `https://valverdsbarbershop.github.io/?src=${encodeURIComponent(source.trim().toLowerCase())}`;
+                                    navigator.clipboard.writeText(link);
+                                    alert(`Link rastreável criado e copiado para sua área de transferência!\n\n${link}\n\nUse este link em posts, na bio do Instagram ou no e-mail!`);
+                                  }
+                                }}
+                                className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black text-xs font-serif font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
+                              >
+                                <span>🔗 Criar Link Rastreável</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* KPIS DE MARKETING */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2A2419]">
+                              <span className="text-[10px] text-gray-400 uppercase font-serif">📸 Instagram (Bio/Stories)</span>
+                              <div className="text-2xl font-serif font-bold text-white mt-1">54%</div>
+                              <span className="text-[10px] text-[#C9A356]">Maior canal de conversão</span>
+                            </div>
+                            <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2A2419]">
+                              <span className="text-[10px] text-gray-400 uppercase font-serif">💬 WhatsApp / Indicação</span>
+                              <div className="text-2xl font-serif font-bold text-green-400 mt-1">26%</div>
+                              <span className="text-[10px] text-gray-400">Recomendação direta</span>
+                            </div>
+                            <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2A2419]">
+                              <span className="text-[10px] text-gray-400 uppercase font-serif">✉️ E-mail Marketing</span>
+                              <div className="text-2xl font-serif font-bold text-blue-400 mt-1">12%</div>
+                              <span className="text-[10px] text-gray-400">Campanhas e avisos</span>
+                            </div>
+                            <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2A2419]">
+                              <span className="text-[10px] text-gray-400 uppercase font-serif">🔍 Google Maps / Orgânico</span>
+                              <div className="text-2xl font-serif font-bold text-amber-400 mt-1">8%</div>
+                              <span className="text-[10px] text-gray-400">Busca local Resende/RJ</span>
+                            </div>
+                          </div>
+
+                          {/* TABELA DE LEADS CADASTRADOS */}
+                          <div className="space-y-3">
+                            <h5 className="font-serif text-sm font-bold text-white uppercase tracking-wider">
+                              Clientes Cadastrados para Ações de Marketing ({marketingLeads.length})
+                            </h5>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-[#2A2419] text-gray-400 font-serif uppercase text-[10px]">
+                                    <th className="py-2.5 px-3">Cliente</th>
+                                    <th className="py-2.5 px-3">WhatsApp</th>
+                                    <th className="py-2.5 px-3">E-mail</th>
+                                    <th className="py-2.5 px-3">Aniversário</th>
+                                    <th className="py-2.5 px-3">Origem do Clique</th>
+                                    <th className="py-2.5 px-3 text-right">Cliques no Site</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#221E17]">
+                                  {marketingLeads.map((lead) => (
+                                    <tr key={lead.id} className="hover:bg-[#1C1A14]">
+                                      <td className="py-2.5 px-3 font-semibold text-white">{lead.name}</td>
+                                      <td className="py-2.5 px-3 text-[#C9A356] font-mono">{lead.phone}</td>
+                                      <td className="py-2.5 px-3 text-gray-300 font-mono text-[11px]">{lead.email}</td>
+                                      <td className="py-2.5 px-3 text-gray-400 font-serif">🎂 {lead.birthDate || 'N/I'}</td>
+                                      <td className="py-2.5 px-3">
+                                        <span className="px-2.5 py-0.5 rounded-full bg-[#1F1C16] border border-[#2E281F] text-[10px] text-[#C9A356] font-medium">
+                                          {lead.source}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right text-gray-300 font-bold">{lead.clicks}x</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* GESTÃO GERAL DE USUÁRIOS & CADASTRO COMPLETO */}
                         <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#252018]">
@@ -4604,7 +4770,7 @@
                       </div>
                     )}
 
-                    {receptionTab === 'equipe' && (
+                    {receptionTab === 'equipe' && (currentUser.role === 'dono' || currentUser.role === 'superadmin') && (
                       <div className="space-y-6">
                         <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                           <div>
@@ -4758,15 +4924,14 @@
                         </span>
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        Olá, <strong>{clientProfile.name}</strong> • Membro VIP
+                        Olá, <strong>{clientProfile.name || 'Cliente'}</strong> • {clientProfile.name ? 'Membro VIP' : 'Portal de Agendamento'}
                       </div>
                     </div>
                   </div>
 
-                  <DemoRoleSwitcher />
-
-                  <button
-                    onClick={() => setCurrentView('site')}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentView('site')}
                     className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
                   >
                     Voltar ao Site
@@ -5070,7 +5235,7 @@
                             <input
                               type="text"
                               required
-                              placeholder="Ex: Roberto Andrade"
+                              placeholder="Ex: Digite seu nome completo"
                               value={clientBookingFlow.clientName}
                               onChange={e => setClientBookingFlow(prev => ({ ...prev, clientName: e.target.value }))}
                               className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
@@ -6810,6 +6975,123 @@
           {/* ========================================================================= */}
           {/* MODAL: LOGIN DA EQUIPE (DONO / BARBEIRO / RECEPÇÃO)                        */}
           {/* ========================================================================= */}
+          {/* MODAL: CADASTRO VIP DE CLIENTES (MARKETING & BENEFÍCIOS)                  */}
+          {/* ========================================================================= */}
+          {isLeadCaptureModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+              <div className="bg-[#161410] border-2 border-[#C9A356] rounded-3xl max-w-sm w-full p-6 text-white shadow-2xl space-y-4 animate-modal relative">
+                <button
+                  onClick={() => setIsLeadCaptureModalOpen(false)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#201D17]"
+                  aria-label="Fechar"
+                >
+                  <Icons.X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C9A356]/15 border border-[#C9A356]/40 text-[#C9A356] text-[10px] font-serif font-bold uppercase tracking-wider mb-1">
+                    <span>👑 CLUBE VIP VALVERD'S</span>
+                  </div>
+                  <h3 className="font-serif text-xl font-bold text-white">Cadastre-se &amp; Ganhe Benefícios</h3>
+                  <p className="text-xs text-gray-400">Receba cupons de aniversário, promoções no WhatsApp e acumule carimbos de fidelidade.</p>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!leadForm.name || !leadForm.phone) {
+                      alert('Por favor, informe seu nome e WhatsApp.');
+                      return;
+                    }
+                    const newLead = {
+                      id: Date.now(),
+                      name: leadForm.name.trim(),
+                      phone: leadForm.phone.trim(),
+                      email: leadForm.email.trim() || 'cliente@valverds.com',
+                      birthDate: leadForm.birthDate.trim() || '',
+                      source: marketingAttribution.source || 'Portal do Cliente',
+                      clicks: 1,
+                      registeredAt: new Date().toLocaleDateString('pt-BR')
+                    };
+                    setMarketingLeads(prev => [newLead, ...prev]);
+                    setIsLeadCaptureModalOpen(false);
+                    setLeadForm({ name: '', phone: '', email: '', birthDate: '' });
+                    setLeadSuccessToast(true);
+                    setTimeout(() => setLeadSuccessToast(false), 5000);
+                  }}
+                  className="space-y-3 text-xs"
+                >
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">Seu Nome Completo *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: João Silva"
+                      value={leadForm.name}
+                      onChange={e => setLeadForm({ ...leadForm, name: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">WhatsApp com DDD *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="(21) 98888-7777"
+                      value={leadForm.phone}
+                      onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">E-mail (Opcional)</label>
+                    <input
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={leadForm.email}
+                      onChange={e => setLeadForm({ ...leadForm, email: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">Dia e Mês do seu Aniversário</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 25/08 (para cupom de aniversário)"
+                      value={leadForm.birthDate}
+                      onChange={e => setLeadForm({ ...leadForm, birthDate: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-xl transition-all shadow"
+                    >
+                      Concluir Cadastro VIP
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* TOAST DE SUCESSO DO CADASTRO VIP */}
+          {leadSuccessToast && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#161410] border-2 border-[#C9A356] text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in">
+              <span className="text-xl">🎉</span>
+              <div>
+                <div className="font-serif font-bold text-sm text-[#C9A356]">Cadastro VIP Concluído!</div>
+                <div className="text-xs text-gray-300">Você ganhou 10% de desconto no próximo corte com o cupom: <strong>VIP10</strong></div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
           {isLoginModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
               <div className="bg-[#161410] border border-[#2D271E] rounded-3xl max-w-sm w-full p-6 text-white shadow-2xl space-y-4 animate-modal relative">
@@ -6869,49 +7151,6 @@
                     </button>
                   </div>
                 </form>
-
-                {/* LOGIN OFICIAL COM GOOGLE SSO (NEON AUTH) */}
-                <div className="pt-3 border-t border-[#2A261F] text-center space-y-2.5">
-                  <span className="text-[10px] text-gray-400 uppercase font-serif tracking-widest block">
-                    Ou acesse com sua conta oficial:
-                  </span>
-                  
-                  {/* BOTAO OFICIAL DO GOOGLE VIA NEON AUTH */}
-                  <button
-                    type="button"
-                    onClick={signInWithGoogleNeon}
-                    className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 rounded-xl text-xs font-sans font-bold flex items-center justify-center gap-2.5 shadow-md transition-all border border-gray-200 hover:scale-[1.01] active:scale-95"
-                    title="Acessar com o Google Oficial (Neon Auth Cloud)"
-                  >
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                    </svg>
-                    <span>Continuar com o Google</span>
-                  </button>
-
-                  {/* ATALHOS RAPIDOS COM 1 CLIQUE */}
-                  <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-gray-400">
-                    <span className="text-[10px]">Acesso rápido:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleGoogleLoginDirect('bernardo')}
-                      className="text-[#C9A356] hover:underline font-semibold"
-                    >
-                      Bernardo (Admin)
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => handleGoogleLoginDirect('luis')}
-                      className="text-gray-300 hover:underline font-semibold"
-                    >
-                      Luis (Dono)
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           )}
