@@ -1122,6 +1122,7 @@
       const [bookingForm, setBookingForm] = useState({
         client: '',
         phone: '',
+        cpf: '',
         serviceId: 's1',
         barberKey: 'luis',
         day: 'Seg',
@@ -1431,8 +1432,17 @@
 
       const handleCreateBooking = (e) => {
         e.preventDefault();
-        if (!bookingForm.client || !bookingForm.phone) {
-          alert('Por favor preencha nome e WhatsApp.');
+        if (!bookingForm.client.trim()) {
+          alert('Por favor informe o nome do cliente.');
+          return;
+        }
+        const cleanPhone = (bookingForm.phone || '').replace(/\D/g, '');
+        if (cleanPhone.length < 10) {
+          alert('Por favor informe um WhatsApp válido com DDD (Ex: (21) 98888-7777).');
+          return;
+        }
+        if (!bookingForm.cpf || !validateCPF(bookingForm.cpf)) {
+          alert('CPF Obrigatório e Inválido!\n\nPor favor, informe um CPF válido para confirmar a reserva. O CPF é obrigatório para evitar agendamentos falsos e garantir a vaga exclusiva.');
           return;
         }
 
@@ -1440,6 +1450,7 @@
         const brb = barbers.find(b => b.barberKey === bookingForm.barberKey) || barbers[0];
 
         const matchedDay = currentWeek.days.find(d => d.name === bookingForm.day) || currentWeek.days[0];
+        const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
         const newAppt = {
           id: Date.now(),
@@ -1447,22 +1458,27 @@
           day: bookingForm.day,
           date: matchedDay.date,
           dayNum: matchedDay.num,
-          client: bookingForm.client,
-          phone: bookingForm.phone,
+          client: bookingForm.client.trim(),
+          phone: maskPhone(bookingForm.phone),
+          cpf: maskCPF(bookingForm.cpf),
+          isCpfVerified: true,
+          voucherCode: voucherCode,
           service: srv.name,
           barber: brb.name,
+          barberKey: brb.barberKey,
           time: bookingForm.time,
-          status: 'agendado',
+          status: 'confirmado',
           price: srv.price,
           items: [{ name: srv.name, price: srv.price }],
           total: srv.price,
-          paymentMethod: '',
-          notes: bookingForm.notes || 'Agendado pelo painel.'
+          paymentMethod: 'Presencial / PIX',
+          notes: bookingForm.notes ? `${bookingForm.notes} • Voucher #${voucherCode}` : `Voucher #${voucherCode} • CPF ${maskCPF(bookingForm.cpf)}`
         };
 
         setAppointments(prev => [newAppt, ...prev]);
         setIsBookingModalOpen(false);
-        setBookingForm({ client: '', phone: '', serviceId: 's1', barberKey: 'luis', day: 'Seg', time: '14:00', notes: '' });
+        setConfirmedBookingModal(newAppt);
+        setBookingForm({ client: '', phone: '', cpf: '', serviceId: 's1', barberKey: 'luis', day: 'Seg', time: '14:00', notes: '' });
       };
 
       const openCheckout = (appt) => {
@@ -4321,9 +4337,9 @@
                 </div>
 
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-gray-400 font-serif uppercase mb-1">Nome do Cliente:</label>
+                      <label className="block text-gray-400 font-serif uppercase mb-1">Nome do Cliente *</label>
                       <input
                         type="text"
                         required
@@ -4334,16 +4350,57 @@
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-400 font-serif uppercase mb-1">WhatsApp:</label>
+                      <label className="block text-gray-400 font-serif uppercase mb-1">WhatsApp *</label>
                       <input
                         type="text"
                         required
                         value={bookingForm.phone}
-                        onChange={e => setBookingForm({ ...bookingForm, phone: e.target.value })}
+                        onChange={e => {
+                          const masked = maskPhone(e.target.value);
+                          setBookingForm({ ...bookingForm, phone: masked });
+                        }}
                         placeholder="(21) 98888-7777"
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
                       />
                     </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-gray-400 font-serif uppercase">CPF do Titular *</label>
+                        {bookingForm.cpf && (
+                          validateCPF(bookingForm.cpf) ? (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-700/50 flex items-center gap-0.5">
+                              <Icons.Check className="w-2.5 h-2.5" /> Válido
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-red-400 bg-red-950/60 px-1.5 py-0.5 rounded border border-red-800/50">
+                              Inválido
+                            </span>
+                          )
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength="14"
+                        value={bookingForm.cpf || ''}
+                        onChange={e => {
+                          const masked = maskCPF(e.target.value);
+                          setBookingForm({ ...bookingForm, cpf: masked });
+                        }}
+                        placeholder="000.000.000-00"
+                        className={`w-full px-3.5 py-2.5 bg-[#0B0B0B] border rounded-xl text-white text-xs focus:outline-none transition-colors ${
+                          bookingForm.cpf
+                            ? (validateCPF(bookingForm.cpf) ? 'border-emerald-500/80 ring-1 ring-emerald-500/30' : 'border-red-500/80')
+                            : 'border-[#2A261F] focus:border-[#C9A356]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* AVISO ANTI NO-SHOW */}
+                  <div className="p-3 bg-[#13110D] rounded-xl border border-[#30291E] flex items-center gap-2.5 text-[11px] text-gray-300">
+                    <span className="text-[#C9A356] font-bold text-base">🛡️</span>
+                    <span><strong>Garantia Anti No-Show:</strong> O CPF é validado pela Receita Federal para emissão do voucher único e reserva da cadeira exclusiva.</span>
                   </div>
 
                   <div>
