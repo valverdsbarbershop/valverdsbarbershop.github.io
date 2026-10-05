@@ -1,0 +1,2884 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Valverd's BarberShop — Beard, hair and mustache | Gestão & Experiência</title>
+  
+  <!-- Google Fonts: Cinzel vintage clássico & Inter para UI moderna -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['Cinzel', 'Georgia', 'serif'],
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            gold: {
+              DEFAULT: '#C9A356',
+              light: '#DFBD78',
+              dark: '#A68238',
+              hover: '#B59044'
+            },
+            darkBg: '#0B0B0B',
+            darkCard: '#161512',
+            darkBorder: '#28241E',
+            lightBg: '#F7F6F2'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18, ReactDOM & Babel Standalone -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0B0B0B; }
+    ::-webkit-scrollbar-thumb { background: #C9A356; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #DFBD78; }
+  </style>
+</head>
+<body class="bg-[#0B0B0B] text-[#E0DDD5] antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // =========================================================================
+    // ÍCONES E LOGOTIPO OFICIAL
+    // =========================================================================
+    const OfficialLogo = ({ className = "w-20 h-20" }) => (
+      <img
+        src="logo_valverds_clean.png"
+        alt="Valverd's BarberShop Logo Oficial"
+        className={`${className} object-contain rounded-lg filter drop-shadow-md hover:scale-105 transition-transform`}
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.src = 'assets/Valverde.jpg';
+        }}
+      />
+    );
+
+    const BowtieIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <polygon points="4 6 12 11 20 6 20 18 12 13 4 18" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+      </svg>
+    );
+
+    const BarberBeardIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M12 2C8 2 5 5 5 9c0 3 2 5.5 4 7 1.5 1 2 3 3 5 1-2 1.5-4 3-5 2-1.5 4-4 4-7 0-4-3-7-7-7z" strokeLinejoin="round" />
+        <path d="M8 12c1.5 1 3 1 4 0 1 1 2.5 1 4 0" strokeLinecap="round" />
+      </svg>
+    );
+
+    const CrossedRazorsIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <line x1="4" y1="20" x2="20" y2="4" strokeLinecap="round" />
+        <line x1="4" y1="4" x2="20" y2="20" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+
+    const ClassicShearsIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <line x1="8.5" y1="7.5" x2="20" y2="17" strokeLinecap="round" />
+        <line x1="8.5" y1="16.5" x2="20" y2="7" strokeLinecap="round" />
+      </svg>
+    );
+
+    const CombAndRazorIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="5" width="18" height="4" rx="1" />
+        <line x1="6" y1="9" x2="6" y2="15" />
+        <line x1="10" y1="9" x2="10" y2="15" />
+        <line x1="14" y1="9" x2="14" y2="15" />
+        <line x1="18" y1="9" x2="18" y2="15" />
+      </svg>
+    );
+
+    const CuttingScissorsIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <line x1="8.5" y1="7.5" x2="20" y2="17" strokeLinecap="round" />
+        <line x1="8.5" y1="16.5" x2="20" y2="7" strokeLinecap="round" />
+      </svg>
+    );
+
+    const MapPinIcon = ({ className = "w-5 h-5" }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
+        <circle cx="12" cy="9" r="3" />
+      </svg>
+    );
+
+    // =========================================================================
+    // DADOS REAIS DE VALVERD'S BARBERSHOP
+    // =========================================================================
+    const ADDRESS_FULL = 'R. Antônio Veloso Júnior, 77 - Campos Elíseos, Resende - RJ, 27541-200';
+    const GOOGLE_MAPS_LINK = 'https://www.google.com/maps/search/?api=1&query=Valverd%27s+BarberShop+R.+Ant%C3%B4nio+Veloso+J%C3%BAnior%2C+77+-+Campos+El%C3%ADseos%2C+Resende+-+RJ%2C+27541-200';
+
+    const SERVICES_MENU = [
+      { id: 's1', name: 'Corte Masculino', price: 40, duration: 40, category: 'Cabelo', description: 'Técnica precisa na tesoura ou máquina, degrade limpo e finalização impecável.' },
+      { id: 's2', name: 'Corte Infantil', price: 50, duration: 35, category: 'Cabelo', description: 'Atendimento calmo, paciente e no estilo para os pequenos.' },
+      { id: 's3', name: 'Barba + Cabelo (Combo Especial)', price: 65, duration: 60, category: 'Combo', description: 'A experiência completa: corte alinhado e barba desenhada na navalha.' },
+      { id: 's4', name: 'Somente Barba', price: 35, duration: 30, category: 'Barba', description: 'Barboterapia com toalha quente, hidratação, navalha afiada e pós-barba.' },
+      { id: 's5', name: 'Design de Sobrancelha', price: 20, duration: 15, category: 'Estética', description: 'Alinhamento preciso na navalha para realçar o olhar.' },
+      { id: 's6', name: 'Hidratação Capilar Profunda', price: 30, duration: 25, category: 'Tratamento', description: 'Revitalização dos fios com maciez e brilho imediato.' }
+    ];
+
+    const BARBERS = [
+      {
+        id: 'b1',
+        barberKey: 'luis',
+        name: 'Luis Valverde',
+        handle: '@luisvalverdelv',
+        role: 'Fundador & Mestre Barbeiro',
+        chair: 'Cadeira 01 (Mestre)',
+        email: 'luis@valverds.com',
+        commissionRate: 60,
+        rating: 5.0,
+        reviews: 420,
+        avatar: 'luis_valverde.jpg',
+        specialties: 'Cortes Clássicos, Fade e Barboterapia',
+        bio: 'Fundador da Valverd\'s em 2022 com o compromisso de entregar corte alinhado e atendimento de respeito.'
+      },
+      {
+        id: 'b2',
+        barberKey: 'yago',
+        name: 'Yago Barber',
+        handle: '@yago_barber9',
+        role: 'Especialista em Fade & Estilo',
+        chair: 'Cadeira 02 (Fade & Style)',
+        email: 'yago@valverds.com',
+        commissionRate: 50,
+        rating: 4.9,
+        reviews: 231,
+        avatar: 'yago_barber.png',
+        specialties: 'Degradê Navalhado, Freestyle e Barba',
+        bio: 'Especialista em técnicas modernas de acabamento e fidelização de clientes.'
+      }
+    ];
+
+    const GALLERY_SLIDES = [
+      { id: 1, url: 'neon_folhagem.jpg', caption: 'Letreiro Neon Oficial Valverd\'s BarberShop no Jardim Vertical' },
+      { id: 2, url: 'espaco_interior_2.png', caption: 'Ambiente Climatizado — Atendimento de Respeito em Campos Elíseos' },
+      { id: 3, url: 'luis_valverde.jpg', caption: 'Luis Valverde (@luisvalverdelv) — Fundador & Mestre Barbeiro em Atendimento' },
+      { id: 4, url: 'yago_barber.png', caption: 'Yago Barber (@yago_barber9) — Especialista em Fade & Alinhamento' },
+      { id: 5, url: 'espaco_real_maps.png', caption: 'Perfil Oficial Valverd\'s no Google Maps — Nota Máxima 5.0 ★★★★★' },
+      { id: 6, url: 'tabela_precos.png', caption: 'Tabela Oficial de Serviços e Preços' }
+    ];
+
+    const INITIAL_PRODUCTS = [
+      { id: 'p1', name: 'Cerveja Heineken Long Neck (330ml)', category: 'Bar', price: 14, stock: 48, minStock: 15, type: 'Cerveja' },
+      { id: 'p2', name: 'Cerveja IPA Artesanal Valverd\'s (500ml)', category: 'Bar', price: 20, stock: 24, minStock: 10, type: 'Cerveja Especial' },
+      { id: 'p3', name: 'Cerveja Corona Extra com Limão', category: 'Bar', price: 15, stock: 32, minStock: 12, type: 'Cerveja' },
+      { id: 'p4', name: 'Dose Whisky Single Malt (12 Anos)', category: 'Bar', price: 25, stock: 12, minStock: 5, type: 'Destilado' },
+      { id: 'p5', name: 'Refrigerante Coca-Cola / Guaraná (Lata)', category: 'Bar', price: 7, stock: 36, minStock: 15, type: 'Refrigerante' },
+      { id: 'p6', name: 'Café Espresso Gourmet Especial', category: 'Bar', price: 0, stock: 999, minStock: 50, type: 'Cortesia' },
+      { id: 'p7', name: 'Água Mineral com ou sem Gás', category: 'Bar', price: 0, stock: 999, minStock: 50, type: 'Cortesia' },
+      { id: 'p8', name: 'Pomada Modeladora Matte Valverd\'s (150g)', category: 'Produtos', price: 45, stock: 18, minStock: 8, type: 'Cabelo' },
+      { id: 'p9', name: 'Óleo Hidratante para Barba (30ml)', category: 'Produtos', price: 35, stock: 14, minStock: 6, type: 'Barba' },
+      { id: 'p10', name: 'Balm Modelador e Alinhador de Barba (100g)', category: 'Produtos', price: 38, stock: 12, minStock: 6, type: 'Barba' },
+      { id: 'p11', name: 'Shampoo Mentolado Fortalecedor (250ml)', category: 'Produtos', price: 42, stock: 6, minStock: 10, type: 'Tratamento' },
+      { id: 'p12', name: 'Loção Pós-Barba Refrescante Aloe (120ml)', category: 'Produtos', price: 30, stock: 15, minStock: 5, type: 'Pós-Barba' }
+    ];
+
+    const BRAND_PILLARS = [
+      { icon: '👑', title: 'Atendimento de Respeito', desc: 'Pontualidade, acolhimento e escuta atenta ao que você realmente deseja.' },
+      { icon: '✂️', title: 'Corte Alinhado e Preciso', desc: 'Técnica apurada na tesoura e máquina para valorizar seu formato de rosto.' },
+      { icon: '⭐', title: 'Resultado que Eleva sua Imagem', desc: 'Saia confiante para qualquer compromisso profissional ou social.' },
+      { icon: '🤝', title: 'Relacionamento que Gera Lealdade', desc: 'Mais que clientes, cultivamos amigos e uma comunidade fiel.' }
+    ];
+
+    // DEFINIÇÃO DAS SEMANAS PARA NAVEGAÇÃO
+    const WEEKS_DATA = [
+      {
+        id: -1,
+        label: '31/08 a 05/09 (Semana Passada)',
+        monthLabel: 'Agosto / Setembro 2026',
+        days: [
+          { name: 'Seg', date: '31/08', num: 31 },
+          { name: 'Ter', date: '01/09', num: 1 },
+          { name: 'Qua', date: '02/09', num: 2 },
+          { name: 'Qui', date: '03/09', num: 3 },
+          { name: 'Sex', date: '04/09', num: 4 },
+          { name: 'Sáb', date: '05/09', num: 5 }
+        ]
+      },
+      {
+        id: 0,
+        label: '07/09 a 12/09 (Semana Atual)',
+        monthLabel: 'Setembro 2026',
+        days: [
+          { name: 'Seg', date: '07/09', num: 7 },
+          { name: 'Ter', date: '08/09', num: 8 },
+          { name: 'Qua', date: '09/09', num: 9 },
+          { name: 'Qui', date: '10/09', num: 10 },
+          { name: 'Sex', date: '11/09', num: 11 },
+          { name: 'Sáb', date: '12/09', num: 12 }
+        ]
+      },
+      {
+        id: 1,
+        label: '14/09 a 19/09 (Próxima Semana)',
+        monthLabel: 'Setembro 2026',
+        days: [
+          { name: 'Seg', date: '14/09', num: 14 },
+          { name: 'Ter', date: '15/09', num: 15 },
+          { name: 'Qua', date: '16/09', num: 16 },
+          { name: 'Qui', date: '17/09', num: 17 },
+          { name: 'Sex', date: '18/09', num: 18 },
+          { name: 'Sáb', date: '19/09', num: 19 }
+        ]
+      },
+      {
+        id: 2,
+        label: '21/09 a 26/09',
+        monthLabel: 'Setembro 2026',
+        days: [
+          { name: 'Seg', date: '21/09', num: 21 },
+          { name: 'Ter', date: '22/09', num: 22 },
+          { name: 'Qua', date: '23/09', num: 23 },
+          { name: 'Qui', date: '24/09', num: 24 },
+          { name: 'Sex', date: '25/09', num: 25 },
+          { name: 'Sáb', date: '26/09', num: 26 }
+        ]
+      }
+    ];
+
+    // DIAS DE SETEMBRO 2026 (PARA VISÃO MENSAL)
+    const SEPTEMBER_DAYS = [
+      { dayNum: 1, weekDay: 'Ter', isOpen: true },
+      { dayNum: 2, weekDay: 'Qua', isOpen: true },
+      { dayNum: 3, weekDay: 'Qui', isOpen: true },
+      { dayNum: 4, weekDay: 'Sex', isOpen: true },
+      { dayNum: 5, weekDay: 'Sáb', isOpen: true },
+      { dayNum: 6, weekDay: 'Dom', isOpen: false },
+      { dayNum: 7, weekDay: 'Seg', isOpen: true },
+      { dayNum: 8, weekDay: 'Ter', isOpen: true },
+      { dayNum: 9, weekDay: 'Qua', isOpen: true },
+      { dayNum: 10, weekDay: 'Qui', isOpen: true },
+      { dayNum: 11, weekDay: 'Sex', isOpen: true },
+      { dayNum: 12, weekDay: 'Sáb', isOpen: true },
+      { dayNum: 13, weekDay: 'Dom', isOpen: false },
+      { dayNum: 14, weekDay: 'Seg', isOpen: true },
+      { dayNum: 15, weekDay: 'Ter', isOpen: true },
+      { dayNum: 16, weekDay: 'Qua', isOpen: true },
+      { dayNum: 17, weekDay: 'Qui', isOpen: true },
+      { dayNum: 18, weekDay: 'Sex', isOpen: true },
+      { dayNum: 19, weekDay: 'Sáb', isOpen: true },
+      { dayNum: 20, weekDay: 'Dom', isOpen: false },
+      { dayNum: 21, weekDay: 'Seg', isOpen: true },
+      { dayNum: 22, weekDay: 'Ter', isOpen: true },
+      { dayNum: 23, weekDay: 'Qua', isOpen: true },
+      { dayNum: 24, weekDay: 'Qui', isOpen: true },
+      { dayNum: 25, weekDay: 'Sex', isOpen: true },
+      { dayNum: 26, weekDay: 'Sáb', isOpen: true },
+      { dayNum: 27, weekDay: 'Dom', isOpen: false },
+      { dayNum: 28, weekDay: 'Seg', isOpen: true },
+      { dayNum: 29, weekDay: 'Ter', isOpen: true },
+      { dayNum: 30, weekDay: 'Qua', isOpen: true }
+    ];
+
+    // SEMANA COMPLETA DE AGENDAMENTOS (BASE)
+    const INITIAL_APPOINTMENTS = [
+      // SEGUNDA-FEIRA (HOJE - 08/09)
+      { id: 101, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Roberto Andrade', phone: '(21) 98877-1122', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:00', status: 'concluido', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: 'PIX', notes: 'Cliente Ouro, degradê clássico na tesoura.' },
+      { id: 102, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Marcio Nogueira', phone: '(21) 97766-2233', service: 'Barba + Cabelo (Combo)', barber: 'Luis Valverde', time: '10:00', status: 'em_atendimento', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }, { name: 'Cerveja Heineken Long Neck (330ml)', price: 14 }], total: 79, paymentMethod: '', notes: 'Toalha quente com essência de eucalipto.' },
+      { id: 103, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Rodrigo Medeiros', phone: '(21) 98111-2233', service: 'Corte Masculino', barber: 'Luis Valverde', time: '11:00', status: 'aguardando', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Chegou e está no lounge tomando café.' },
+      { id: 104, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Lucas Pereira & Filho', phone: '(21) 98123-4567', service: 'Corte Infantil', barber: 'Yago Barber', time: '09:30', status: 'concluido', price: 50, items: [{ name: 'Corte Infantil', price: 50 }], total: 50, paymentMethod: 'CARTÃO', notes: 'Atendimento bem calmo para o pequeno.' },
+      { id: 105, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Felipe Alcantara', phone: '(21) 99988-3344', service: 'Somente Barba', barber: 'Yago Barber', time: '10:30', status: 'em_atendimento', price: 35, items: [{ name: 'Somente Barba', price: 35 }], total: 35, paymentMethod: '', notes: 'Alinhamento navalhado na bochecha e queixo.' },
+      { id: 106, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Guilherme Castro', phone: '(21) 97123-9988', service: 'Corte Masculino', barber: 'Yago Barber', time: '11:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Degradê na zero alta.' },
+      { id: 107, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Thiago Martins', phone: '(21) 99222-3344', service: 'Barba + Cabelo (Combo)', barber: 'Luis Valverde', time: '14:00', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Agendado pelo app.' },
+      { id: 108, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Gabriel Souza', phone: '(21) 98777-6655', service: 'Design de Sobrancelha', barber: 'Yago Barber', time: '15:00', status: 'agendado', price: 20, items: [{ name: 'Design de Sobrancelha', price: 20 }], total: 20, paymentMethod: '', notes: 'Alinhamento rápido na navalha.' },
+      { id: 109, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Carlos Eduardo', phone: '(21) 98111-9988', service: 'Corte Masculino', barber: 'Luis Valverde', time: '16:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Corte clássico.' },
+      { id: 110, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Rafael Lima', phone: '(21) 99887-5544', service: 'Corte Masculino', barber: 'Yago Barber', time: '17:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Fade navalhado.' },
+
+      // TERÇA-FEIRA (09/09)
+      { id: 201, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Bruno Silveira', phone: '(21) 97654-3210', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Manutenção mensal.' },
+      { id: 202, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Diego Santos', phone: '(21) 98765-4321', service: 'Barba + Cabelo (Combo)', barber: 'Yago Barber', time: '10:00', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Barba cheia alinhada.' },
+      { id: 203, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Matheus Rocha', phone: '(21) 99123-4567', service: 'Corte Masculino', barber: 'Yago Barber', time: '11:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Degradê médio.' },
+      { id: 204, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Marcos Vinicius', phone: '(21) 98234-5678', service: 'Corte Masculino', barber: 'Luis Valverde', time: '14:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Tesoura no topo.' },
+      { id: 205, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Pedro Henrique', phone: '(21) 97345-6789', service: 'Corte Masculino', barber: 'Yago Barber', time: '16:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Pezinho alinhado.' },
+
+      // QUARTA-FEIRA (10/09)
+      { id: 301, weekId: 0, day: 'Qua', date: '10/09', dayNum: 10, client: 'Fernando Dias', phone: '(21) 99456-7890', service: 'Corte Masculino', barber: 'Luis Valverde', time: '10:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Corte executivo.' },
+      { id: 302, weekId: 0, day: 'Qua', date: '10/09', dayNum: 10, client: 'Victor Hugo', phone: '(21) 98567-8901', service: 'Corte Infantil', barber: 'Yago Barber', time: '11:00', status: 'agendado', price: 50, items: [{ name: 'Corte Infantil', price: 50 }], total: 50, paymentMethod: '', notes: 'Primeiro corte no salão.' },
+      { id: 303, weekId: 0, day: 'Qua', date: '10/09', dayNum: 10, client: 'Alexsandro Moura', phone: '(21) 97678-9012', service: 'Barba + Cabelo (Combo)', barber: 'Luis Valverde', time: '15:00', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Toalha quente.' },
+      { id: 304, weekId: 0, day: 'Qua', date: '10/09', dayNum: 10, client: 'Renan Oliveira', phone: '(21) 99789-0123', service: 'Somente Barba', barber: 'Yago Barber', time: '16:30', status: 'agendado', price: 35, items: [{ name: 'Somente Barba', price: 35 }], total: 35, paymentMethod: '', notes: 'Desenho da barba.' },
+
+      // PRÓXIMA SEMANA (14/09 a 19/09)
+      { id: 701, weekId: 1, day: 'Seg', date: '14/09', dayNum: 14, client: 'Otávio Mesquita', phone: '(21) 98111-4455', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Agendamento antecipado.' },
+      { id: 702, weekId: 1, day: 'Seg', date: '14/09', dayNum: 14, client: 'Fábio Assunção', phone: '(21) 97222-3344', service: 'Barba + Cabelo (Combo)', barber: 'Luis Valverde', time: '10:30', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Barba cheia.' },
+      { id: 703, weekId: 1, day: 'Ter', date: '15/09', dayNum: 15, client: 'Murilo Rosa', phone: '(21) 99333-2211', service: 'Corte Masculino', barber: 'Yago Barber', time: '10:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Fade.' },
+      { id: 704, weekId: 1, day: 'Ter', date: '15/09', dayNum: 15, client: 'Leandro Hassum', phone: '(21) 98444-5566', service: 'Somente Barba', barber: 'Yago Barber', time: '11:30', status: 'agendado', price: 35, items: [{ name: 'Somente Barba', price: 35 }], total: 35, paymentMethod: '', notes: 'Alinhamento.' }
+    ];
+
+    // PERFIL DO CLIENTE
+    const INITIAL_CLIENT_PROFILE = {
+      id: 'c101',
+      name: 'Roberto Andrade',
+      email: 'roberto@cliente.com',
+      phone: '(21) 98877-1122',
+      memberSince: 'Outubro 2022',
+      tier: 'Cliente VIP Ouro',
+      loyaltyStamps: 7,
+      preferredBarber: 'Luis Valverde',
+      preferredService: 'Corte Masculino',
+      styleNotes: 'Degradê clássico na tesoura, pezinho quadrado e toalha quente com essência de eucalipto.',
+      history: [
+        { id: 1, date: '28/08/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Degradê na tesoura.' },
+        { id: 2, date: '14/08/2026', service: 'Barba + Cabelo (Combo)', barber: 'Luis Valverde', price: 65, rating: 5, notes: 'Toalha quente com eucalipto.' },
+        { id: 3, date: '25/07/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Manutenção de corte.' },
+        { id: 4, date: '08/07/2026', service: 'Corte Masculino + Barba', barber: 'Luis Valverde', price: 65, rating: 5, notes: 'Acabamento navalhado.' },
+        { id: 5, date: '20/06/2026', service: 'Corte Masculino', barber: 'Luis Valverde', price: 40, rating: 5, notes: 'Corte clássico.' }
+      ]
+    };
+
+    // HORÁRIOS GERAIS DA BARBEARIA
+    const INITIAL_SHOP_HOURS = [
+      { day: 'Segunda-feira', short: 'Seg', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Terça-feira', short: 'Ter', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Quarta-feira', short: 'Qua', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Quinta-feira', short: 'Qui', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Sexta-feira', short: 'Sex', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Sábado', short: 'Sáb', open: '09:00', close: '19:00', isOpen: true },
+      { day: 'Domingo', short: 'Dom', open: 'Fechado', close: 'Fechado', isOpen: false }
+    ];
+
+    // ESCALAS INDIVIDUAIS POR BARBEIRO
+    const INITIAL_BARBER_SCHEDULES = [
+      {
+        id: 'luis',
+        barberKey: 'luis',
+        name: 'Luis Valverde',
+        role: 'Proprietário & Mestre Barbeiro',
+        chair: 'Cadeira 01 (Mestre)',
+        avatar: 'luis_valverde.jpg',
+        workDaysDesc: 'Segunda a Sábado',
+        activeDays: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+        startTime: '09:00',
+        endTime: '19:00',
+        lunchBreak: '12:30 às 13:30',
+        slotDuration: '45 min',
+        status: 'Disponível Hoje',
+        autoAccept: true
+      },
+      {
+        id: 'yago',
+        barberKey: 'yago',
+        name: 'Yago Barber',
+        role: 'Especialista em Fade & Estilo',
+        chair: 'Cadeira 02 (Fade & Style)',
+        avatar: 'yago_barber.png',
+        workDaysDesc: 'Terça a Sábado (Folga Segunda)',
+        activeDays: ['Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+        startTime: '10:00',
+        endTime: '19:00',
+        lunchBreak: '13:00 às 14:00',
+        slotDuration: '45 min',
+        status: 'Disponível Hoje',
+        autoAccept: true
+      }
+    ];
+
+    // SLOTS HORÁRIOS COMPARATIVOS
+    const TIME_SLOTS_COMPARE = [
+      '09:00', '09:45', '10:30', '11:15', '12:00', '12:45', '13:30', '14:15', '15:00', '15:45', '16:30', '17:15', '18:00', '18:45'
+    ];
+
+    // =========================================================================
+    // COMPONENTE PRINCIPAL: VALVERD'S APP
+    // =========================================================================
+    function ValverdsApp() {
+      // NAVEGAÇÃO E SESSÃO
+      const [currentView, setCurrentView] = useState('site');
+      const [activeNav, setActiveNav] = useState('home');
+      
+      // USUÁRIO AUTENTICADO
+      const [currentUser, setCurrentUser] = useState({
+        name: 'Luis Valverde',
+        email: 'luis@valverds.com',
+        role: 'dono',
+        barberKey: 'luis',
+        title: 'Proprietário & Mestre Barbeiro',
+        avatar: 'luis_valverde.jpg'
+      });
+
+      // ABAS INTERNAS
+      const [receptionTab, setReceptionTab] = useState('agenda');
+      const [barberTab, setBarberTab] = useState('minha_agenda');
+      const [barberCalendarMode, setBarberCalendarMode] = useState('semanal'); // 'semanal' | 'mensal' | 'diaria' | 'comparativo'
+      const [selectedWeekIndex, setSelectedWeekIndex] = useState(1); // Index in WEEKS_DATA (1 = Semana Atual)
+      const [selectedWeekDay, setSelectedWeekDay] = useState('Seg');
+      const [selectedMonthDay, setSelectedMonthDay] = useState(8);
+      const [clientTab, setClientTab] = useState('agendamentos');
+      const [clientCalendarView, setClientCalendarView] = useState('semana'); // 'semana' | 'mes'
+
+      const [loginEmail, setLoginEmail] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+      const [currentSlide, setCurrentSlide] = useState(0);
+
+      // ESTOQUE & INVENTÁRIO
+      const [products, setProducts] = useState(INITIAL_PRODUCTS);
+
+      // AGENDAMENTOS GLOBAIS
+      const [appointments, setAppointments] = useState(INITIAL_APPOINTMENTS);
+      const [checkoutAppt, setCheckoutAppt] = useState(null);
+      const [selectedPayment, setSelectedPayment] = useState('PIX');
+      const [additionalItemId, setAdditionalItemId] = useState('');
+
+      // HORÁRIOS & ESCALAS
+      const [shopHours, setShopHours] = useState(INITIAL_SHOP_HOURS);
+      const [barberSchedules, setBarberSchedules] = useState(INITIAL_BARBER_SCHEDULES);
+
+      // ESTADO DO EDITOR DE ESCALA PELO BARBEIRO
+      const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
+      const [barberEditEndTime, setBarberEditEndTime] = useState('19:00');
+      const [barberEditLunchBreak, setBarberEditLunchBreak] = useState('13:00 às 14:00');
+      const [barberEditActiveDays, setBarberEditActiveDays] = useState(['Ter', 'Qua', 'Qui', 'Sex', 'Sáb']);
+      const [scheduleSavedToast, setScheduleSavedToast] = useState(false);
+
+      // PERFIL DO CLIENTE
+      const [clientProfile, setClientProfile] = useState(INITIAL_CLIENT_PROFILE);
+
+      // MODAL VENDA RÁPIDA DE BALCÃO
+      const [isQuickSaleModalOpen, setIsQuickSaleModalOpen] = useState(false);
+      const [quickSaleProduct, setQuickSaleProduct] = useState(INITIAL_PRODUCTS[0]);
+      const [quickSaleQty, setQuickSaleQty] = useState(1);
+      const [quickSalePayment, setQuickSalePayment] = useState('PIX');
+      const [quickSaleSuccess, setQuickSaleSuccess] = useState(false);
+
+      // MODAL NOVO AGENDAMENTO
+      const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+      const [selectedService, setSelectedService] = useState(SERVICES_MENU[0]);
+      const [selectedBarber, setSelectedBarber] = useState(BARBERS[0]);
+      const [selectedDayOption, setSelectedDayOption] = useState('Seg');
+      const [selectedTime, setSelectedTime] = useState('14:00');
+      const [clientName, setClientName] = useState('');
+      const [clientPhone, setClientPhone] = useState('');
+      const [clientNotes, setClientNotes] = useState('');
+      const [bookingSuccess, setBookingSuccess] = useState(false);
+
+      // Vendas avulsas registradas no balcão hoje
+      const [counterSales, setCounterSales] = useState([
+        { id: 901, item: 'Pomada Modeladora Matte Valverd\'s (150g)', category: 'Produtos', qty: 1, total: 45, time: '10:15', paymentMethod: 'PIX' },
+        { id: 902, item: 'Cerveja IPA Artesanal Valverd\'s (500ml)', category: 'Bar', qty: 2, total: 40, time: '11:20', paymentMethod: 'CARTÃO' }
+      ]);
+
+      const currentWeek = WEEKS_DATA[selectedWeekIndex] || WEEKS_DATA[1];
+
+      const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % GALLERY_SLIDES.length);
+      const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + GALLERY_SLIDES.length) % GALLERY_SLIDES.length);
+
+      const scrollToSection = (id) => {
+        setActiveNav(id);
+        if (currentView !== 'site') setCurrentView('site');
+        const element = document.getElementById(id);
+        if (element) element.scrollIntoView({ behavior: 'smooth' });
+      };
+
+      // TROCA RÁPIDA DE PERFIL (DEMO RBAC)
+      const switchRole = (roleKey) => {
+        if (roleKey === 'dono') {
+          setCurrentUser({
+            name: 'Luis Valverde',
+            email: 'luis@valverds.com',
+            role: 'dono',
+            barberKey: 'luis',
+            title: 'Proprietário & Mestre Barbeiro',
+            avatar: 'luis_valverde.jpg'
+          });
+          setCurrentView('reception');
+          setReceptionTab('agenda');
+        } else if (roleKey === 'barbeiro') {
+          setCurrentUser({
+            name: 'Yago Barber',
+            email: 'yago@valverds.com',
+            role: 'barbeiro',
+            barberKey: 'yago',
+            title: 'Especialista em Fade & Estilo',
+            avatar: 'yago_barber.png'
+          });
+          const yagoSched = barberSchedules.find(b => b.id === 'yago') || INITIAL_BARBER_SCHEDULES[1];
+          setBarberEditStartTime(yagoSched.startTime);
+          setBarberEditEndTime(yagoSched.endTime);
+          setBarberEditLunchBreak(yagoSched.lunchBreak);
+          setBarberEditActiveDays(yagoSched.activeDays);
+          setCurrentView('reception');
+          setBarberTab('minha_agenda');
+        } else if (roleKey === 'recepcao') {
+          setCurrentUser({
+            name: 'Recepção Valverd\'s',
+            email: 'recepcao@valverds.com',
+            role: 'recepcao',
+            barberKey: 'recepcao',
+            title: 'Gerente de Recepção & Caixa',
+            avatar: 'Valverde.jpg'
+          });
+          setCurrentView('reception');
+          setReceptionTab('agenda');
+        } else if (roleKey === 'cliente') {
+          setCurrentUser({
+            name: clientProfile.name,
+            email: clientProfile.email,
+            role: 'cliente',
+            barberKey: 'cliente',
+            title: clientProfile.tier,
+            avatar: 'Valverde.jpg'
+          });
+          setCurrentView('client');
+          setClientTab('agendamentos');
+        }
+      };
+
+      const handleLoginSubmit = (e) => {
+        e.preventDefault();
+        const email = loginEmail.toLowerCase();
+        if (email.includes('luis')) {
+          switchRole('dono');
+        } else if (email.includes('yago')) {
+          switchRole('barbeiro');
+        } else if (email.includes('recepcao') || email.includes('admin')) {
+          switchRole('recepcao');
+        } else {
+          switchRole('cliente');
+        }
+      };
+
+      // SALVAR HORÁRIOS PELO PRÓPRIO BARBEIRO
+      const handleSaveBarberSchedule = (e) => {
+        e.preventDefault();
+        const currentBarberId = currentUser.barberKey || (currentUser.name.includes('Yago') ? 'yago' : 'luis');
+        
+        setBarberSchedules((prev) =>
+          prev.map((b) =>
+            b.id === currentBarberId
+              ? {
+                  ...b,
+                  startTime: barberEditStartTime,
+                  endTime: barberEditEndTime,
+                  lunchBreak: barberEditLunchBreak,
+                  activeDays: barberEditActiveDays,
+                  workDaysDesc: `${barberEditActiveDays.join(', ')} (${barberEditStartTime} às ${barberEditEndTime})`
+                }
+              : b
+          )
+        );
+
+        setScheduleSavedToast(true);
+        setTimeout(() => setScheduleSavedToast(false), 4000);
+      };
+
+      const toggleBarberDay = (day) => {
+        if (barberEditActiveDays.includes(day)) {
+          setBarberEditActiveDays(barberEditActiveDays.filter(d => d !== day));
+        } else {
+          setBarberEditActiveDays([...barberEditActiveDays, day]);
+        }
+      };
+
+      const updateStock = (id, delta) => {
+        setProducts((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, stock: Math.max(0, item.stock + delta) } : item))
+        );
+      };
+
+      const changeAppointmentStatus = (id, newStatus) => {
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
+        );
+      };
+
+      const addItemToCheckout = (product) => {
+        if (!checkoutAppt || !product) return;
+        if (product.price > 0 && product.stock <= 0) {
+          alert('Item sem estoque disponível!');
+          return;
+        }
+        updateStock(product.id, -1);
+        setCheckoutAppt((prev) => ({
+          ...prev,
+          items: [...prev.items, { name: product.name, price: product.price }],
+          total: prev.total + product.price
+        }));
+      };
+
+      const handleConfirmCheckout = () => {
+        if (!checkoutAppt) return;
+        setAppointments((prev) =>
+          prev.map((item) =>
+            item.id === checkoutAppt.id
+              ? { ...item, status: 'concluido', total: checkoutAppt.total, items: checkoutAppt.items, paymentMethod: selectedPayment }
+              : item
+          )
+        );
+        setCheckoutAppt(null);
+        setAdditionalItemId('');
+      };
+
+      const handleExecuteQuickSale = (e) => {
+        e.preventDefault();
+        if (!quickSaleProduct) return;
+        const total = quickSaleProduct.price * quickSaleQty;
+        updateStock(quickSaleProduct.id, -quickSaleQty);
+        setCounterSales((prev) => [
+          {
+            id: Date.now(),
+            item: quickSaleProduct.name,
+            category: quickSaleProduct.category,
+            qty: quickSaleQty,
+            total,
+            time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            paymentMethod: quickSalePayment
+          },
+          ...prev
+        ]);
+        setQuickSaleSuccess(true);
+      };
+
+      const handleCompleteBooking = (e) => {
+        e.preventDefault();
+        if (!clientName || !clientPhone) return;
+        const newAppointment = {
+          id: Date.now(),
+          weekId: currentWeek.id,
+          day: selectedDayOption,
+          date: selectedDayOption === 'Seg' ? '08/09' : selectedDayOption === 'Ter' ? '09/09' : '10/09',
+          dayNum: selectedDayOption === 'Seg' ? 8 : selectedDayOption === 'Ter' ? 9 : 10,
+          client: clientName,
+          phone: clientPhone,
+          service: selectedService.name,
+          barber: selectedBarber.name,
+          time: selectedTime,
+          status: 'agendado',
+          price: selectedService.price,
+          items: [{ name: selectedService.name, price: selectedService.price }],
+          total: selectedService.price,
+          paymentMethod: '',
+          notes: clientNotes || 'Agendado pelo portal.'
+        };
+        setAppointments((prev) => [...prev, newAppointment]);
+        setBookingSuccess(true);
+      };
+
+      // MÉTRICAS DO DIA
+      const todaysAppointments = useMemo(() => appointments.filter(a => a.day === 'Seg' && (a.weekId === 0 || a.weekId === undefined)), [appointments]);
+      const completedToday = todaysAppointments.filter(a => a.status === 'concluido');
+      const inChairToday = todaysAppointments.filter(a => a.status === 'em_atendimento');
+      const waitingToday = todaysAppointments.filter(a => a.status === 'aguardando');
+      const scheduledToday = todaysAppointments.filter(a => a.status === 'agendado');
+
+      const revenueServices = completedToday.reduce((acc, a) => acc + (a.total || a.price), 0);
+      const revenueBalcao = counterSales.reduce((acc, s) => acc + s.total, 0);
+      const totalRevenueToday = revenueServices + revenueBalcao;
+
+      // MÉTRICAS DO BARBEIRO LOGADO
+      const myBarberName = currentUser.role === 'barbeiro' ? currentUser.name : (currentUser.role === 'dono' ? 'Luis Valverde' : '');
+      const myAllAppointments = useMemo(() => appointments.filter(a => a.barber === myBarberName), [appointments, myBarberName]);
+      const myWeekAppointments = useMemo(() => myAllAppointments.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)), [myAllAppointments, currentWeek]);
+      const myTodaysAppointments = useMemo(() => myAllAppointments.filter(a => a.day === 'Seg' && (a.weekId === 0 || a.weekId === undefined)), [myAllAppointments]);
+      const myCompletedToday = myTodaysAppointments.filter(a => a.status === 'concluido');
+      const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + a.price, 0);
+      const myCommissionRate = currentUser.name.includes('Luis') ? 0.60 : 0.50;
+      const myCommissionToday = myRevenueToday * myCommissionRate;
+
+      // SELETOR DE PERFIL PARA TESTE RÁPIDO (DEMO RBAC)
+      const DemoRoleSwitcher = () => (
+        <div className="bg-[#191713] border border-[#3A3326] rounded-full p-1.5 flex items-center gap-1 shadow-2xl">
+          <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold px-2.5 hidden sm:inline">
+            ⚡ PERFIL DEMO:
+          </span>
+          <button
+            onClick={() => switchRole('dono')}
+            className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'dono' && currentView === 'reception' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
+            title="Dono / Proprietário: Visão Global Irrestrita"
+          >
+            <span>👑</span>
+            <span>Dono</span>
+          </button>
+          <button
+            onClick={() => switchRole('barbeiro')}
+            className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'barbeiro' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
+            title="Barbeiro (Yago): Minha Agenda Semanal/Mensal, Meus Ganhos, Minha Escala"
+          >
+            <span>✂️</span>
+            <span>Barbeiro</span>
+          </button>
+          <button
+            onClick={() => switchRole('recepcao')}
+            className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'recepcao' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
+            title="Recepção: Fluxo de Balcão e Encaixes"
+          >
+            <span>📋</span>
+            <span>Recepção</span>
+          </button>
+          <button
+            onClick={() => switchRole('cliente')}
+            className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentView === 'client' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
+            title="Cliente: Área do Cliente com Cartão Fidelidade e Agendamentos"
+          >
+            <span>👤</span>
+            <span>Cliente</span>
+          </button>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen bg-[#0B0B0B] text-[#E0DDD5] font-sans antialiased flex flex-col selection:bg-[#C9A356] selection:text-black">
+          
+          {/* ========================================================================= */}
+          {/* MODO 1: SITE PÚBLICO DE APRESENTAÇÃO                                      */}
+          {/* ========================================================================= */}
+          {currentView === 'site' && (
+            <div className="flex flex-col md:flex-row min-h-screen">
+              {/* SIDEBAR LATERAL FIXA */}
+              <aside className="w-full md:w-[145px] md:fixed md:inset-y-0 md:left-0 bg-[#0B0B0B] border-r border-[#211F1C] z-40 flex md:flex-col items-center justify-between p-3 md:py-6 text-white shadow-2xl">
+                <div className="flex flex-col items-center text-center cursor-pointer mb-2" onClick={() => scrollToSection('home')}>
+                  <OfficialLogo className="w-20 h-20" />
+                  <span className="text-[9px] font-serif tracking-[0.25em] text-[#C9A356] mt-1 font-bold">EST. 2022</span>
+                </div>
+
+                <nav className="w-full flex md:flex-col items-center justify-around md:justify-center gap-1 md:gap-2.5 overflow-x-auto md:overflow-visible py-1">
+                  <button onClick={() => scrollToSection('home')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'home' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <BowtieIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1">HOME</span>
+                  </button>
+                  <button onClick={() => scrollToSection('sobre-nos')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'sobre-nos' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <BarberBeardIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1 text-center">SOBRE</span>
+                  </button>
+                  <button onClick={() => scrollToSection('espaco')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'espaco' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <CrossedRazorsIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1">ESPAÇO</span>
+                  </button>
+                  <button onClick={() => scrollToSection('servicos')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'servicos' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <ClassicShearsIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1">SERVIÇOS</span>
+                  </button>
+                  <button onClick={() => scrollToSection('bebidas')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'bebidas' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <CombAndRazorIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1">BAR</span>
+                  </button>
+                  <button onClick={() => scrollToSection('barbeiros')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'barbeiros' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <CuttingScissorsIcon className="w-5 h-5" />
+                    <span className="text-[9px] font-serif tracking-widest uppercase font-semibold mt-1">EQUIPE</span>
+                  </button>
+                  <button onClick={() => scrollToSection('localizacao')} className={`flex flex-col items-center p-2 rounded w-full transition-all ${activeNav === 'localizacao' ? 'text-[#C9A356]' : 'text-[#E0DDD5] hover:text-[#C9A356]'}`}>
+                    <MapPinIcon className="w-5 h-5 text-[#C9A356]" />
+                    <span className="text-[9px] font-serif tracking-wider uppercase font-semibold mt-1 text-center">RESENDE</span>
+                  </button>
+                </nav>
+
+                <div className="w-full pt-3 border-t border-[#211F1C] flex flex-col gap-2">
+                  <button
+                    onClick={() => switchRole('cliente')}
+                    className="w-full py-2 px-1 rounded-lg bg-[#C9A356]/15 hover:bg-[#C9A356] border border-[#C9A356]/40 text-[#C9A356] hover:text-black transition-all flex flex-col items-center text-center shadow"
+                  >
+                    <span className="text-xs">👤</span>
+                    <span className="text-[8px] uppercase tracking-wider font-bold">ÁREA CLIENTE</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('login')}
+                    className="w-full py-2 px-1 rounded-lg bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-400 hover:text-white transition-all flex flex-col items-center text-center"
+                  >
+                    <span className="text-xs">🔒</span>
+                    <span className="text-[8px] uppercase tracking-wider font-bold">EQUIPE / LOGIN</span>
+                  </button>
+                </div>
+              </aside>
+
+              {/* CONTEÚDO PRINCIPAL DO SITE */}
+              <main className="flex-1 md:ml-[145px] bg-[#FFFFFF] min-h-screen text-[#1A1A1A]">
+                {/* HERO */}
+                <section id="home" className="relative min-h-[92vh] flex flex-col items-center justify-center text-center px-4 py-16 bg-cover bg-center" style={{ backgroundImage: `linear-gradient(rgba(11, 11, 11, 0.85), rgba(11, 11, 11, 0.92)), url('espaco_interior_1.png')` }}>
+                  <div className="max-w-4xl mx-auto flex flex-col items-center z-10 text-white">
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full p-2 bg-[#0B0B0B]/85 border-2 border-[#C9A356]/60 shadow-2xl flex items-center justify-center backdrop-blur-md mb-5">
+                      <OfficialLogo className="w-full h-full" />
+                    </div>
+                    
+                    <div className="inline-flex items-center gap-2 border border-[#C9A356]/50 px-4 py-1.5 rounded-full mb-3 bg-[#0B0B0B]/70">
+                      <span className="text-[11px] font-serif uppercase tracking-[0.25em] text-[#E0DDD5]">R. ANTÔNIO VELOSO JÚNIOR, 77 • CAMPOS ELÍSEOS • RESENDE / RJ</span>
+                    </div>
+
+                    <h1 className="font-serif text-3xl sm:text-5xl md:text-6xl font-bold tracking-wider uppercase text-white mb-2">VALVERD'S</h1>
+                    <div className="text-base sm:text-xl font-serif italic text-[#C9A356] tracking-widest mb-3">BarberShop — Desde 2022</div>
+                    <p className="text-sm sm:text-base md:text-lg font-serif text-[#D6D2CA] tracking-widest uppercase max-w-xl mb-3">"Beard, hair and mustache"</p>
+                    <p className="text-xs sm:text-sm text-[#C9A356] font-serif font-bold tracking-wider uppercase mb-8">"Dê um tapa no seu estilo!"</p>
+
+                    <div className="flex flex-col sm:flex-row gap-4 items-center">
+                      <button onClick={() => setIsBookingModalOpen(true)} className="px-8 py-3.5 bg-[#C9A356] hover:bg-[#B59044] text-[#0B0B0B] font-serif text-xs font-bold uppercase tracking-widest rounded shadow-xl transition-all hover:scale-105">
+                        Agende Seu Horário (A Partir de R$ 40)
+                      </button>
+                      <button onClick={() => switchRole('cliente')} className="px-7 py-3.5 bg-[#161512] hover:bg-[#201E19] text-[#C9A356] border border-[#C9A356]/50 font-serif text-xs font-bold uppercase tracking-widest rounded shadow-xl transition-all flex items-center gap-2">
+                        <span>👤 Meu Espaço / Fidelidade</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* PILARES */}
+                <section className="bg-[#0B0B0B] text-white py-12 px-6 border-b border-[#211F1C]">
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {BRAND_PILLARS.map((p, idx) => (
+                      <div key={idx} className="bg-[#161512] border border-[#2A261F] p-6 rounded-2xl text-center hover:border-[#C9A356]/50 transition-all">
+                        <div className="text-3xl mb-3">{p.icon}</div>
+                        <h3 className="font-serif font-bold text-sm uppercase text-[#C9A356] mb-2">{p.title}</h3>
+                        <p className="text-xs text-[#9E9B93] leading-relaxed">{p.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* SOBRE NÓS */}
+                <section id="sobre-nos" className="py-24 px-6 md:px-16 max-w-6xl mx-auto">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div className="relative aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl border border-[#E5E2DC]">
+                      <img src="luis_valverde.jpg" alt="Luis Valverde na Valverd's BarberShop" className="w-full h-full object-cover" />
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 text-white">
+                        <div className="text-[#C9A356] font-serif text-xs uppercase font-bold tracking-wider">Mestre Barbeiro & Criador</div>
+                        <div className="font-serif text-xl font-bold">Luis Valverde (@luisvalverdelv)</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="p-3 rounded-full bg-[#FAF8F5] border border-[#C9A356]/30 inline-block mb-4">
+                        <BarberBeardIcon className="w-10 h-10 text-[#C9A356]" />
+                      </div>
+                      <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-[0.2em] uppercase text-[#1A1A1A] mb-6">S O B R E - N Ó S</h2>
+                      <p className="text-[#4A4742] leading-relaxed text-sm sm:text-base mb-4">
+                        A <strong>Valverd's BarberShop</strong> nasceu em 2022 em <strong>Campos Elíseos – Resende / RJ</strong> com o propósito claro de transformar o corte de cabelo e o cuidado com a barba em uma experiência de alta precisão, respeito e bem-estar.
+                      </p>
+                      <p className="text-[#4A4742] leading-relaxed text-sm sm:text-base mb-6">
+                        Localizada na <strong>Rua Antônio Veloso Júnior, 77</strong>, nosso espaço é climatizado e projetado para você relaxar enquanto renova seu estilo. Nosso lema <em className="text-[#C9A356] font-serif">"Beard, hair and mustache"</em> e o convite <em className="text-[#1A1A1A] font-serif font-bold">"Dê um tapa no seu estilo!"</em> guiam nosso trabalho diário na tesoura, na máquina e na navalha quente.
+                      </p>
+
+                      <div className="pt-6 border-t border-[#E5E2DC] grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-[#FAF8F5] p-3 rounded-2xl">
+                          <div className="text-[10px] text-[#8C887F] font-serif uppercase">Fundação</div>
+                          <div className="font-serif font-bold text-lg text-[#1A1A1A]">2022</div>
+                        </div>
+                        <div className="bg-[#FAF8F5] p-3 rounded-2xl">
+                          <div className="text-[10px] text-[#8C887F] font-serif uppercase">Google Maps</div>
+                          <div className="font-serif font-bold text-lg text-[#C9A356]">5.0 ★★★★★</div>
+                        </div>
+                        <div className="bg-[#FAF8F5] p-3 rounded-2xl">
+                          <div className="text-[10px] text-[#8C887F] font-serif uppercase">Local</div>
+                          <div className="font-serif font-bold text-xs text-[#1A1A1A] truncate">Resende / RJ</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ESPAÇO */}
+                <section id="espaco" className="py-24 px-6 md:px-16 bg-[#FAFAF8] border-y border-[#EFECE6]">
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                    <div className="lg:col-span-5">
+                      <div className="p-3 rounded-full bg-white border border-[#C9A356]/30 inline-block mb-4">
+                        <CrossedRazorsIcon className="w-10 h-10 text-[#C9A356]" />
+                      </div>
+                      <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-[0.2em] uppercase text-[#1A1A1A] mb-6">E S P A Ç O</h2>
+                      <p className="text-[#4A4742] leading-relaxed text-sm mb-6">
+                        Ambiente climatizado, navalhas esterilizadas, toalhas quentes, café quentinho e cerveja gelada. Conheça as fotos reais do nosso salão na Rua Antônio Veloso Júnior, 77.
+                      </p>
+                      <button onClick={() => setIsBookingModalOpen(true)} className="px-6 py-3 bg-[#0B0B0B] hover:bg-[#C9A356] text-[#C9A356] hover:text-black font-serif text-xs font-bold uppercase rounded-full transition-all">
+                        Agendar sua visita →
+                      </button>
+                    </div>
+
+                    <div className="lg:col-span-7">
+                      <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-[#E5E2DC] aspect-[16/10] bg-black">
+                        <img src={GALLERY_SLIDES[currentSlide].url} alt={GALLERY_SLIDES[currentSlide].caption} className="w-full h-full object-cover transition-all duration-700" />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 text-white flex justify-between items-end">
+                          <p className="text-xs sm:text-sm font-serif">{GALLERY_SLIDES[currentSlide].caption}</p>
+                          <div className="flex gap-2">
+                            <button onClick={prevSlide} className="w-9 h-9 rounded-full bg-black/60 hover:bg-[#C9A356] hover:text-black text-white flex items-center justify-center transition-all">‹</button>
+                            <button onClick={nextSlide} className="w-9 h-9 rounded-full bg-black/60 hover:bg-[#C9A356] hover:text-black text-white flex items-center justify-center transition-all">›</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* SERVIÇOS */}
+                <section id="servicos" className="py-24 px-6 md:px-16 max-w-6xl mx-auto">
+                  <div className="text-center mb-16">
+                    <div className="text-xs font-serif tracking-widest uppercase text-[#C9A356] font-bold mb-2">TABELA OFICIAL</div>
+                    <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.2em] uppercase text-[#1A1A1A]">
+                      N O S S O S &nbsp; S E R V I Ç O S
+                    </h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* DESTAQUE 1 */}
+                    <div className="flex flex-col bg-black rounded-3xl overflow-hidden shadow-xl border border-[#2A261F]">
+                      <div className="bg-[#161512] py-3 text-center border-b border-[#2A261F] text-[#C9A356] font-serif font-bold text-lg uppercase">CORTE MASCULINO</div>
+                      <div className="aspect-[4/5] relative">
+                        <img src="yago_barber.png" alt="Corte na Valverd's" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-5 flex flex-col justify-end text-white">
+                          <div className="font-serif text-2xl font-bold text-[#C9A356] mb-1">R$ 40,00</div>
+                          <p className="text-xs text-gray-300 mb-3">Tesoura ou máquina, degrade limpo e acabamento na navalha.</p>
+                          <button onClick={() => { setSelectedService(SERVICES_MENU[0]); setIsBookingModalOpen(true); }} className="py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full">
+                            Agendar Corte • R$ 40,00
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DESTAQUE 2 */}
+                    <div className="flex flex-col bg-black rounded-3xl overflow-hidden shadow-xl border-2 border-[#C9A356] relative">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#C9A356] text-black text-[10px] font-serif uppercase tracking-widest font-bold px-3 py-0.5 rounded-full shadow">MAIS PEDIDO</div>
+                      <div className="bg-[#161512] py-3 text-center border-b border-[#2A261F] text-[#C9A356] font-serif font-bold text-lg uppercase">BARBA + CABELO</div>
+                      <div className="aspect-[4/5] relative">
+                        <img src="luis_valverde.jpg" alt="Combo Barba + Cabelo" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-5 flex flex-col justify-end text-white">
+                          <div className="font-serif text-2xl font-bold text-[#C9A356] mb-1">R$ 65,00</div>
+                          <p className="text-xs text-gray-300 mb-3">Combo completo com barboterapia e corte alinhado.</p>
+                          <button onClick={() => { setSelectedService(SERVICES_MENU[2]); setIsBookingModalOpen(true); }} className="py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full">
+                            Agendar Combo • R$ 65,00
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* TABELA COMPLETA */}
+                    <div className="bg-[#12110E] text-white p-6 rounded-3xl shadow-xl border border-[#2A261F]">
+                      <div className="text-center pb-4 mb-4 border-b border-[#2A261F] text-xs font-serif tracking-widest uppercase text-[#C9A356] font-bold">TABELA COMPLETA</div>
+                      <ul className="space-y-3">
+                        {SERVICES_MENU.map((s) => (
+                          <li key={s.id} onClick={() => { setSelectedService(s); setIsBookingModalOpen(true); }} className="p-3 rounded-2xl bg-[#1A1814] hover:bg-[#25221B] border border-[#2A261F] cursor-pointer transition-all">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-serif font-semibold text-xs text-white">{s.name}</span>
+                              <span className="font-bold text-sm text-[#C9A356]">R$ {s.price.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            <p className="text-[11px] text-[#8C887F]">{s.description}</p>
+                          </li>
+                        ))}
+                      </ul>
+                      <button onClick={() => setIsBookingModalOpen(true)} className="w-full mt-5 py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full transition-all">
+                        Agendar Pelo Sistema
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* BAR & BEBIDAS */}
+                <section id="bebidas" className="py-24 px-6 md:px-16 bg-[#FAFAF8] border-y border-[#EFECE6]">
+                  <div className="max-w-6xl mx-auto">
+                    <div className="text-center mb-16">
+                      <div className="text-xs font-serif tracking-widest uppercase text-[#C9A356] font-bold mb-2">EXPERIÊNCIA COMPLETA</div>
+                      <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.2em] uppercase text-[#1A1A1A]">
+                        B E B I D A S &nbsp; & &nbsp; B A R
+                      </h2>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                      <div className="space-y-3">
+                        {products.filter(p => p.category === 'Bar').map((bev) => (
+                          <div key={bev.id} className="bg-white p-4 rounded-2xl border border-[#E5E2DC] flex justify-between items-center text-xs shadow-sm">
+                            <div>
+                              <div className="font-bold font-serif text-sm text-[#1A1A1A]">{bev.name}</div>
+                              <div className="text-[#8C887F]">{bev.type}</div>
+                            </div>
+                            <div className="font-bold text-sm text-[#C9A356]">
+                              {bev.price === 0 ? 'Cortesia da Casa' : `R$ ${bev.price.toFixed(2).replace('.', ',')}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-xl bg-black border border-[#E5E2DC]">
+                        <img src="espaco_interior_2.png" alt="Bar da Valverd's" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* EQUIPE */}
+                <section id="barbeiros" className="py-24 px-6 md:px-16 max-w-6xl mx-auto">
+                  <div className="text-center mb-16">
+                    <div className="text-xs font-serif tracking-widest uppercase text-[#C9A356] font-bold mb-2">MESTRES DA NAVALHA</div>
+                    <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold tracking-[0.2em] uppercase text-[#1A1A1A]">
+                      N O S S A &nbsp; E Q U I P E
+                    </h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    {BARBERS.map((barber) => (
+                      <div key={barber.id} className="bg-white rounded-3xl border border-[#E5E2DC] overflow-hidden shadow-lg hover:shadow-2xl transition-all">
+                        <div className="aspect-[4/3] relative bg-black">
+                          <img src={barber.avatar} alt={barber.name} className="w-full h-full object-cover" />
+                          <div className="absolute top-3 right-3 bg-black/80 px-3 py-1 rounded-full text-[#C9A356] text-xs font-bold font-serif">
+                            ★ {barber.rating.toFixed(1)} ({barber.reviews})
+                          </div>
+                        </div>
+                        <div className="p-6">
+                          <div className="text-xs text-[#C9A356] font-serif uppercase font-bold">{barber.role}</div>
+                          <h3 className="font-serif text-xl font-bold text-[#1A1A1A] mt-1">{barber.name}</h3>
+                          <div className="text-xs text-blue-600 font-semibold mb-3">{barber.handle}</div>
+                          <p className="text-xs text-[#5C5850] leading-relaxed mb-4">{barber.bio}</p>
+                          <div className="bg-[#FAF8F5] p-3 rounded-2xl text-[11px] text-[#4A4742] mb-4">
+                            <strong>Especialidades:</strong> {barber.specialties}
+                          </div>
+                          <button onClick={() => { setSelectedBarber(barber); setIsBookingModalOpen(true); }} className="w-full py-3 bg-[#0B0B0B] hover:bg-[#C9A356] text-[#C9A356] hover:text-black font-serif text-xs font-bold uppercase rounded-full transition-all">
+                            Agendar com {barber.name.split(' ')[0]}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* LOCALIZAÇÃO */}
+                <section id="localizacao" className="py-24 px-6 md:px-16 bg-[#0B0B0B] text-white">
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div>
+                      <div className="inline-flex items-center gap-2 border border-[#C9A356]/50 px-3 py-1 rounded-full mb-4">
+                        <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356]">LOCALIZAÇÃO OFICIAL NO GOOGLE MAPS</span>
+                      </div>
+                      <h2 className="font-serif text-3xl sm:text-4xl font-bold uppercase tracking-wider mb-2">Valverd's BarberShop</h2>
+                      <div className="flex items-center gap-2 text-sm text-[#C9A356] font-serif mb-4">
+                        <span>★★★★★ 5,0 no Google</span>
+                        <span className="text-gray-400">• Aberto até 19:00</span>
+                      </div>
+                      <p className="text-[#9E9B93] text-sm leading-relaxed mb-6">
+                        Venha nos visitar em nosso espaço físico em Campos Elíseos – Resende / RJ. Ambiente climatizado, atendimento com horário marcado e estacionamento na via.
+                      </p>
+
+                      <div className="space-y-4 text-xs font-serif">
+                        <div className="flex items-start gap-3 bg-[#161512] p-4 rounded-2xl border border-[#2A261F]">
+                          <span className="text-lg">📍</span>
+                          <div>
+                            <div className="text-[#C9A356] font-bold uppercase">Endereço Exato</div>
+                            <div className="text-white mt-0.5">{ADDRESS_FULL}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 bg-[#161512] p-4 rounded-2xl border border-[#2A261F]">
+                          <span className="text-lg">⏰</span>
+                          <div>
+                            <div className="text-[#C9A356] font-bold uppercase">Horário de Funcionamento</div>
+                            <div className="text-white mt-0.5">Segunda a Sábado — 09:00 às 19:00 (Domingo Fechado)</div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 bg-[#161512] p-4 rounded-2xl border border-[#2A261F]">
+                          <span className="text-lg">📱</span>
+                          <div>
+                            <div className="text-[#C9A356] font-bold uppercase">Telefone & WhatsApp</div>
+                            <div className="text-white mt-0.5">(21) 97010-0668</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-[#2A261F] bg-[#161512] p-4 text-center">
+                      <a href={GOOGLE_MAPS_LINK} target="_blank" rel="noopener noreferrer" className="block group">
+                        <img src="espaco_real_maps.png" alt="Valverd's BarberShop no Google Maps" className="w-full max-h-[480px] object-contain rounded-2xl mx-auto mb-3 group-hover:opacity-90 transition-opacity" />
+                        <div className="text-xs font-serif text-[#C9A356] group-hover:underline flex items-center justify-center gap-1">
+                          <span>📍 Clique para abrir no Google Maps (5.0 ★★★★★)</span>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+                </section>
+
+                {/* FOOTER */}
+                <footer className="bg-[#050505] text-[#8C887F] py-8 px-6 border-t border-[#1C1B18] text-center text-xs">
+                  <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <OfficialLogo className="w-12 h-12" />
+                      <div className="text-left">
+                        <div className="font-serif font-bold text-white text-sm">VALVERD'S BARBERSHOP</div>
+                        <div className="text-[11px]">R. Antônio Veloso Júnior, 77 - Resende / RJ</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => switchRole('cliente')} className="text-[#C9A356] hover:underline font-serif text-xs">Área do Cliente</button>
+                      <span>•</span>
+                      <button onClick={() => setCurrentView('login')} className="text-gray-400 hover:underline font-serif text-xs">Acesso Restrito</button>
+                    </div>
+                  </div>
+                </footer>
+              </main>
+
+              {/* BOTAO FLUTUANTE DE AGENDAMENTO */}
+              <button
+                onClick={() => setIsBookingModalOpen(true)}
+                className="fixed bottom-6 right-6 z-50 bg-[#0B0B0B] hover:bg-[#C9A356] text-[#C9A356] hover:text-black px-5 py-3 rounded-full shadow-2xl border border-[#C9A356]/40 flex items-center gap-2.5 font-serif text-xs font-bold uppercase tracking-wider transition-all hover:scale-105"
+              >
+                <span>✂️</span>
+                <span>Agendar Horário</span>
+              </button>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODO 2: TELA DE LOGIN & CONTROLE DE ACESSO (RBAC)                         */}
+          {/* ========================================================================= */}
+          {currentView === 'login' && (
+            <div className="min-h-screen w-full bg-[#0B0B0B] flex flex-col justify-center items-center p-6 text-white relative">
+              <button onClick={() => setCurrentView('site')} className="absolute top-6 left-6 text-xs text-[#9E9B93] hover:text-[#C9A356] font-serif uppercase tracking-widest flex items-center gap-2">
+                <span>←</span>
+                <span>Voltar ao Site Público</span>
+              </button>
+
+              <div className="max-w-xl w-full bg-[#161512] border border-[#2A261F] rounded-3xl shadow-2xl p-8">
+                <div className="flex flex-col items-center mb-6 text-center">
+                  <OfficialLogo className="w-24 h-24 mb-3" />
+                  <div className="text-[10px] font-serif tracking-widest text-[#C9A356] uppercase font-bold">
+                    CONTROLE DE ACESSO & HIERARQUIA
+                  </div>
+                  <h2 className="font-serif text-2xl font-bold uppercase tracking-wider text-white mt-1">
+                    Entrar na Plataforma
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                    Acesso inteligente por regras e hierarquia para donos, barbeiros, recepção e clientes.
+                  </p>
+                </div>
+
+                {/* ACESSO DEMO RÁPIDO COM 4 PERFIS */}
+                <div className="mb-6">
+                  <div className="text-[11px] font-serif uppercase tracking-widest text-[#C9A356] font-bold mb-3 text-center">
+                    ⚡ SELECIONE UM PERFIL PARA ACESSO IMEDIATO:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => switchRole('dono')}
+                      className="p-3.5 bg-[#1F1C16] hover:bg-[#C9A356] text-white hover:text-black border border-[#C9A356]/40 rounded-2xl text-left transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-serif font-bold text-xs uppercase text-[#C9A356] group-hover:text-black">1. Luis Valverde</span>
+                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full text-white">👑 DONO</span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 group-hover:text-black/80">Visão total: todas as agendas, DRE, escalas e bar.</div>
+                    </button>
+
+                    <button
+                      onClick={() => switchRole('barbeiro')}
+                      className="p-3.5 bg-[#1F1C16] hover:bg-[#C9A356] text-white hover:text-black border border-[#C9A356]/40 rounded-2xl text-left transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-serif font-bold text-xs uppercase text-[#C9A356] group-hover:text-black">2. Yago Barber</span>
+                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full text-white">✂️ BARBEIRO</span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 group-hover:text-black/80">Visão restrita: Minha agenda semanal, mensal e comissões.</div>
+                    </button>
+
+                    <button
+                      onClick={() => switchRole('recepcao')}
+                      className="p-3.5 bg-[#1F1C16] hover:bg-[#C9A356] text-white hover:text-black border border-[#C9A356]/40 rounded-2xl text-left transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-serif font-bold text-xs uppercase text-[#C9A356] group-hover:text-black">3. Recepção & Caixa</span>
+                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full text-white">📋 OPERAÇÃO</span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 group-hover:text-black/80">Fila do lounge, PDV de produtos e encaixes.</div>
+                    </button>
+
+                    <button
+                      onClick={() => switchRole('cliente')}
+                      className="p-3.5 bg-[#1F1C16] hover:bg-[#C9A356] text-white hover:text-black border border-[#C9A356]/40 rounded-2xl text-left transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-serif font-bold text-xs uppercase text-[#C9A356] group-hover:text-black">4. Roberto Andrade</span>
+                        <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full text-white">👤 CLIENTE</span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 group-hover:text-black/80">Cartão fidelidade, histórico e próximo corte.</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative flex py-2 items-center mb-4">
+                  <div className="flex-grow border-t border-[#2A261F]"></div>
+                  <span className="flex-shrink mx-4 text-[10px] uppercase tracking-widest text-gray-500 font-serif">OU DIGITE SUAS CREDENCIAIS</span>
+                  <div className="flex-grow border-t border-[#2A261F]"></div>
+                </div>
+
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-serif uppercase tracking-wider text-[#C5C0B5] mb-1">E-mail ou Usuário:</label>
+                    <input
+                      type="text"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="luis@valverds.com / yago@valverds.com / cliente"
+                      className="w-full px-4 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-serif uppercase tracking-wider text-[#C5C0B5] mb-1">Senha:</label>
+                    <input
+                      type="password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-4 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-xl"
+                  >
+                    Acessar Conta
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODO 3: GERÊNCIA / RECEPÇÃO / PORTAL DO BARBEIRO (RBAC EXECUTIVO)        */}
+          {/* ========================================================================= */}
+          {currentView === 'reception' && (
+            <div className="min-h-screen w-full bg-[#0D0C0A] text-[#E0DDD5] flex flex-col">
+              
+              {/* TOPBAR EXECUTIVA ARREDONDADA */}
+              <header className="bg-[#12110E] border-b border-[#211E18] px-6 py-4 sticky top-0 z-40 backdrop-blur-md">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                  
+                  {/* IDENTIFICAÇÃO DO PERFIL */}
+                  <div className="flex items-center gap-4">
+                    <OfficialLogo className="w-12 h-12" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif font-bold text-base tracking-wider text-white">VALVERD'S</span>
+                        <span className={`text-[10px] font-serif font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow ${currentUser.role === 'dono' ? 'bg-[#C9A356] text-black' : currentUser.role === 'barbeiro' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>
+                          {currentUser.role === 'dono' ? '👑 PROPRIETÁRIO' : currentUser.role === 'barbeiro' ? '✂️ PORTAL DO BARBEIRO' : '📋 RECEPÇÃO & BALCÃO'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                        <span>{currentUser.name}</span>
+                        <span>•</span>
+                        <span className="text-[#C9A356]">{currentUser.title}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SELETOR DE PERFIL DEMO (RBAC) */}
+                  <DemoRoleSwitcher />
+
+                  {/* PILLS DE KPI */}
+                  <div className="flex items-center gap-3">
+                    {currentUser.role === 'barbeiro' ? (
+                      <>
+                        <div className="bg-[#181612] px-4 py-1.5 rounded-full border border-[#2D271F] flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400 uppercase font-serif">Minha Comissão Hoje:</span>
+                          <span className="font-serif font-bold text-sm text-green-400">R$ {myCommissionToday.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        <div className="bg-[#181612] px-4 py-1.5 rounded-full border border-[#2D271F] flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400 uppercase font-serif">Meus Clientes Hoje:</span>
+                          <span className="font-serif font-bold text-sm text-[#C9A356]">{myTodaysAppointments.length}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-[#181612] px-4 py-1.5 rounded-full border border-[#2D271F] flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400 uppercase font-serif">Caixa Hoje:</span>
+                          <span className="font-serif font-bold text-sm text-green-400">R$ {totalRevenueToday.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        <div className="bg-[#181612] px-4 py-1.5 rounded-full border border-[#2D271F] flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400 uppercase font-serif">No Lounge:</span>
+                          <span className="font-serif font-bold text-sm text-amber-400">{waitingToday.length}</span>
+                        </div>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => setCurrentView('site')}
+                      className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
+                    >
+                      Site Público
+                    </button>
+                  </div>
+                </div>
+
+                {/* CONTROLE DE ABAS (PÍLULAS) */}
+                <div className="max-w-7xl mx-auto mt-4 pt-3 border-t border-[#1C1A14] flex items-center gap-2 overflow-x-auto pb-1">
+                  {currentUser.role === 'barbeiro' ? (
+                    <>
+                      <button
+                        onClick={() => setBarberTab('minha_agenda')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${barberTab === 'minha_agenda' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        📅 Minha Agenda ({barberCalendarMode === 'semanal' ? 'Semana' : barberCalendarMode === 'mensal' ? 'Mês' : barberCalendarMode === 'comparativo' ? 'Grade Horários' : 'Hoje'})
+                      </button>
+                      <button
+                        onClick={() => setBarberTab('meus_ganhos')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${barberTab === 'meus_ganhos' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        💵 Minhas Comissões & Cortes
+                      </button>
+                      <button
+                        onClick={() => setBarberTab('minha_escala')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${barberTab === 'minha_escala' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        ⏰ Atualizar Meus Horários & Escala
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setReceptionTab('agenda')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'agenda' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        📅 Agenda & Cadeiras
+                      </button>
+                      <button
+                        onClick={() => setReceptionTab('fila')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'fila' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        🛋️ Fila & Lounge
+                      </button>
+                      <button
+                        onClick={() => setReceptionTab('produtos')}
+                        className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'produtos' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                      >
+                        🍾 Bar & Produtos (PDV)
+                      </button>
+                      {currentUser.role === 'dono' && (
+                        <>
+                          <button
+                            onClick={() => setReceptionTab('financeiro')}
+                            className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'financeiro' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                          >
+                            📊 Caixa & DRE
+                          </button>
+                          <button
+                            onClick={() => setReceptionTab('escalas')}
+                            className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'escalas' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                          >
+                            ⏰ Horários & Escalas Gerais
+                          </button>
+                          <button
+                            onClick={() => setReceptionTab('equipe')}
+                            className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${receptionTab === 'equipe' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                          >
+                            ✂️ Equipe & Barbeiros
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </header>
+
+              {/* CONTEÚDO PRINCIPAL DA GERÊNCIA */}
+              <main className="max-w-7xl mx-auto p-6 flex-1 w-full">
+                
+                {/* ------------------------------------------------------------- */}
+                {/* SEÇÃO DO BARBEIRO (ROLE === 'BARBEIRO')                         */}
+                {/* ------------------------------------------------------------- */}
+                {currentUser.role === 'barbeiro' && (
+                  <div className="space-y-6">
+                    {/* ABA DO BARBEIRO 1: MINHA AGENDA (COM NAVEGAÇÃO DE SEMANA & MÊS) */}
+                    {barberTab === 'minha_agenda' && (
+                      <div className="space-y-6">
+                        
+                        {/* BANNER PRINCIPAL COM SELETOR DE MODOS */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shadow-xl">
+                          <div className="flex items-center gap-4">
+                            <div className="relative">
+                              <img src={currentUser.avatar} alt={currentUser.name} className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A356] shadow" />
+                              <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></span>
+                            </div>
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">AGENDA PESSOAL DO PROFISSIONAL</div>
+                              <h2 className="font-serif text-2xl font-bold text-white mt-0.5">{currentUser.name}</h2>
+                              <p className="text-xs text-gray-400">Escala ativa: <strong>{barberEditStartTime} às {barberEditEndTime}</strong> • Almoço: <strong>{barberEditLunchBreak}</strong></p>
+                            </div>
+                          </div>
+
+                          {/* MODOS DE VISUALIZAÇÃO DA AGENDA */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="bg-[#1E1B15] p-1 rounded-full border border-[#332C20] flex items-center gap-1">
+                              <button
+                                onClick={() => setBarberCalendarMode('semanal')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${barberCalendarMode === 'semanal' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Semana
+                              </button>
+                              <button
+                                onClick={() => setBarberCalendarMode('mensal')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${barberCalendarMode === 'mensal' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Mês
+                              </button>
+                              <button
+                                onClick={() => setBarberCalendarMode('comparativo')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${barberCalendarMode === 'comparativo' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Grade por Barbeiro
+                              </button>
+                              <button
+                                onClick={() => setBarberCalendarMode('diaria')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${barberCalendarMode === 'diaria' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Hoje
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => setIsBookingModalOpen(true)}
+                              className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow"
+                            >
+                              + Encaixe
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* CONTROLE DE NAVEGAÇÃO ENTRE SEMANAS */}
+                        {(barberCalendarMode === 'semanal' || barberCalendarMode === 'comparativo') && (
+                          <div className="bg-[#161410] p-4 rounded-2xl border border-[#282319] flex justify-between items-center shadow">
+                            <button
+                              disabled={selectedWeekIndex === 0}
+                              onClick={() => setSelectedWeekIndex(Math.max(0, selectedWeekIndex - 1))}
+                              className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold flex items-center gap-1.5 transition-all ${selectedWeekIndex === 0 ? 'opacity-30 cursor-not-allowed text-gray-500' : 'bg-[#1E1B15] text-[#C9A356] hover:bg-[#2A251D]'}`}
+                            >
+                              <span>‹</span>
+                              <span>Semana Anterior</span>
+                            </button>
+
+                            <div className="text-center">
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold block">PERÍODO SELECIONADO</span>
+                              <strong className="font-serif text-sm sm:text-base text-white">{currentWeek.label}</strong>
+                            </div>
+
+                            <button
+                              disabled={selectedWeekIndex === WEEKS_DATA.length - 1}
+                              onClick={() => setSelectedWeekIndex(Math.min(WEEKS_DATA.length - 1, selectedWeekIndex + 1))}
+                              className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold flex items-center gap-1.5 transition-all ${selectedWeekIndex === WEEKS_DATA.length - 1 ? 'opacity-30 cursor-not-allowed text-gray-500' : 'bg-[#1E1B15] text-[#C9A356] hover:bg-[#2A251D]'}`}
+                            >
+                              <span>Próxima Semana</span>
+                              <span>›</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* MODO 1: VISÃO SEMANAL DO BARBEIRO */}
+                        {barberCalendarMode === 'semanal' && (
+                          <div className="space-y-4">
+                            {/* BOTÕES DOS DIAS DA SEMANA ATUAL */}
+                            <div className="grid grid-cols-6 gap-2 sm:gap-3">
+                              {currentWeek.days.map((d) => {
+                                const dayAppts = myAllAppointments.filter(a => (a.day === d.name && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined))));
+                                const isSelected = selectedWeekDay === d.name;
+                                return (
+                                  <button
+                                    key={d.name}
+                                    onClick={() => setSelectedWeekDay(d.name)}
+                                    className={`p-3.5 rounded-2xl border text-center transition-all ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-[1.02]' : 'bg-[#161410] text-gray-300 border-[#282319] hover:border-[#C9A356]/50'}`}
+                                  >
+                                    <div className="text-[10px] font-serif uppercase font-bold">{d.name}</div>
+                                    <div className="text-lg font-bold font-serif my-0.5">{d.num}</div>
+                                    <div className={`text-[10px] rounded-full px-2 py-0.5 font-bold ${isSelected ? 'bg-black/30 text-black' : 'bg-[#221E17] text-[#C9A356]'}`}>
+                                      {dayAppts.length} {dayAppts.length === 1 ? 'cliente' : 'clientes'}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* LISTA DE AGENDAMENTOS DO DIA SELECIONADO NA SEMANA */}
+                            <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                              <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#282319]">
+                                <div>
+                                  <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">HORÁRIOS DE {selectedWeekDay.toUpperCase()} ({currentWeek.label})</span>
+                                  <h3 className="font-serif text-lg font-bold text-white">Clientes & Agendamentos Marcados</h3>
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Minha Jornada: <strong>{barberEditStartTime} às {barberEditEndTime}</strong>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                {myAllAppointments.filter(a => (a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)))).map((a) => (
+                                  <div key={a.id} className="bg-[#1E1B15] p-4 rounded-2xl border border-[#30291D] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-16 text-center py-2 bg-[#12110E] rounded-xl border border-[#282319]">
+                                        <div className="font-serif font-bold text-sm text-[#C9A356]">{a.time}</div>
+                                        <div className="text-[9px] text-gray-400">{a.day}</div>
+                                      </div>
+                                      <div>
+                                        <div className="font-serif font-bold text-sm text-white">{a.client}</div>
+                                        <div className="text-xs text-gray-400">{a.service} • R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                        <div className="text-[11px] text-gray-500 italic mt-0.5">"{a.notes}"</div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                                      <span className={`text-[10px] font-serif font-bold uppercase px-3 py-1 rounded-full ${a.status === 'concluido' ? 'bg-green-900/60 text-green-300' : a.status === 'em_atendimento' ? 'bg-blue-900/60 text-blue-300' : a.status === 'aguardando' ? 'bg-amber-900/60 text-amber-300' : 'bg-[#282319] text-gray-300'}`}>
+                                        {a.status === 'concluido' ? '✓ Concluído' : a.status === 'em_atendimento' ? '● Na Cadeira' : a.status === 'aguardando' ? '🛋️ No Sofá' : '⏰ Agendado'}
+                                      </span>
+                                      <a
+                                        href={`https://wa.me/55${a.phone.replace(/\D/g, '')}?text=Olá%20${encodeURIComponent(a.client)}%2C%20aqui%20é%20o%20${encodeURIComponent(currentUser.name)}%20da%20Valverd's!`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1 bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-black rounded-full text-xs font-serif font-bold transition-all flex items-center gap-1"
+                                      >
+                                        <span>💬</span>
+                                        <span>WhatsApp</span>
+                                      </a>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {myAllAppointments.filter(a => (a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)))).length === 0 && (
+                                  <div className="text-center py-12 text-gray-500 text-xs font-serif">
+                                    Nenhum agendamento para este dia nesta semana. Horários livres para receber novos clientes!
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* MODO 2: VISÃO MENSAL (GRADE COMPLETA DE SETEMBRO 2026) */}
+                        {barberCalendarMode === 'mensal' && (
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-5">
+                            <div className="flex justify-between items-center pb-4 border-b border-[#282319]">
+                              <div>
+                                <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">CALENDÁRIO MENSAL DO BARBEIRO</span>
+                                <h3 className="font-serif text-xl font-bold text-white mt-0.5">Setembro 2026</h3>
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                Clique em um dia para ver ou adicionar clientes
+                              </div>
+                            </div>
+
+                            {/* CABEÇALHO DOS DIAS DA SEMANA */}
+                            <div className="grid grid-cols-7 gap-2 text-center text-[11px] font-serif font-bold text-gray-400 uppercase pb-2">
+                              <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span className="text-red-400">Dom</span>
+                            </div>
+
+                            {/* DIAS DE SETEMBRO */}
+                            <div className="grid grid-cols-7 gap-2">
+                              {/* Offset inicial (Setembro começou numa terça) */}
+                              <div className="bg-transparent border border-transparent rounded-2xl p-2 opacity-0"></div>
+
+                              {SEPTEMBER_DAYS.map((d) => {
+                                const dayAppts = myAllAppointments.filter(a => a.dayNum === d.dayNum);
+                                const isSelected = selectedMonthDay === d.dayNum;
+                                return (
+                                  <button
+                                    key={d.dayNum}
+                                    onClick={() => setSelectedMonthDay(d.dayNum)}
+                                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col justify-between aspect-square ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-105 font-bold' : d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]/50' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}
+                                  >
+                                    <div className="flex justify-between items-center w-full">
+                                      <span className="text-xs font-serif font-bold">{d.dayNum}</span>
+                                      <span className="text-[9px] uppercase">{d.weekDay}</span>
+                                    </div>
+                                    <div className="mt-1">
+                                      {d.isOpen ? (
+                                        dayAppts.length > 0 ? (
+                                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-black text-[#C9A356]' : 'bg-[#C9A356]/20 text-[#C9A356]'}`}>
+                                            {dayAppts.length} {dayAppts.length === 1 ? 'corte' : 'cortes'}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] text-gray-500">Livre</span>
+                                        )
+                                      ) : (
+                                        <span className="text-[9px] text-red-500">Folga</span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* DETALHES DO DIA SELECIONADO NO MÊS */}
+                            <div className="mt-6 pt-6 border-t border-[#282319] bg-[#1A1813] p-5 rounded-2xl">
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="font-serif font-bold text-white text-base">
+                                  Atendimentos no dia {selectedMonthDay} de Setembro
+                                </h4>
+                                <span className="text-xs text-[#C9A356] font-serif">
+                                  {myAllAppointments.filter(a => a.dayNum === selectedMonthDay).length} clientes marcados
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                {myAllAppointments.filter(a => a.dayNum === selectedMonthDay).map(a => (
+                                  <div key={a.id} className="p-3 bg-[#13120E] rounded-xl border border-[#282319] flex justify-between items-center text-xs">
+                                    <div>
+                                      <span className="font-serif font-bold text-[#C9A356] mr-2">{a.time}</span>
+                                      <strong className="text-white">{a.client}</strong> — <span className="text-gray-400">{a.service}</span>
+                                    </div>
+                                    <span className="text-[10px] bg-[#2A2419] px-2 py-0.5 rounded-full text-gray-300 font-bold uppercase">{a.status}</span>
+                                  </div>
+                                ))}
+
+                                {myAllAppointments.filter(a => a.dayNum === selectedMonthDay).length === 0 && (
+                                  <div className="text-xs text-gray-500 text-center py-4">
+                                    Nenhum cliente agendado para o dia {selectedMonthDay}. Dia 100% aberto para agendamentos!
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* MODO 3: GRADE COMPARATIVA (QUAL BARBEIRO TEM QUAL HORÁRIO) */}
+                        {barberCalendarMode === 'comparativo' && (
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-5">
+                            <div>
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">MAPA DE CADEIRAS & HORÁRIOS</span>
+                              <h3 className="font-serif text-xl font-bold text-white mt-0.5">Ocupação por Barbeiro em {selectedWeekDay} ({currentWeek.label})</h3>
+                              <p className="text-xs text-gray-400">Veja exatamente qual barbeiro está livre, na cadeira ou em intervalo em cada horário.</p>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-[#2D271E] text-gray-400 font-serif uppercase text-[10px]">
+                                    <th className="py-3 px-3">Horário</th>
+                                    <th className="py-3 px-3">👑 Luis Valverde (Cadeira 1)</th>
+                                    <th className="py-3 px-3">✂️ Yago Barber (Cadeira 2)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#221E17]">
+                                  {TIME_SLOTS_COMPARE.map((slot) => {
+                                    const luisAppt = appointments.find(a => a.barber === 'Luis Valverde' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                                    const yagoAppt = appointments.find(a => a.barber === 'Yago Barber' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+
+                                    const isLuisLunch = slot === '12:45' || slot === '13:30';
+                                    const isYagoLunch = slot === '13:30' || slot === '14:15';
+
+                                    return (
+                                      <tr key={slot} className="hover:bg-[#1B1914] transition-colors">
+                                        <td className="py-3 px-3 font-serif font-bold text-[#C9A356] whitespace-nowrap">{slot}</td>
+                                        
+                                        {/* COLUNA LUIS VALVERDE */}
+                                        <td className="py-3 px-3">
+                                          {luisAppt ? (
+                                            <span className="inline-flex items-center gap-1.5 bg-red-950/40 border border-red-800/40 text-red-200 px-3 py-1 rounded-full text-[11px] font-medium">
+                                              <span>●</span>
+                                              <span>Ocupado: <strong>{luisAppt.client}</strong> ({luisAppt.service})</span>
+                                            </span>
+                                          ) : isLuisLunch ? (
+                                            <span className="inline-flex items-center gap-1.5 bg-[#252016] text-amber-400 px-3 py-1 rounded-full text-[11px]">
+                                              <span>☕</span>
+                                              <span>Intervalo de Almoço</span>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px]">
+                                              <span>✓</span>
+                                              <span>Horário Livre (Cadeira 1)</span>
+                                            </span>
+                                          )}
+                                        </td>
+
+                                        {/* COLUNA YAGO BARBER */}
+                                        <td className="py-3 px-3">
+                                          {selectedWeekDay === 'Seg' ? (
+                                            <span className="inline-flex items-center gap-1.5 bg-[#1F1C16] text-gray-500 px-3 py-1 rounded-full text-[11px]">
+                                              <span>🛑</span>
+                                              <span>Folga Semanal (Inicia Terça)</span>
+                                            </span>
+                                          ) : yagoAppt ? (
+                                            <span className="inline-flex items-center gap-1.5 bg-red-950/40 border border-red-800/40 text-red-200 px-3 py-1 rounded-full text-[11px] font-medium">
+                                              <span>●</span>
+                                              <span>Ocupado: <strong>{yagoAppt.client}</strong> ({yagoAppt.service})</span>
+                                            </span>
+                                          ) : isYagoLunch ? (
+                                            <span className="inline-flex items-center gap-1.5 bg-[#252016] text-amber-400 px-3 py-1 rounded-full text-[11px]">
+                                              <span>☕</span>
+                                              <span>Intervalo de Almoço</span>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px]">
+                                              <span>✓</span>
+                                              <span>Horário Livre (Cadeira 2)</span>
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* MODO 4: VISÃO DIÁRIA SIMPLES */}
+                        {barberCalendarMode === 'diaria' && (
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                            <h3 className="font-serif text-lg font-bold text-white mb-4">Meus Atendimentos de Hoje (Segunda-feira)</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {myTodaysAppointments.map((a) => (
+                                <div key={a.id} className="bg-[#1A1813] p-5 rounded-3xl border border-[#2D271E] flex flex-col justify-between">
+                                  <div>
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div className="font-serif font-bold text-base text-white">{a.client}</div>
+                                      <span className="font-serif font-bold text-sm text-[#C9A356] bg-[#231F17] px-3 py-1 rounded-full">
+                                        {a.time}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-300 font-medium mb-1">{a.service}</div>
+                                    <div className="text-xs text-gray-500 mb-3">{a.phone} • {a.notes}</div>
+                                  </div>
+
+                                  <div className="pt-3 border-t border-[#2A2419] flex justify-between items-center">
+                                    <div>
+                                      <span className="text-[10px] text-gray-400">Minha Comissão: </span>
+                                      <strong className="text-green-400 text-xs font-serif">R$ {(a.price * myCommissionRate).toFixed(2).replace('.', ',')}</strong>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {a.status === 'aguardando' && (
+                                        <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-bold uppercase">
+                                          Chamar
+                                        </button>
+                                      )}
+                                      {a.status === 'em_atendimento' && (
+                                        <button onClick={() => setCheckoutAppt(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase">
+                                          Concluir
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    )}
+
+                    {/* ABA DO BARBEIRO 2: MEUS GANHOS & COMISSÕES */}
+                    {barberTab === 'meus_ganhos' && (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319] shadow">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">MINHA COMISSÃO HOJE</div>
+                            <div className="font-serif text-2xl font-bold text-green-400 mt-1">
+                              R$ {myCommissionToday.toFixed(2).replace('.', ',')}
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-1">Taxa: {(myCommissionRate * 100)}% sobre serviços</div>
+                          </div>
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319] shadow">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">CLIENTES ATENDIDOS</div>
+                            <div className="font-serif text-2xl font-bold text-white mt-1">
+                              {myCompletedToday.length} de {myTodaysAppointments.length}
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-1">Atendimentos concluídos hoje</div>
+                          </div>
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319] shadow">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PREVISÃO DA SEMANA</div>
+                            <div className="font-serif text-2xl font-bold text-[#C9A356] mt-1">
+                              R$ {(myWeekAppointments.reduce((acc, a) => acc + a.price, 0) * myCommissionRate).toFixed(2).replace('.', ',')}
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-1">{myWeekAppointments.length} cortes nesta semana</div>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                          <h3 className="font-serif text-lg font-bold text-white mb-4">Extrato Pessoal de Serviços</h3>
+                          <div className="space-y-3">
+                            {myWeekAppointments.map((a) => (
+                              <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex justify-between items-center text-xs">
+                                <div>
+                                  <div className="font-serif font-bold text-white">{a.client} — {a.service}</div>
+                                  <div className="text-gray-400 text-[11px]">{a.day} • {a.time} • Valor Bruto: R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-serif font-bold text-green-400 text-sm">
+                                    + R$ {(a.price * myCommissionRate).toFixed(2).replace('.', ',')}
+                                  </div>
+                                  <span className="text-[9px] uppercase font-bold text-gray-400">{a.status}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA DO BARBEIRO 3: ATUALIZAR MEUS HORÁRIOS & ESCALA (AUTONOMIA DO BARBEIRO) */}
+                    {barberTab === 'minha_escala' && (
+                      <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-6">
+                        <div>
+                          <div className="inline-flex items-center gap-2 bg-[#C9A356]/15 border border-[#C9A356]/40 px-3 py-1 rounded-full text-xs font-serif font-bold text-[#C9A356] mb-2">
+                            ⚙️ AUTONOMIA DO PROFISSIONAL
+                          </div>
+                          <h3 className="font-serif text-2xl font-bold text-white">Editar Meu Horário de Serviço & Escala</h3>
+                          <p className="text-xs text-gray-400 mt-1 max-w-xl">
+                            Você pode ajustar seus horários de início e término, seu intervalo de almoço e quais dias da semana atende. Suas mudanças passam a valer imediatamente na agenda pública e recepção!
+                          </p>
+                        </div>
+
+                        {scheduleSavedToast && (
+                          <div className="p-4 bg-green-950/80 border border-green-500 rounded-2xl text-green-200 text-xs font-serif flex items-center gap-3 shadow-xl">
+                            <span className="text-xl">✓</span>
+                            <div>
+                              <strong className="block text-white">Horários Salvos com Sucesso!</strong>
+                              Sua nova escala já está sincronizada com a agenda pública e as cadeiras.
+                            </div>
+                          </div>
+                        )}
+
+                        <form onSubmit={handleSaveBarberSchedule} className="space-y-6 max-w-2xl bg-[#1B1914] p-6 rounded-2xl border border-[#2E281F]">
+                          {/* DIAS DE ATENDIMENTO */}
+                          <div>
+                            <label className="block text-xs font-serif uppercase tracking-wider text-[#C9A356] font-bold mb-2">
+                              Dias que Você Atende na Barbearia:
+                            </label>
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => {
+                                const isActive = barberEditActiveDays.includes(day);
+                                return (
+                                  <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => toggleBarberDay(day)}
+                                    className={`py-2 px-3 rounded-xl text-xs font-serif font-bold transition-all text-center ${isActive ? 'bg-[#C9A356] text-black shadow' : 'bg-[#12110E] text-gray-400 border border-[#282319]'}`}
+                                  >
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* HORÁRIOS DE ENTRADA E SAÍDA */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-serif uppercase tracking-wider text-gray-300 mb-1">Horário de Início:</label>
+                              <select
+                                value={barberEditStartTime}
+                                onChange={(e) => setBarberEditStartTime(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                              >
+                                <option value="08:30">08:30</option>
+                                <option value="09:00">09:00</option>
+                                <option value="09:30">09:30</option>
+                                <option value="10:00">10:00 (Padrão Fade)</option>
+                                <option value="10:30">10:30</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-serif uppercase tracking-wider text-gray-300 mb-1">Horário de Término:</label>
+                              <select
+                                value={barberEditEndTime}
+                                onChange={(e) => setBarberEditEndTime(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                              >
+                                <option value="17:00">17:00</option>
+                                <option value="18:00">18:00</option>
+                                <option value="18:30">18:30</option>
+                                <option value="19:00">19:00 (Padrão Salão)</option>
+                                <option value="20:00">20:00</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* INTERVALO DE ALMOÇO */}
+                          <div>
+                            <label className="block text-xs font-serif uppercase tracking-wider text-gray-300 mb-1">Intervalo de Almoço / Pausa:</label>
+                            <select
+                              value={barberEditLunchBreak}
+                              onChange={(e) => setBarberEditLunchBreak(e.target.value)}
+                              className="w-full px-4 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                            >
+                              <option value="12:00 às 13:00">12:00 às 13:00</option>
+                              <option value="12:30 às 13:30">12:30 às 13:30 (Padrão Mestre)</option>
+                              <option value="13:00 às 14:00">13:00 às 14:00 (Padrão Yago)</option>
+                              <option value="13:30 às 14:30">13:30 às 14:30</option>
+                            </select>
+                          </div>
+
+                          <div className="pt-3 border-t border-[#2A261F] flex justify-end">
+                            <button
+                              type="submit"
+                              className="px-6 py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-xl"
+                            >
+                              💾 Salvar Minha Escala & Horários
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+                {/* ------------------------------------------------------------- */}
+                {/* SEÇÃO DO DONO E RECEPÇÃO                                       */}
+                {/* ------------------------------------------------------------- */}
+                {(currentUser.role === 'dono' || currentUser.role === 'recepcao') && (
+                  <div className="space-y-6">
+                    
+                    {/* ABA 1: AGENDA & CADEIRAS */}
+                    {receptionTab === 'agenda' && (
+                      <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#161410] p-6 rounded-3xl border border-[#282319] gap-4 shadow-xl">
+                          <div>
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">VISÃO GERAL DO SALÃO</div>
+                            <h2 className="font-serif text-2xl font-bold text-white mt-0.5">Agenda das Cadeiras</h2>
+                            <p className="text-xs text-gray-400">Acompanhamento centralizado de atendimentos de todos os barbeiros.</p>
+                          </div>
+                          <div className="flex gap-3">
+                            <button onClick={() => setIsQuickSaleModalOpen(true)} className="px-4 py-2 bg-[#1C1A14] hover:bg-[#25221B] text-[#C9A356] border border-[#C9A356]/40 font-serif text-xs font-bold uppercase rounded-full">
+                              🍾 Venda Balcão (PDV)
+                            </button>
+                            <button onClick={() => setIsBookingModalOpen(true)} className="px-5 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow">
+                              + Novo Encaixe
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* LISTA DAS CADEIRAS E ATENDIMENTOS DE HOJE */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {BARBERS.map((barber) => {
+                            const barberAppts = todaysAppointments.filter(a => a.barber === barber.name);
+                            const sched = barberSchedules.find(b => b.id === barber.barberKey) || barber;
+                            return (
+                              <div key={barber.id} className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                                <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#282319]">
+                                  <div className="flex items-center gap-3">
+                                    <img src={barber.avatar} alt={barber.name} className="w-12 h-12 rounded-full object-cover border border-[#C9A356]" />
+                                    <div>
+                                      <h3 className="font-serif font-bold text-white text-base">{barber.name}</h3>
+                                      <div className="text-[11px] text-[#C9A356] font-serif">{barber.chair}</div>
+                                      <div className="text-[10px] text-gray-400">Escala: {sched.startTime || '09:00'} às {sched.endTime || '19:00'}</div>
+                                    </div>
+                                  </div>
+                                  <span className="text-xs text-gray-400">{barberAppts.length} clientes hoje</span>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {barberAppts.map((a) => (
+                                    <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex justify-between items-center text-xs">
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-serif font-bold text-sm text-[#C9A356]">{a.time}</span>
+                                          <strong className="text-white text-xs">{a.client}</strong>
+                                        </div>
+                                        <div className="text-gray-400 text-[11px] mt-0.5">{a.service} — R$ {a.price}</div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-[9px] uppercase font-bold px-2.5 py-0.5 rounded-full ${a.status === 'concluido' ? 'bg-green-900/50 text-green-300' : a.status === 'em_atendimento' ? 'bg-blue-900/50 text-blue-300' : 'bg-[#2A2419] text-gray-300'}`}>
+                                          {a.status}
+                                        </span>
+                                        {a.status !== 'concluido' && (
+                                          <button onClick={() => setCheckoutAppt(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase">
+                                            Cobrar
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA 2: FILA & LOUNGE */}
+                    {receptionTab === 'fila' && (
+                      <div className="space-y-6">
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                          <h3 className="font-serif text-xl font-bold text-white">Controle do Sofá & Lounge</h3>
+                          <p className="text-xs text-gray-400 mt-1">Acompanhe quem está no café esperando corte e quem está na cadeira.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="bg-[#15130F] p-5 rounded-3xl border border-[#262118]">
+                            <div className="font-serif text-xs font-bold uppercase text-gray-300 pb-3 mb-3 border-b border-[#282319]">
+                              1. Agendados ({scheduledToday.length})
+                            </div>
+                            <div className="space-y-3">
+                              {scheduledToday.map(a => (
+                                <div key={a.id} className="p-3 bg-[#1C1914] rounded-2xl border border-[#282319] text-xs">
+                                  <div className="flex justify-between font-bold text-white mb-1">
+                                    <span>{a.client}</span>
+                                    <span className="text-[#C9A356] font-serif">{a.time}</span>
+                                  </div>
+                                  <div className="text-gray-400 text-[11px] mb-2">{a.service} com {a.barber}</div>
+                                  <button onClick={() => changeAppointmentStatus(a.id, 'aguardando')} className="w-full py-1.5 bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-white rounded-full text-[10px] font-bold uppercase transition-all">
+                                    🛋️ Marcar Chegada
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-[#17140E] p-5 rounded-3xl border border-amber-500/40">
+                            <div className="font-serif text-xs font-bold uppercase text-amber-300 pb-3 mb-3 border-b border-amber-500/30">
+                              2. No Lounge / Café ({waitingToday.length})
+                            </div>
+                            <div className="space-y-3">
+                              {waitingToday.map(a => (
+                                <div key={a.id} className="p-3 bg-[#201C15] rounded-2xl border border-amber-500/30 text-xs">
+                                  <div className="font-bold text-white mb-1">{a.client}</div>
+                                  <div className="text-gray-300 text-[11px] mb-2">{a.service} com {a.barber}</div>
+                                  <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-bold uppercase transition-all">
+                                    ✂️ Chamar p/ Cadeira
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-[#151411] p-5 rounded-3xl border border-blue-500/40">
+                            <div className="font-serif text-xs font-bold uppercase text-blue-300 pb-3 mb-3 border-b border-blue-500/30">
+                              3. Na Cadeira ({inChairToday.length})
+                            </div>
+                            <div className="space-y-3">
+                              {inChairToday.map(a => (
+                                <div key={a.id} className="p-3 bg-[#1C1A14] rounded-2xl border border-blue-500/30 text-xs">
+                                  <div className="font-bold text-white mb-1">{a.client}</div>
+                                  <div className="text-gray-300 text-[11px] mb-2">{a.service} com {a.barber}</div>
+                                  <button onClick={() => setCheckoutAppt(a)} className="w-full py-1.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase transition-all">
+                                    💰 Fechar Comanda
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA 3: PRODUTOS & BAR */}
+                    {receptionTab === 'produtos' && (
+                      <div className="space-y-6">
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl flex justify-between items-center">
+                          <div>
+                            <h3 className="font-serif text-xl font-bold text-white">Estoque do Bar & Produtos</h3>
+                            <p className="text-xs text-gray-400 mt-1">Controle de estoque de cervejas, whiskies, pomadas e shampoos.</p>
+                          </div>
+                          <button onClick={() => setIsQuickSaleModalOpen(true)} className="px-5 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow">
+                            + Venda Avulsa
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {products.map(p => (
+                            <div key={p.id} className="bg-[#171511] p-4 rounded-2xl border border-[#29241C] flex justify-between items-center text-xs">
+                              <div>
+                                <div className="font-bold text-white text-xs">{p.name}</div>
+                                <div className="text-[11px] text-[#C9A356] font-serif">R$ {p.price.toFixed(2).replace('.', ',')}</div>
+                                <div className="text-[10px] text-gray-400 mt-1">Estoque: <strong className={p.stock <= p.minStock ? 'text-red-400' : 'text-white'}>{p.stock} un</strong></div>
+                              </div>
+                              <div className="flex gap-1">
+                                <button onClick={() => updateStock(p.id, -1)} className="w-7 h-7 rounded-lg bg-[#25211A] text-white hover:bg-red-900 font-bold">-</button>
+                                <button onClick={() => updateStock(p.id, 1)} className="w-7 h-7 rounded-lg bg-[#25211A] text-white hover:bg-green-900 font-bold">+</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA 4: FINANCEIRO & DRE (APENAS DONO) */}
+                    {receptionTab === 'financeiro' && currentUser.role === 'dono' && (
+                      <div className="space-y-6">
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                          <h3 className="font-serif text-xl font-bold text-white">Demonstrativo Financeiro & DRE da Valverd's</h3>
+                          <p className="text-xs text-gray-400 mt-1">Visão restrita e confidencial acessível exclusivamente pelo proprietário.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319]">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">FATURAMENTO BRUTO</div>
+                            <div className="font-serif text-2xl font-bold text-white mt-1">R$ {totalRevenueToday.toFixed(2).replace('.', ',')}</div>
+                            <div className="text-[10px] text-gray-400 mt-1">Serviços + Bar hoje</div>
+                          </div>
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319]">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">COMISSÕES EQUIPE</div>
+                            <div className="font-serif text-2xl font-bold text-amber-400 mt-1">R$ {(revenueServices * 0.52).toFixed(2).replace('.', ',')}</div>
+                            <div className="text-[10px] text-gray-400 mt-1">Barbeiros parceiros</div>
+                          </div>
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319]">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">CUSTO INSUMOS / BAR</div>
+                            <div className="font-serif text-2xl font-bold text-red-400 mt-1">R$ 28,00</div>
+                            <div className="text-[10px] text-gray-400 mt-1">Cervejas e café</div>
+                          </div>
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-green-500/40">
+                            <div className="text-[10px] font-serif uppercase tracking-widest text-green-400 font-bold">LUCRO LÍQUIDO LOJA</div>
+                            <div className="font-serif text-2xl font-bold text-green-400 mt-1">
+                              R$ {(totalRevenueToday - (revenueServices * 0.52) - 28).toFixed(2).replace('.', ',')}
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-1">Resultado líquido</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA 5: HORÁRIOS & ESCALAS (CONFIGURAÇÃO GERAL DO DONO) */}
+                    {receptionTab === 'escalas' && currentUser.role === 'dono' && (
+                      <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-6">
+                        <div>
+                          <h3 className="font-serif text-xl font-bold text-white">Gestão de Horários & Escalas da Equipe</h3>
+                          <p className="text-xs text-gray-400 mt-1">Configure os dias de funcionamento geral e visualize a jornada de cada profissional.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2F291E]">
+                            <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356] mb-4">Horário de Funcionamento da Barbearia</h4>
+                            <div className="space-y-2">
+                              {shopHours.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-xs py-1.5 border-b border-[#282319]">
+                                  <span className="font-bold text-white">{item.day}</span>
+                                  <span className={item.isOpen ? 'text-[#C9A356] font-serif' : 'text-red-400'}>
+                                    {item.isOpen ? `${item.open} às ${item.close}` : 'Fechado'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356]">Escalas Ativas por Barbeiro</h4>
+                            {barberSchedules.map((bs) => (
+                              <div key={bs.id} className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2F291E] space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <div className="font-serif font-bold text-sm text-white">{bs.name}</div>
+                                  <span className="text-[10px] bg-[#C9A356]/20 text-[#C9A356] px-2.5 py-0.5 rounded-full font-bold">{bs.workDaysDesc}</span>
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Jornada: <strong>{bs.startTime} às {bs.endTime}</strong> • Almoço: <strong>{bs.lunchBreak}</strong>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ABA 6: EQUIPE & BARBEIROS (APENAS DONO) */}
+                    {receptionTab === 'equipe' && currentUser.role === 'dono' && (
+                      <div className="space-y-6">
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                          <h3 className="font-serif text-xl font-bold text-white">Quadro Executivo de Barbeiros</h3>
+                          <p className="text-xs text-gray-400 mt-1">Gestão de performance individual, taxas de comissão e avaliação dos clientes.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {BARBERS.map((barber) => (
+                            <div key={barber.id} className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center gap-4 mb-4">
+                                  <img src={barber.avatar} alt={barber.name} className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A356]" />
+                                  <div>
+                                    <h4 className="font-serif font-bold text-lg text-white">{barber.name}</h4>
+                                    <div className="text-xs text-[#C9A356] font-serif">{barber.role}</div>
+                                    <div className="text-[11px] text-gray-400">{barber.handle} • ★ {barber.rating.toFixed(1)}</div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-xs bg-[#1C1A14] p-3 rounded-2xl">
+                                  <div>
+                                    <span className="text-gray-400">Cadeira:</span>
+                                    <div className="font-bold text-white">{barber.chair}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400">Taxa Comissão:</span>
+                                    <div className="font-bold text-green-400">{barber.commissionRate}%</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+              </main>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODO 4: ÁREA EXCLUSIVA DO CLIENTE (PORTAL DO CLIENTE VALVERD'S)          */}
+          {/* ========================================================================= */}
+          {currentView === 'client' && (
+            <div className="min-h-screen w-full bg-[#0D0C0A] text-[#E0DDD5] flex flex-col">
+              {/* TOPBAR DO CLIENTE */}
+              <header className="bg-[#12110E] border-b border-[#211E18] px-6 py-4 sticky top-0 z-40 backdrop-blur-md">
+                <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-4">
+                    <OfficialLogo className="w-12 h-12" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif font-bold text-base tracking-wider text-white">VALVERD'S</span>
+                        <span className="text-[10px] font-serif font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-[#C9A356] text-black shadow">
+                          MEU ESPAÇO VIP
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Olá, <strong>{clientProfile.name}</strong> • Membro desde {clientProfile.memberSince}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SELETOR DE PERFIL DEMO */}
+                  <DemoRoleSwitcher />
+
+                  <button
+                    onClick={() => setCurrentView('site')}
+                    className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
+                  >
+                    Voltar ao Site
+                  </button>
+                </div>
+
+                {/* ABAS DO CLIENTE */}
+                <div className="max-w-6xl mx-auto mt-4 pt-3 border-t border-[#1C1A14] flex items-center gap-2 overflow-x-auto">
+                  <button
+                    onClick={() => setClientTab('agendamentos')}
+                    className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${clientTab === 'agendamentos' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                  >
+                    📅 Próximo Agendamento
+                  </button>
+                  <button
+                    onClick={() => setClientTab('calendario')}
+                    className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${clientTab === 'calendario' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                  >
+                    🗓️ Ver Calendário & Horários
+                  </button>
+                  <button
+                    onClick={() => setClientTab('fidelidade')}
+                    className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${clientTab === 'fidelidade' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                  >
+                    ⭐ Cartão Fidelidade Digital
+                  </button>
+                  <button
+                    onClick={() => setClientTab('historico')}
+                    className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${clientTab === 'historico' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                  >
+                    📜 Histórico de Cortes
+                  </button>
+                  <button
+                    onClick={() => setClientTab('estilo')}
+                    className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all ${clientTab === 'estilo' ? 'bg-[#C9A356] text-black shadow' : 'bg-[#181612] text-gray-300 hover:bg-[#221F18]'}`}
+                  >
+                    ✂️ Minhas Preferências de Estilo
+                  </button>
+                </div>
+              </header>
+
+              {/* CONTEÚDO DO PORTAL DO CLIENTE */}
+              <main className="max-w-6xl mx-auto p-6 flex-1 w-full space-y-6">
+                
+                {/* ABA DO CLIENTE 1: PRÓXIMO AGENDAMENTO COM TRACKER */}
+                {clientTab === 'agendamentos' && (
+                  <div className="space-y-6">
+                    <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                          <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">SEU ATENDIMENTO CONFIRMADO</span>
+                          <h2 className="font-serif text-2xl font-bold text-white mt-1">Corte Masculino com Luis Valverde</h2>
+                          <p className="text-xs text-gray-400">Hoje às 09:00 • R. Antônio Veloso Júnior, 77 (Campos Elíseos)</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-gray-400 block font-serif uppercase">Valor do Serviço</span>
+                          <span className="font-serif text-2xl font-bold text-[#C9A356]">R$ 40,00</span>
+                        </div>
+                      </div>
+
+                      {/* STEPPER DINÂMICO EM 4 ETAPAS */}
+                      <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2D271E]">
+                        <div className="text-[11px] font-serif uppercase tracking-wider text-gray-400 mb-4 font-bold">STATUS DO SEU CORTE EM TEMPO REAL:</div>
+                        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                          <div className="flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-green-500 text-black flex items-center justify-center font-bold mb-1 shadow">✓</div>
+                            <span className="text-[10px] font-bold text-white">1. Agendado</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-green-500 text-black flex items-center justify-center font-bold mb-1 shadow">✓</div>
+                            <span className="text-[10px] font-bold text-white">2. No Lounge</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-green-500 text-black flex items-center justify-center font-bold mb-1 shadow">✓</div>
+                            <span className="text-[10px] font-bold text-white">3. Na Cadeira</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-[#C9A356] text-black flex items-center justify-center font-bold mb-1 shadow">★</div>
+                            <span className="text-[10px] font-bold text-[#C9A356]">4. Concluído</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* AÇÕES DO AGENDAMENTO */}
+                      <div className="flex flex-wrap gap-3">
+                        <a
+                          href={GOOGLE_MAPS_LINK}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-5 py-2.5 bg-[#1F1C16] hover:bg-[#2A261F] text-white border border-[#3A3326] rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
+                        >
+                          <span>📍 Como Chegar (Google Maps)</span>
+                        </a>
+                        <a
+                          href="https://wa.me/5521970100668"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-5 py-2.5 bg-[#25D366] hover:bg-[#20BD5A] text-black rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
+                        >
+                          <span>💬 Falar no WhatsApp</span>
+                        </a>
+                        <button
+                          onClick={() => setIsBookingModalOpen(true)}
+                          className="px-5 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-xs font-serif font-bold uppercase transition-all shadow ml-auto"
+                        >
+                          + Agendar Novo Horário
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA DO CLIENTE 2: CALENDÁRIO COM SEMANA & MÊS */}
+                {clientTab === 'calendario' && (
+                  <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#282319]">
+                      <div>
+                        <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">DISPONIBILIDADE DA BARBEARIA</span>
+                        <h2 className="font-serif text-2xl font-bold text-white mt-0.5">Calendário de Horários dos Barbeiros</h2>
+                        <p className="text-xs text-gray-400">Consulte os horários de cada barbeiro por semana ou pelo mês completo.</p>
+                      </div>
+
+                      <div className="bg-[#1E1B15] p-1 rounded-full border border-[#332C20] flex items-center gap-1">
+                        <button
+                          onClick={() => setClientCalendarView('semana')}
+                          className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${clientCalendarView === 'semana' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          Visão Semanal
+                        </button>
+                        <button
+                          onClick={() => setClientCalendarView('mes')}
+                          className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${clientCalendarView === 'mes' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          Visão Mensal
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* NAVEGAÇÃO ENTRE SEMANAS PARA O CLIENTE */}
+                    {clientCalendarView === 'semana' && (
+                      <div className="space-y-4">
+                        <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2D271E] flex justify-between items-center">
+                          <button
+                            disabled={selectedWeekIndex === 0}
+                            onClick={() => setSelectedWeekIndex(Math.max(0, selectedWeekIndex - 1))}
+                            className="px-4 py-1.5 rounded-full bg-[#161410] text-[#C9A356] text-xs font-serif font-bold disabled:opacity-30"
+                          >
+                            ‹ Semana Anterior
+                          </button>
+                          <span className="font-serif font-bold text-sm text-white">{currentWeek.label}</span>
+                          <button
+                            disabled={selectedWeekIndex === WEEKS_DATA.length - 1}
+                            onClick={() => setSelectedWeekIndex(Math.min(WEEKS_DATA.length - 1, selectedWeekIndex + 1))}
+                            className="px-4 py-1.5 rounded-full bg-[#161410] text-[#C9A356] text-xs font-serif font-bold disabled:opacity-30"
+                          >
+                            Próxima Semana ›
+                          </button>
+                        </div>
+
+                        {/* CARDS DOS DIAS DA SEMANA */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {currentWeek.days.map((d) => (
+                            <div key={d.name} className="bg-[#1B1914] p-4 rounded-2xl border border-[#2A2419] text-center space-y-2">
+                              <div className="text-[10px] font-serif uppercase font-bold text-[#C9A356]">{d.name}</div>
+                              <div className="font-serif font-bold text-xl text-white">{d.num}</div>
+                              <div className="text-[10px] text-gray-400">
+                                <div>👑 Luis: 09h-19h</div>
+                                <div>✂️ Yago: {d.name === 'Seg' ? 'Folga' : '10h-19h'}</div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedDayOption(d.name);
+                                  setIsBookingModalOpen(true);
+                                }}
+                                className="w-full py-1 bg-[#C9A356] hover:bg-[#B59044] text-black text-[10px] font-serif uppercase font-bold rounded-lg shadow"
+                              >
+                                Agendar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* VISÃO MENSAL PARA O CLIENTE */}
+                    {clientCalendarView === 'mes' && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-7 gap-2 text-center text-[11px] font-serif font-bold text-gray-400 uppercase pb-2">
+                          <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span className="text-red-400">Dom</span>
+                        </div>
+                        <div className="grid grid-cols-7 gap-2">
+                          <div className="p-2 opacity-0"></div>
+                          {SEPTEMBER_DAYS.map((d) => (
+                            <button
+                              key={d.dayNum}
+                              onClick={() => {
+                                if (d.isOpen) {
+                                  setSelectedDayOption(d.weekDay);
+                                  setIsBookingModalOpen(true);
+                                }
+                              }}
+                              className={`p-3 rounded-2xl border text-center transition-all flex flex-col justify-between aspect-square ${d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}
+                            >
+                              <div className="flex justify-between items-center w-full">
+                                <span className="text-xs font-serif font-bold">{d.dayNum}</span>
+                                <span className="text-[9px] uppercase">{d.weekDay}</span>
+                              </div>
+                              <div className="text-[9px] font-bold">
+                                {d.isOpen ? <span className="text-[#C9A356]">Aberto</span> : <span className="text-red-500">Fechado</span>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ABA DO CLIENTE 3: CARTÃO FIDELIDADE DIGITAL */}
+                {clientTab === 'fidelidade' && (
+                  <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
+                    <div>
+                      <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PROGRAMA DE RECOMPENSAS VALVERD'S</span>
+                      <h2 className="font-serif text-2xl font-bold text-white mt-1">Seu Cartão Fidelidade Digital</h2>
+                      <p className="text-xs text-gray-400">A cada 10 cortes realizados na Valverd's, você ganha 1 corte ou barba inteiramente grátis!</p>
+                    </div>
+
+                    <div className="bg-[#1C1A14] p-6 rounded-2xl border border-[#2D271E] text-center space-y-5">
+                      <div className="inline-flex items-center gap-2 bg-[#C9A356]/15 border border-[#C9A356]/40 px-4 py-1.5 rounded-full text-xs text-[#C9A356] font-serif font-bold">
+                        ⭐ {clientProfile.loyaltyStamps} de 10 Selos Conquistados (70%)
+                      </div>
+
+                      {/* 10 MEDALHÕES DE SELOS */}
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-3 max-w-2xl mx-auto my-4">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                          const isCompleted = num <= clientProfile.loyaltyStamps;
+                          return (
+                            <div
+                              key={num}
+                              className={`aspect-square rounded-2xl flex flex-col items-center justify-center border transition-all ${isCompleted ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-lg scale-105' : 'bg-[#12110E] text-gray-500 border-[#2D271E]'}`}
+                            >
+                              <span className="text-base">{isCompleted ? '✂️' : num}</span>
+                              <span className="text-[9px] font-serif font-bold mt-0.5">{isCompleted ? 'OK' : `${num}º`}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="bg-[#242018] p-4 rounded-xl border border-[#3A3326] text-xs text-[#D8D4CA] max-w-md mx-auto">
+                        🎉 <strong>Faltam apenas 3 cortes</strong> para você resgatar sua recompensa de fidelidade!
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA DO CLIENTE 4: HISTÓRICO DE CORTES */}
+                {clientTab === 'historico' && (
+                  <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
+                    <div>
+                      <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">REGISTRO DE VISITAS</span>
+                      <h2 className="font-serif text-2xl font-bold text-white mt-1">Histórico de Cortes & Serviços</h2>
+                      <p className="text-xs text-gray-400">Todos os atendimentos realizados na Valverd's BarberShop.</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {clientProfile.history.map((h) => (
+                        <div key={h.id} className="p-4 bg-[#1C1A14] rounded-2xl border border-[#2D271E] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+                          <div>
+                            <div className="font-serif font-bold text-white text-sm">{h.service}</div>
+                            <div className="text-gray-400 text-[11px] mt-0.5">Com <strong>{h.barber}</strong> • {h.date}</div>
+                            <div className="text-gray-500 text-[10px] italic mt-0.5">"{h.notes}"</div>
+                          </div>
+                          <div className="text-right self-end sm:self-auto">
+                            <div className="font-serif font-bold text-[#C9A356] text-sm">R$ {h.price.toFixed(2).replace('.', ',')}</div>
+                            <div className="text-amber-400 text-[11px]">★★★★★ (5.0)</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA DO CLIENTE 5: MINHAS PREFERÊNCIAS DE ESTILO */}
+                {clientTab === 'estilo' && (
+                  <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
+                    <div>
+                      <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">FICHA TÉCNICA PESSOAL</span>
+                      <h2 className="font-serif text-2xl font-bold text-white mt-1">Meu Estilo Gravado</h2>
+                      <p className="text-xs text-gray-400">Seu barbeiro consulta esta ficha antes de começar para garantir seu padrão ideal.</p>
+                    </div>
+
+                    <div className="bg-[#1C1A14] p-6 rounded-2xl border border-[#2D271E] space-y-4 text-xs">
+                      <div className="flex justify-between py-2 border-b border-[#282319]">
+                        <span className="text-gray-400">Barbeiro Favorito:</span>
+                        <strong className="text-[#C9A356] font-serif">{clientProfile.preferredBarber}</strong>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-[#282319]">
+                        <span className="text-gray-400">Serviço Mais Pedido:</span>
+                        <strong className="text-white">{clientProfile.preferredService}</strong>
+                      </div>
+                      <div className="py-2 border-b border-[#282319]">
+                        <span className="text-gray-400 block mb-1">Observações do seu Corte & Barba:</span>
+                        <p className="text-white font-medium bg-[#12110E] p-3 rounded-xl border border-[#2A2419]">
+                          "{clientProfile.styleNotes}"
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setSelectedService(SERVICES_MENU[0]);
+                        setSelectedBarber(BARBERS[0]);
+                        setIsBookingModalOpen(true);
+                      }}
+                      className="w-full py-3.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow"
+                    >
+                      ⚡ Repetir Meu Último Corte com Luis Valverde
+                    </button>
+                  </div>
+                )}
+
+              </main>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: FECHAMENTO DE COMANDA / CHECKOUT COM ITENS DE BAR E PRODUTOS      */}
+          {/* ========================================================================= */}
+          {checkoutAppt && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+              <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl">
+                <div className="flex justify-between items-start pb-4 border-b border-[#2A261F]">
+                  <div>
+                    <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">FECHAMENTO DE COMANDA</span>
+                    <h3 className="font-serif text-xl font-bold text-white mt-1">{checkoutAppt.client}</h3>
+                    <p className="text-xs text-gray-400">{checkoutAppt.service} com {checkoutAppt.barber}</p>
+                  </div>
+                  <button onClick={() => setCheckoutAppt(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                </div>
+
+                <div className="py-4 space-y-3">
+                  <div className="text-xs font-serif uppercase tracking-wider text-[#C9A356] font-bold">ITENS CONSUMIDOS:</div>
+                  <ul className="space-y-2">
+                    {checkoutAppt.items.map((item, idx) => (
+                      <li key={idx} className="flex justify-between text-xs py-1 border-b border-[#232019]">
+                        <span>{item.name}</span>
+                        <strong className="text-[#C9A356]">R$ {item.price.toFixed(2).replace('.', ',')}</strong>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="pt-2">
+                    <label className="block text-[11px] text-gray-400 mb-1">+ Adicionar Bebida ou Produto:</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={additionalItemId}
+                        onChange={(e) => setAdditionalItemId(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                      >
+                        <option value="">Selecione item do Bar ou Produto...</option>
+                        {products.filter(p => p.stock > 0).map(p => (
+                          <option key={p.id} value={p.id}>{p.name} — R$ {p.price} (Estoque: {p.stock})</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => {
+                          const prod = products.find(p => p.id === additionalItemId);
+                          addItemToCheckout(prod);
+                        }}
+                        className="px-4 py-2 bg-[#262117] hover:bg-[#C9A356] hover:text-black rounded-xl text-xs font-bold"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-[#2A261F] flex justify-between items-center text-sm font-serif">
+                    <span className="font-bold uppercase">Total da Comanda:</span>
+                    <span className="text-2xl font-bold text-green-400">R$ {checkoutAppt.total.toFixed(2).replace('.', ',')}</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Forma de Pagamento:</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['PIX', 'CARTÃO', 'DINHEIRO'].map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setSelectedPayment(m)}
+                          className={`py-2 rounded-xl text-xs font-serif font-bold transition-all ${selectedPayment === m ? 'bg-[#C9A356] text-black shadow' : 'bg-[#1F1C16] text-gray-300'}`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-[#2A261F] flex gap-3">
+                  <button onClick={() => setCheckoutAppt(null)} className="flex-1 py-2.5 bg-[#201D17] hover:bg-[#2B271F] text-gray-300 rounded-xl text-xs font-serif font-bold">
+                    Cancelar
+                  </button>
+                  <button onClick={handleConfirmCheckout} className="flex-1 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-xl text-xs font-serif font-bold uppercase shadow">
+                    Confirmar Pagamento
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: VENDA RÁPIDA DE BALCÃO (BAR / PRODUTOS)                            */}
+          {/* ========================================================================= */}
+          {isQuickSaleModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+              <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-md w-full p-6 text-white shadow-2xl">
+                <div className="flex justify-between items-start pb-4 border-b border-[#2A261F]">
+                  <div>
+                    <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PDV BALCÃO</span>
+                    <h3 className="font-serif text-xl font-bold text-white mt-1">Venda Avulsa de Produto</h3>
+                  </div>
+                  <button onClick={() => { setIsQuickSaleModalOpen(false); setQuickSaleSuccess(false); }} className="text-gray-400 hover:text-white text-xl">✕</button>
+                </div>
+
+                {quickSaleSuccess ? (
+                  <div className="py-6 text-center space-y-3">
+                    <div className="text-4xl text-green-400">✓</div>
+                    <h4 className="font-serif font-bold text-lg text-white">Venda Concluída com Sucesso!</h4>
+                    <p className="text-xs text-gray-400">Estoque atualizado e valor lançado no caixa do dia.</p>
+                    <button onClick={() => { setIsQuickSaleModalOpen(false); setQuickSaleSuccess(false); }} className="mt-4 px-6 py-2 bg-[#C9A356] text-black font-serif text-xs font-bold uppercase rounded-full">
+                      Fechar
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleExecuteQuickSale} className="py-4 space-y-4">
+                    <div>
+                      <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Selecione o Item:</label>
+                      <select
+                        value={quickSaleProduct ? quickSaleProduct.id : ''}
+                        onChange={(e) => {
+                          const p = products.find(x => x.id === e.target.value);
+                          setQuickSaleProduct(p);
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                      >
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} — R$ {p.price} (Estoque: {p.stock})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Quantidade:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={quickSaleProduct ? quickSaleProduct.stock : 10}
+                          value={quickSaleQty}
+                          onChange={(e) => setQuickSaleQty(parseInt(e.target.value) || 1)}
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Pagamento:</label>
+                        <select
+                          value={quickSalePayment}
+                          onChange={(e) => setQuickSalePayment(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="CARTÃO">CARTÃO</option>
+                          <option value="DINHEIRO">DINHEIRO</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-[#2A261F] flex justify-between items-center">
+                      <span className="font-serif text-xs uppercase">Total da Venda:</span>
+                      <strong className="text-xl font-bold font-serif text-green-400">
+                        R$ {((quickSaleProduct ? quickSaleProduct.price : 0) * quickSaleQty).toFixed(2).replace('.', ',')}
+                      </strong>
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-xl shadow">
+                      Finalizar Venda
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: NOVO AGENDAMENTO / ENCAIXE COM VISÃO DE HORÁRIOS POR BARBEIRO      */}
+          {/* ========================================================================= */}
+          {isBookingModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+              <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl">
+                <div className="flex justify-between items-start pb-4 border-b border-[#2A261F]">
+                  <div>
+                    <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">AGENDAMENTO VALVERD'S</span>
+                    <h3 className="font-serif text-xl font-bold text-white mt-1">Reserve Seu Momento</h3>
+                  </div>
+                  <button onClick={() => { setIsBookingModalOpen(false); setBookingSuccess(false); }} className="text-gray-400 hover:text-white text-xl">✕</button>
+                </div>
+
+                {bookingSuccess ? (
+                  <div className="py-6 text-center space-y-3">
+                    <div className="text-4xl text-green-400">✓</div>
+                    <h4 className="font-serif font-bold text-lg text-white">Agendamento Confirmado!</h4>
+                    <p className="text-xs text-gray-300">
+                      Horário marcado para <strong>{selectedDayOption}</strong> às <strong>{selectedTime}</strong> com <strong>{selectedBarber.name}</strong>.
+                    </p>
+                    <div className="pt-4 flex gap-3">
+                      <button onClick={() => { setIsBookingModalOpen(false); setBookingSuccess(false); }} className="flex-1 py-2.5 bg-[#C9A356] text-black font-serif text-xs font-bold uppercase rounded-full">
+                        Concluir
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleCompleteBooking} className="py-4 space-y-4">
+                    <div>
+                      <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Serviço Desejado:</label>
+                      <select
+                        value={selectedService.id}
+                        onChange={(e) => {
+                          const s = SERVICES_MENU.find(x => x.id === e.target.value);
+                          setSelectedService(s);
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                      >
+                        {SERVICES_MENU.map(s => (
+                          <option key={s.id} value={s.id}>{s.name} — R$ {s.price}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Selecione o Barbeiro & Veja os Horários:</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {BARBERS.map(b => {
+                          const sched = barberSchedules.find(s => s.id === b.barberKey) || b;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setSelectedBarber(b)}
+                              className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-1 ${selectedBarber.id === b.id ? 'bg-[#C9A356] text-black border-[#C9A356]' : 'bg-[#0B0B0B] text-gray-300 border-[#2A261F]'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <img src={b.avatar} alt={b.name} className="w-8 h-8 rounded-full object-cover" />
+                                <span className="text-xs font-serif font-bold">{b.name.split(' ')[0]}</span>
+                              </div>
+                              <span className="text-[10px] opacity-80">Jornada: {sched.startTime || '09h'} - {sched.endTime || '19h'}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Dia da Semana:</label>
+                        <select
+                          value={selectedDayOption}
+                          onChange={(e) => setSelectedDayOption(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        >
+                          <option value="Seg">Segunda-feira (08/09)</option>
+                          <option value="Ter">Terça-feira (09/09)</option>
+                          <option value="Qua">Quarta-feira (10/09)</option>
+                          <option value="Qui">Quinta-feira (11/09)</option>
+                          <option value="Sex">Sexta-feira (12/09)</option>
+                          <option value="Sáb">Sábado (13/09)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Horário Disponível:</label>
+                        <select
+                          value={selectedTime}
+                          onChange={(e) => setSelectedTime(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        >
+                          <option value="09:00">09:00</option>
+                          <option value="09:45">09:45</option>
+                          <option value="10:30">10:30</option>
+                          <option value="11:15">11:15</option>
+                          <option value="14:00">14:00</option>
+                          <option value="14:45">14:45</option>
+                          <option value="15:30">15:30</option>
+                          <option value="16:15">16:15</option>
+                          <option value="17:00">17:00</option>
+                          <option value="17:45">17:45</option>
+                          <option value="18:30">18:30</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">Seu Nome:</label>
+                        <input
+                          type="text"
+                          required
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder="Ex: Carlos Eduardo"
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-serif uppercase text-gray-400 mb-1">WhatsApp:</label>
+                        <input
+                          type="text"
+                          required
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(e.target.value)}
+                          placeholder="(21) 98888-7777"
+                          className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase tracking-wider rounded-xl shadow">
+                      Confirmar Horário • R$ {selectedService.price}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ValverdsApp />);
+  </script>
+</body>
+</html>

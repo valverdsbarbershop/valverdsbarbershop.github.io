@@ -1,0 +1,17 @@
+# Security: Never commit environment credentials
+.env
+.env.local
+.env.*.local
+
+# Logs and scratch
+*.log
+*.txt
+.agents/
+.system_generated/
+*.zip
+
+# Dependencies
+node_modules/
+dist/
+.DS_Store
+Thumbs.db
