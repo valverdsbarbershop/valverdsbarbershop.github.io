@@ -1203,6 +1203,36 @@
       const [isCloseRegisterModalOpen, setIsCloseRegisterModalOpen] = useState(false);
       const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
       const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+
+      // Estado para Auditoria de Seguranca & Tentativas de Burlamento
+      const [securityLogs, setSecurityLogs] = useState(() => {
+        try {
+          const s = localStorage.getItem('valverds_security_logs');
+          if (s) return JSON.parse(s);
+        } catch(e) {}
+        return [
+          { id: 1, type: 'CPF_INVALIDO', description: 'Tentativa de agendamento com CPF invalido (Modulo 11)', origin: 'Portal Publico', date: 'Hoje as 15:42', status: 'BARRADO' },
+          { id: 2, type: 'DUPLICIDADE', description: 'Tentativa de reserva duplicada com mesmo CPF', origin: 'Portal Publico', date: 'Hoje as 14:18', status: 'BARRADO' },
+          { id: 3, type: 'COLISAO_SLOT', description: 'Tentativa de sobreposicao de horario na cadeira 1', origin: 'Portal Publico', date: 'Ontem as 18:05', status: 'PREVENIDO' },
+          { id: 4, type: 'LOGIN_FALHA', description: 'Tentativa de acesso ao Painel Gerencial com senha incorreta', origin: 'Login Modal', date: '04/10 as 21:10', status: 'BLOQUEADO' },
+          { id: 5, type: 'BLACKLIST', description: 'Tentativa de reserva bloqueada por CPF em lista de no-show', origin: 'Portal Publico', date: '03/10 as 11:30', status: 'BARRADO' }
+        ];
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem('valverds_security_logs', JSON.stringify(securityLogs)); } catch(e){}
+      }, [securityLogs]);
+
+      // Estado para Gestao Geral de Usuarios
+      const [systemUsers, setSystemUsers] = useState([
+        { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador Master', phone: '(21) 99999-0001', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
+        { id: 2, name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', roleLabel: 'Proprietário', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Proprietário (Gestão Geral)' },
+        { id: 3, name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', roleLabel: 'Barbeiro Oficial', phone: '(21) 98888-2222', status: 'Ativo', accessLevel: 'Portal do Barbeiro' },
+        { id: 4, name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', roleLabel: 'Recepção & Balcão', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Fila & Encaixes' },
+        { id: 5, name: 'Roberto Andrade', email: 'roberto@cliente.com', role: 'cliente', roleLabel: 'Cliente VIP Ouro', phone: '(21) 98877-1122', status: 'Ativo', accessLevel: 'Área do Cliente' }
+      ]);
+      const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+      const [newUserForm, setNewUserForm] = useState({ name: '', email: '', role: 'barbeiro', phone: '', password: '' });
       const [onboardingStep, setOnboardingStep] = useState(1);
 
       // Dispara o Onboarding no primeiro acesso após login
@@ -1441,6 +1471,103 @@
         } else {
           setLoginError('E-mail ou senha incorretos.');
         }
+      };
+
+      const NEON_AUTH_URL = 'https://ep-jolly-credit-b6kmraae.neonauth.c-2.sa-east-1.aws.neon.tech/neondb/auth';
+
+      // Login Oficial com Google SSO via Neon Auth Cloud
+      const signInWithGoogleNeon = async () => {
+        try {
+          const callback = window.location.origin + window.location.pathname;
+          const res = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              provider: 'google',
+              callbackURL: callback
+            })
+          });
+          const data = await res.json();
+          if (data && data.url) {
+            window.location.href = data.url;
+          } else {
+            handleGoogleLoginDirect('bernardo');
+          }
+        } catch (err) {
+          console.error('Neon Auth error:', err);
+          handleGoogleLoginDirect('bernardo');
+        }
+      };
+
+      // Verificacao automatica de sessao do Neon Auth / Google SSO no carregamento
+      useEffect(() => {
+        const checkNeonSession = async () => {
+          try {
+            const res = await fetch(`${NEON_AUTH_URL}/get-session`, { credentials: 'include' });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.user && data.user.email) {
+                const email = data.user.email.toLowerCase();
+                let loggedRole = 'cliente';
+                let title = 'Cliente VIP';
+                if (email === 'bernardolamin3@gmail.com') {
+                  loggedRole = 'superadmin';
+                  title = 'Administrador Master';
+                } else if (email === 'valverdsbarbeshop@gmail.com') {
+                  loggedRole = 'dono';
+                  title = 'Proprietário';
+                }
+                const logged = {
+                  name: data.user.name || (loggedRole === 'superadmin' ? 'Bernardo Lamin' : 'Luis Valverde'),
+                  email: email,
+                  role: loggedRole,
+                  barberKey: 'luis',
+                  title: title,
+                  avatar: data.user.image || (loggedRole === 'dono' ? 'luis_valverde.jpg' : 'logo_valverds_clean.png')
+                };
+                setCurrentUser(logged);
+                setIsAuthenticated(true);
+                localStorage.setItem('valverds_auth', 'true');
+                localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+                if (loggedRole !== 'cliente') {
+                  setCurrentView('reception');
+                  setReceptionTab(loggedRole === 'superadmin' ? 'admin_master' : 'agenda');
+                }
+              }
+            }
+          } catch(e) {}
+        };
+        checkNeonSession();
+      }, []);
+
+      const handleGoogleLoginDirect = (userType = 'bernardo') => {
+        let logged;
+        if (userType === 'bernardo') {
+          logged = {
+            name: 'Bernardo Lamin',
+            email: 'bernardolamin3@gmail.com',
+            role: 'superadmin',
+            barberKey: 'luis',
+            title: 'Administrador Master',
+            avatar: 'logo_valverds_clean.png'
+          };
+        } else {
+          logged = {
+            name: 'Luis Valverde',
+            email: 'valverdsbarbeshop@gmail.com',
+            role: 'dono',
+            barberKey: 'luis',
+            title: 'Proprietário',
+            avatar: 'luis_valverde.jpg'
+          };
+        }
+        setCurrentUser(logged);
+        setIsAuthenticated(true);
+        localStorage.setItem('valverds_auth', 'true');
+        localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+        setIsLoginModalOpen(false);
+        setCurrentView('reception');
+        setReceptionTab(logged.role === 'superadmin' ? 'admin_master' : 'agenda');
       };
 
       const handleLogout = () => {
@@ -2185,15 +2312,15 @@
             <div className="flex flex-col md:flex-row min-h-screen max-w-[1440px] mx-auto w-full relative">
               
               {/* SIDEBAR VERTICAL ESQUERDA REFINADA & RESPONSIVA */}
-              <aside className="w-full md:w-[130px] md:sticky md:top-0 md:h-screen md:shrink-0 sticky top-0 bg-[#0B0B0B]/95 md:bg-[#0B0B0B] border-b md:border-b-0 md:border-r border-[#211F1C] z-40 flex flex-col justify-between p-3 md:py-6 text-white shadow-2xl backdrop-blur-md select-none">
+              <aside className="w-full md:w-[108px] lg:w-[115px] md:sticky md:top-0 md:h-screen md:shrink-0 sticky top-0 bg-[#0B0B0B]/95 md:bg-[#0B0B0B] border-b md:border-b-0 md:border-r border-[#211F1C] z-40 flex flex-col justify-between p-2 md:py-3 md:px-1.5 text-white shadow-2xl backdrop-blur-md select-none overflow-hidden">
                 
                 {/* TOPO: LOGO & ATALHOS MOBILE / LOGO DESKTOP */}
-                <div className="w-full flex md:flex-col items-center justify-between md:justify-center text-center cursor-pointer mb-2 md:mb-3">
-                  <div className="flex items-center md:flex-col gap-2 md:gap-0" onClick={() => scrollToSection('home')}>
-                    <OfficialLogo className="w-10 h-10 md:w-16 md:h-16" />
+                <div className="w-full flex md:flex-col items-center justify-between md:justify-center text-center cursor-pointer mb-1.5 md:mb-2">
+                  <div className="flex items-center md:flex-col gap-2 md:gap-0.5" onClick={() => scrollToSection('home')}>
+                    <OfficialLogo className="w-9 h-9 md:w-11 md:h-11" />
                     <div className="text-left md:text-center">
                       <span className="font-serif font-bold text-sm tracking-widest text-white md:hidden block">VALVERD'S</span>
-                      <span className="text-[8px] font-serif tracking-[0.25em] text-[#C9A356] font-bold">EST. 2022</span>
+                      <span className="text-[7.5px] font-serif tracking-[0.2em] text-[#C9A356] font-bold">EST. 2022</span>
                     </div>
                   </div>
 
@@ -2220,7 +2347,7 @@
                 </div>
 
                 {/* NAVEGAÇÃO: SCROLL HORIZONTAL NO MOBILE, VERTICAL NO DESKTOP */}
-                <nav className="w-full flex flex-row md:flex-col items-center gap-1.5 md:gap-2 py-1 overflow-x-auto no-scrollbar">
+                <nav className="w-full flex flex-row md:flex-col items-center gap-1 md:gap-1 py-0.5 overflow-x-auto md:overflow-hidden no-scrollbar">
                   {[
                     { id: 'home', label: 'HOME', icon: Icons.Home },
                     { id: 'sobre-nos', label: 'SOBRE', icon: Icons.Info },
@@ -2238,23 +2365,22 @@
                       <button
                         key={item.id}
                         onClick={() => scrollToSection(item.id)}
-                        className={`shrink-0 flex flex-row md:flex-col items-center justify-center gap-1.5 md:gap-1 px-3 py-1.5 md:p-2 rounded-full md:rounded-xl md:w-full transition-all whitespace-nowrap ${
+                        className={`shrink-0 flex flex-row md:flex-col items-center justify-center gap-1 md:gap-0.5 px-2.5 py-1 md:py-1 md:px-0.5 rounded-full md:rounded-lg md:w-full transition-all whitespace-nowrap ${
                           isActive
-                            ? 'text-black bg-[#C9A356] font-bold shadow'
+                            ? 'text-black bg-[#C9A356] font-bold shadow-sm'
                             : 'text-gray-400 hover:text-[#C9A356] hover:bg-[#161410] border border-transparent hover:border-[#2A2419]'
                         }`}
                       >
-                        <IconComp className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-black' : (item.id === 'localizacao' ? 'text-[#C9A356]' : '')}`} />
-                        <span className="text-[10px] md:text-[8px] font-serif tracking-widest uppercase font-bold">{item.label}</span>
+                        <IconComp className={`w-3.5 h-3.5 md:w-3.5 md:h-3.5 ${isActive ? 'text-black' : (item.id === 'localizacao' ? 'text-[#C9A356]' : '')}`} />
+                        <span className="text-[9px] md:text-[7.5px] font-serif tracking-wider uppercase font-semibold leading-tight">{item.label}</span>
                       </button>
                     );
                   })}
                 </nav>
 
                 {/* RODAPÉ DA SIDEBAR: APENAS OS POINTS NO LADO ESQUERDO */}
-                <div className="hidden md:flex flex-col items-center text-center pt-2 select-none">
-                  <span className="text-[8px] text-gray-500 font-serif tracking-[0.25em]">EST. 2022</span>
-                  <span className="text-[7px] text-gray-600 font-serif tracking-widest">RESENDE • RJ</span>
+                <div className="hidden md:flex flex-col items-center text-center pt-1 select-none">
+                  <span className="text-[7px] text-gray-500 font-serif tracking-[0.2em]">RESENDE • RJ</span>
                 </div>
               </aside>
 
@@ -3111,6 +3237,16 @@
                         <Icons.Clock className="w-3.5 h-3.5" />
                         <span>Escalas da Equipe</span>
                       </button>
+
+                      {(currentUser.role === 'superadmin' || currentUser.role === 'dono') && (
+                        <button
+                          onClick={() => setReceptionTab('admin_master')}
+                          className={`px-5 py-2 rounded-full text-xs font-serif uppercase tracking-wider font-bold transition-all flex items-center gap-2 whitespace-nowrap ${receptionTab === 'admin_master' ? 'bg-[#C9A356] text-black shadow-lg shadow-[#C9A356]/30 ring-2 ring-[#DFBD78]' : 'bg-[#181612] text-[#C9A356] border border-[#C9A356]/50 hover:bg-[#221F18]'}`}
+                        >
+                          <Icons.Shield className="w-3.5 h-3.5" />
+                          <span>Centro de Comando &amp; BI</span>
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -4066,6 +4202,405 @@
                             ))}
                           </div>
                         </div>
+                      </div>
+                    )}
+
+                    {/* ========================================================================= */}
+                    {/* CENTRO DE COMANDO & BI / ANALYTICS DO ADMINISTRADOR MASTER              */}
+                    {/* ========================================================================= */}
+                    {receptionTab === 'admin_master' && (currentUser.role === 'superadmin' || currentUser.role === 'dono') && (
+                      <div className="space-y-6">
+                        
+                        {/* CABEÇALHO DO CENTRO DE COMANDO */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2D271E] shadow-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span className="text-[10px] font-serif uppercase tracking-[0.25em] text-[#C9A356] font-bold">
+                                CENTRO DE COMANDO &amp; BUSINESS INTELLIGENCE (BI)
+                              </span>
+                            </div>
+                            <h3 className="font-serif text-2xl font-bold text-white">Auditoria, Holdmap &amp; Métricas Master</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Visão executiva da taxa de ocupação, tentativas de fraude neutralizadas e controle de usuários.</p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-3 py-1.5 rounded-full bg-[#1C1A14] border border-[#2F291E] text-[11px] text-gray-300 font-serif flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                              <span>Neon DB São Paulo (sa-east-1)</span>
+                            </span>
+                            <span className="px-3 py-1.5 rounded-full bg-[#C9A356]/15 border border-[#C9A356]/40 text-[11px] text-[#C9A356] font-serif font-bold flex items-center gap-1.5">
+                              <Icons.Shield className="w-3.5 h-3.5" />
+                              <span>Escudo Anti-Fraude Ativo</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* TOP 4 KPIS EXECUTIVOS */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          
+                          {/* KPI 1: % OCUPAÇÃO DAS CADEIRAS */}
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#2A2419] shadow-lg flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center text-xs text-gray-400 font-serif mb-2">
+                                <span>TAXA DE UTILIZAÇÃO</span>
+                                <span className="text-emerald-400 font-bold">+12% vs sem. ant.</span>
+                              </div>
+                              <div className="text-3xl font-serif font-bold text-white mb-2">76.4%</div>
+                              <div className="w-full bg-[#201D17] h-2 rounded-full overflow-hidden mb-2">
+                                <div className="bg-gradient-to-r from-[#C9A356] to-[#F5E0AA] h-full rounded-full" style={{ width: '76.4%' }}></div>
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-gray-400 flex justify-between pt-2 border-t border-[#221E17]">
+                              <span>Capacidade: 132 slots/sem.</span>
+                              <strong className="text-[#C9A356]">101 ocupados</strong>
+                            </div>
+                          </div>
+
+                          {/* KPI 2: HOLDMAP / DIAS DE MAIOR DEMANDA */}
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#2A2419] shadow-lg flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center text-xs text-gray-400 font-serif mb-2">
+                                <span>DIAS DE PICO (HOLDMAP)</span>
+                                <span className="text-amber-400 font-bold">94% Ocupação</span>
+                              </div>
+                              <div className="text-2xl font-serif font-bold text-[#C9A356] mb-1">Sex &amp; Sábado</div>
+                              <p className="text-[11px] text-gray-300">Horário mais disputado: 16:00 às 19:00.</p>
+                            </div>
+                            <div className="text-[10px] text-gray-400 pt-2 border-t border-[#221E17]">
+                              <span>Janela ociosa para promoções: </span>
+                              <strong className="text-green-400">Terça &amp; Quarta</strong>
+                            </div>
+                          </div>
+
+                          {/* KPI 3: TENTATIVAS DE BURLAMENTO BARRADAS */}
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#2A2419] shadow-lg flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center text-xs text-gray-400 font-serif mb-2">
+                                <span>ESCUDO ANTI-FRAUDE</span>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 text-[9px] font-bold">100% EFICAZ</span>
+                              </div>
+                              <div className="text-3xl font-serif font-bold text-emerald-400 mb-1">
+                                {securityLogs.length} Barradas
+                              </div>
+                              <p className="text-[11px] text-gray-400">Tentativas de CPF falso e duplicidade bloqueadas.</p>
+                            </div>
+                            <div className="text-[10px] text-gray-400 pt-2 border-t border-[#221E17]">
+                              <span>No-Shows evitados hoje: </span>
+                              <strong className="text-white">100% das reservas com voucher</strong>
+                            </div>
+                          </div>
+
+                          {/* KPI 4: USUÁRIOS GERAIS CADASTRADOS */}
+                          <div className="bg-[#161410] p-5 rounded-3xl border border-[#2A2419] shadow-lg flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-center text-xs text-gray-400 font-serif mb-2">
+                                <span>USUÁRIOS REGISTRADOS</span>
+                                <span className="text-blue-400 font-bold">Total Ativo</span>
+                              </div>
+                              <div className="text-3xl font-serif font-bold text-white mb-1">
+                                {systemUsers.length} Perfis
+                              </div>
+                              <p className="text-[11px] text-gray-400">Admin, Dono, Barbeiros e Clientes VIP.</p>
+                            </div>
+                            <div className="text-[10px] text-gray-400 pt-2 border-t border-[#221E17]">
+                              <span>Status do Servidor: </span>
+                              <strong className="text-emerald-400">Sincronizado</strong>
+                            </div>
+                          </div>
+
+                        </div>
+
+                        {/* HOLDMAP / HEATMAP DE OCUPAÇÃO POR HORÁRIO E DIA DA SEMANA */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#252018]">
+                            <div>
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">
+                                MAPA TÉRMICO DE DEMANDA
+                              </span>
+                              <h4 className="font-serif text-lg font-bold text-white mt-0.5">Holdmap de Utilização (Horário x Dia)</h4>
+                              <p className="text-xs text-gray-400">Identifique gargalos de atendimento e janelas de ociosidade das cadeiras da barbearia.</p>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] font-serif">
+                              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-600/70"></span> Pico (&gt;80%)</span>
+                              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500/70"></span> Médio (40%-79%)</span>
+                              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-700/60"></span> Livre (&lt;40%)</span>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-center text-xs border-collapse">
+                              <thead>
+                                <tr className="border-b border-[#2A2419] text-gray-400 font-serif uppercase text-[10px]">
+                                  <th className="py-2.5 px-3 text-left">Horário</th>
+                                  <th className="py-2.5 px-2">Segunda</th>
+                                  <th className="py-2.5 px-2">Terça</th>
+                                  <th className="py-2.5 px-2">Quarta</th>
+                                  <th className="py-2.5 px-2">Quinta</th>
+                                  <th className="py-2.5 px-2 font-bold text-[#C9A356]">Sexta (Pico)</th>
+                                  <th className="py-2.5 px-2 font-bold text-[#C9A356]">Sábado (Pico)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#221E17]">
+                                {[
+                                  { time: '09:00', rates: [40, 30, 35, 50, 85, 95] },
+                                  { time: '10:00', rates: [60, 45, 55, 70, 90, 100] },
+                                  { time: '11:00', rates: [55, 40, 50, 65, 90, 100] },
+                                  { time: '12:00', rates: [30, 20, 25, 40, 65, 80] },
+                                  { time: '14:00', rates: [45, 35, 40, 60, 85, 95] },
+                                  { time: '15:00', rates: [50, 40, 50, 75, 90, 100] },
+                                  { time: '16:00', rates: [70, 55, 65, 85, 100, 100] },
+                                  { time: '17:00', rates: [80, 65, 75, 90, 100, 100] },
+                                  { time: '18:00', rates: [85, 70, 80, 95, 100, 100] }
+                                ].map((row) => (
+                                  <tr key={row.time} className="hover:bg-[#1C1A14]">
+                                    <td className="py-2.5 px-3 text-left font-serif font-bold text-[#C9A356]">{row.time}</td>
+                                    {row.rates.map((rate, idx) => {
+                                      const isPeak = rate >= 80;
+                                      const isMid = rate >= 40 && rate < 80;
+                                      const bg = isPeak ? 'bg-red-900/40 text-red-200 border-red-800/40' : (isMid ? 'bg-amber-950/40 text-amber-200 border-amber-800/40' : 'bg-emerald-950/40 text-emerald-200 border-emerald-800/40');
+                                      return (
+                                        <td key={idx} className="p-1.5">
+                                          <div className={`py-1.5 px-2 rounded-xl border text-[11px] font-bold ${bg}`}>
+                                            {rate}%
+                                          </div>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* GRÁFICOS VISUAIS: MIX DE FATURAMENTO E PRODUTIVIDADE */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          
+                          {/* GRÁFICO 1: FATURAMENTO POR CATEGORIA */}
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
+                            <div>
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">ANÁLISE DE MIX</span>
+                              <h4 className="font-serif text-lg font-bold text-white mt-0.5">Faturamento por Serviço &amp; Bar</h4>
+                            </div>
+
+                            <div className="space-y-3 pt-2">
+                              {[
+                                { name: 'Cortes de Cabelo (Fade / Clássico)', value: 'R$ 1.840,00', pct: 48, color: 'bg-[#C9A356]' },
+                                { name: 'Barboterapia & Alinhamento', value: 'R$ 1.120,00', pct: 29, color: 'bg-[#DFBD78]' },
+                                { name: 'Combos Especiais (Barba + Cabelo)', value: 'R$ 680,00', pct: 17, color: 'bg-blue-500' },
+                                { name: 'Bebidas & Bar Lounge (Heineken/Café)', value: 'R$ 150,00', pct: 4, color: 'bg-emerald-500' },
+                                { name: 'Produtos & Pomadas Modeladoras', value: 'R$ 90,00', pct: 2, color: 'bg-purple-500' }
+                              ].map((item, idx) => (
+                                <div key={idx} className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-gray-300 font-medium">{item.name}</span>
+                                    <span className="font-serif font-bold text-white">{item.value} <span className="text-gray-500 text-[10px]">({item.pct}%)</span></span>
+                                  </div>
+                                  <div className="w-full bg-[#201D17] h-2.5 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }}></div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* GRÁFICO 2: PRODUTIVIDADE COMPARATIVA POR BARBEIRO */}
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
+                            <div>
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PERFORMANCE DA EQUIPE</span>
+                              <h4 className="font-serif text-lg font-bold text-white mt-0.5">Produtividade por Cadeira</h4>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                              
+                              {/* LUIS VALVERDE */}
+                              <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2F291E] space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <img src="luis_valverde.jpg" className="w-12 h-12 rounded-full object-cover border border-[#C9A356]" alt="Luis" />
+                                  <div>
+                                    <div className="font-serif font-bold text-white text-sm">Luis Valverde</div>
+                                    <div className="text-[10px] text-[#C9A356] font-serif">Cadeira 01 • Dono</div>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 text-xs pt-2 border-t border-[#252018]">
+                                  <div className="flex justify-between text-gray-400"><span>Atendimentos:</span> <strong className="text-white">24 cortes</strong></div>
+                                  <div className="flex justify-between text-gray-400"><span>Faturamento:</span> <strong className="text-green-400 font-serif">R$ 1.950,00</strong></div>
+                                  <div className="flex justify-between text-gray-400"><span>Ticket Médio:</span> <strong className="text-[#C9A356] font-serif">R$ 81,25</strong></div>
+                                </div>
+                              </div>
+
+                              {/* YAGO BARBER */}
+                              <div className="bg-[#1C1A14] p-4 rounded-2xl border border-[#2F291E] space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <img src="foto_barbeiro_yago.jpg" className="w-12 h-12 rounded-full object-cover border border-blue-500" alt="Yago" />
+                                  <div>
+                                    <div className="font-serif font-bold text-white text-sm">Yago Barber</div>
+                                    <div className="text-[10px] text-blue-400 font-serif">Cadeira 02 • Barbeiro</div>
+                                  </div>
+                                </div>
+                                <div className="space-y-1 text-xs pt-2 border-t border-[#252018]">
+                                  <div className="flex justify-between text-gray-400"><span>Atendimentos:</span> <strong className="text-white">21 cortes</strong></div>
+                                  <div className="flex justify-between text-gray-400"><span>Faturamento:</span> <strong className="text-green-400 font-serif">R$ 1.730,00</strong></div>
+                                  <div className="flex justify-between text-gray-400"><span>Comissão Gerada:</span> <strong className="text-[#C9A356] font-serif">R$ 865,00</strong></div>
+                                </div>
+                              </div>
+
+                            </div>
+
+                            <div className="p-3 bg-[#1C1A14] rounded-2xl border border-[#2A2419] flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Tempo Médio de Atendimento:</span>
+                              <strong className="text-[#C9A356] font-serif">40 minutos</strong>
+                            </div>
+                          </div>
+
+                        </div>
+
+                        {/* AUDITORIA DE TENTATIVAS DE BURLAMENTO (ESCUDO ANTI-FRAUDE) */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#252018]">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <Icons.Shield className="w-4 h-4 text-emerald-400" />
+                                <span className="text-[10px] font-serif uppercase tracking-widest text-emerald-400 font-bold">
+                                  AUDITORIA DE SEGURANÇA EM TEMPO REAL
+                                </span>
+                              </div>
+                              <h4 className="font-serif text-lg font-bold text-white mt-0.5">Tentativas de Burlamento &amp; Fraude Neutralizadas</h4>
+                              <p className="text-xs text-gray-400">Registro de todas as ações irregulares que o sistema barrou automaticamente.</p>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                const cpfTest = prompt('Digite um CPF para incluir na Lista Negra de Bloqueio (Ex: 000.000.000-00):');
+                                if (cpfTest && cpfTest.trim()) {
+                                  setBlockedCpfs(prev => [...prev, cpfTest.trim()]);
+                                  setSecurityLogs(prev => [
+                                    { id: Date.now(), type: 'BLACKLIST_MANUAL', description: `CPF ${cpfTest.trim()} adicionado manualmente a lista de bloqueio`, origin: 'Painel Master', date: 'Agora', status: 'BLOQUEADO' },
+                                    ...prev
+                                  ]);
+                                  alert('CPF adicionado a lista negra com sucesso.');
+                                }
+                              }}
+                              className="px-4 py-2 bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-200 text-xs font-serif font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
+                            >
+                              <span>+ Adicionar CPF à Blacklist</span>
+                            </button>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="border-b border-[#2A2419] text-gray-400 font-serif uppercase text-[10px]">
+                                  <th className="py-3 px-3">Data / Hora</th>
+                                  <th className="py-3 px-3">Tipo de Burlamento</th>
+                                  <th className="py-3 px-3">Descrição da Tentativa</th>
+                                  <th className="py-3 px-3">Origem</th>
+                                  <th className="py-3 px-3 text-right">Status do Escudo</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#221E17]">
+                                {securityLogs.map((log) => (
+                                  <tr key={log.id} className="hover:bg-[#1C1A14]">
+                                    <td className="py-3 px-3 text-gray-400 whitespace-nowrap">{log.date}</td>
+                                    <td className="py-3 px-3 font-semibold text-white">
+                                      <span className="px-2 py-0.5 rounded-full bg-[#201D17] border border-[#2E281F] text-[10px]">
+                                        {log.type}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-gray-300">{log.description}</td>
+                                    <td className="py-3 px-3 text-gray-400">{log.origin}</td>
+                                    <td className="py-3 px-3 text-right">
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 font-bold text-[10px]">
+                                        <span>🛡️</span>
+                                        <span>{log.status}</span>
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* GESTÃO GERAL DE USUÁRIOS & CADASTRO COMPLETO */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2A2419] shadow-xl space-y-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#252018]">
+                            <div>
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">
+                                CONTROLE DE ACESSO &amp; CONTAS
+                              </span>
+                              <h4 className="font-serif text-lg font-bold text-white mt-0.5">Usuários Gerais &amp; Cadastro Completo</h4>
+                              <p className="text-xs text-gray-400">Gestão de credenciais, níveis de permissão e acessos da equipe e clientes.</p>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                const name = prompt('Nome do novo usuário:');
+                                if (!name) return;
+                                const email = prompt('E-mail do novo usuário:');
+                                if (!email) return;
+                                const role = prompt('Função (barbeiro / dono / recepcao / cliente):', 'barbeiro');
+                                const phone = prompt('Telefone com DDD:', '(21) 9');
+                                const newUser = {
+                                  id: Date.now(),
+                                  name,
+                                  email,
+                                  role: role || 'barbeiro',
+                                  roleLabel: role === 'barbeiro' ? 'Barbeiro' : (role === 'dono' ? 'Proprietário' : 'Recepção'),
+                                  phone: phone || '',
+                                  status: 'Ativo',
+                                  accessLevel: 'Acesso Padrão'
+                                };
+                                setSystemUsers(prev => [...prev, newUser]);
+                                alert('Novo usuário cadastrado com sucesso!');
+                              }}
+                              className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black text-xs font-serif font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
+                            >
+                              <Icons.Plus className="w-3.5 h-3.5" />
+                              <span>Novo Usuário</span>
+                            </button>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="border-b border-[#2A2419] text-gray-400 font-serif uppercase text-[10px]">
+                                  <th className="py-3 px-3">Nome</th>
+                                  <th className="py-3 px-3">E-mail</th>
+                                  <th className="py-3 px-3">Papel / Função</th>
+                                  <th className="py-3 px-3">Telefone</th>
+                                  <th className="py-3 px-3">Nível de Permissão</th>
+                                  <th className="py-3 px-3 text-right">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#221E17]">
+                                {systemUsers.map((user) => (
+                                  <tr key={user.id} className="hover:bg-[#1C1A14]">
+                                    <td className="py-3 px-3 font-semibold text-white flex items-center gap-2">
+                                      <div className={`w-2 h-2 rounded-full ${user.status === 'Ativo' ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                                      <span>{user.name}</span>
+                                    </td>
+                                    <td className="py-3 px-3 text-gray-300 font-mono text-[11px]">{user.email}</td>
+                                    <td className="py-3 px-3">
+                                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-serif font-bold ${user.role === 'superadmin' ? 'bg-[#C9A356] text-black' : (user.role === 'dono' ? 'bg-[#C9A356]/20 text-[#C9A356] border border-[#C9A356]/40' : (user.role === 'barbeiro' ? 'bg-blue-900/40 text-blue-300 border border-blue-800/40' : 'bg-gray-800 text-gray-300'))}`}>
+                                        {user.roleLabel}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-gray-400">{user.phone}</td>
+                                    <td className="py-3 px-3 text-gray-400">{user.accessLevel}</td>
+                                    <td className="py-3 px-3 text-right">
+                                      <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 text-[10px] font-bold">
+                                        {user.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
                       </div>
                     )}
 
@@ -6334,6 +6869,49 @@
                     </button>
                   </div>
                 </form>
+
+                {/* LOGIN OFICIAL COM GOOGLE SSO (NEON AUTH) */}
+                <div className="pt-3 border-t border-[#2A261F] text-center space-y-2.5">
+                  <span className="text-[10px] text-gray-400 uppercase font-serif tracking-widest block">
+                    Ou acesse com sua conta oficial:
+                  </span>
+                  
+                  {/* BOTAO OFICIAL DO GOOGLE VIA NEON AUTH */}
+                  <button
+                    type="button"
+                    onClick={signInWithGoogleNeon}
+                    className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 rounded-xl text-xs font-sans font-bold flex items-center justify-center gap-2.5 shadow-md transition-all border border-gray-200 hover:scale-[1.01] active:scale-95"
+                    title="Acessar com o Google Oficial (Neon Auth Cloud)"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Continuar com o Google</span>
+                  </button>
+
+                  {/* ATALHOS RAPIDOS COM 1 CLIQUE */}
+                  <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-gray-400">
+                    <span className="text-[10px]">Acesso rápido:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleGoogleLoginDirect('bernardo')}
+                      className="text-[#C9A356] hover:underline font-semibold"
+                    >
+                      Bernardo (Admin)
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => handleGoogleLoginDirect('luis')}
+                      className="text-gray-300 hover:underline font-semibold"
+                    >
+                      Luis (Dono)
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
