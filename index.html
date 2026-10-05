@@ -797,7 +797,34 @@
       return clean.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
     };
 
+        // =========================================================================
+    // CONEXÃO COM BANCO DE DADOS EM NUVEM: NEON POSTGRESQL (SÃO PAULO)
     // =========================================================================
+    const NEON_CONFIG = {
+      url: 'https://ep-jolly-credit-b6kmraae-pooler.c-2.sa-east-1.aws.neon.tech/sql',
+      conn: 'postgresql://neondb_owner:npg_Ieo53DFdiXmg@ep-jolly-credit-b6kmraae-pooler.c-2.sa-east-1.aws.neon.tech/neondb?sslmode=require'
+    };
+
+    async function neonQuery(sql, params = []) {
+      try {
+        const res = await fetch(NEON_CONFIG.url, {
+          method: 'POST',
+          headers: {
+            'neon-connection-string': NEON_CONFIG.conn,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query: sql, params })
+        });
+        if (!res.ok) throw new Error('Falha na resposta do Neon');
+        const data = await res.json();
+        return data.rows || [];
+      } catch (err) {
+        console.warn('Neon Cloud offline ou aviso:', err);
+        return null;
+      }
+    }
+
+// =========================================================================
     // COMPONENTE PRINCIPAL
     // =========================================================================
     function ValverdsApp() {
@@ -1048,6 +1075,16 @@
         setAppointments(prev => [...prev, newAppt]);
         setClientBookingSuccessToast(true);
         setConfirmedBookingModal(newAppt);
+
+        // Gravação em Tempo Real no Neon Cloud
+        neonQuery(`
+          INSERT INTO appointments (id, voucher_code, client_name, phone, cpf, is_cpf_verified, service_name, barber_name, barber_key, day_name, appt_date, appt_time, status, price, total, payment_method, notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);
+        `, [
+          newAppt.id, newAppt.voucherCode, newAppt.client, newAppt.phone, newAppt.cpf, newAppt.isCpfVerified,
+          newAppt.service, newAppt.barber, newAppt.barberKey, newAppt.day, newAppt.date, newAppt.time,
+          newAppt.status, newAppt.price, newAppt.total, newAppt.paymentMethod, newAppt.notes
+        ]);
         setTimeout(() => setClientBookingSuccessToast(false), 5000);
         setClientTab('meu_corte');
       };
@@ -1068,6 +1105,128 @@
       const [editingService, setEditingService] = useState(null);
 
       const [clientProfile, setClientProfile] = useState(INITIAL_CLIENT_PROFILE);
+
+      // Estados de Autenticação Real & Banco Neon Cloud
+      const [dbSynced, setDbSynced] = useState(false);
+      const [isFirstAccessModalOpen, setIsFirstAccessModalOpen] = useState(false);
+      const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+      const [firstAccessForm, setFirstAccessForm] = useState({
+        name: 'Luis Valverde',
+        email: '',
+        phone: '(21) 97010-0668',
+        password: '',
+        confirmPassword: '',
+        role: 'dono',
+        chair: 'Cadeira 01'
+      });
+      const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+      const [loginError, setLoginError] = useState('');
+
+      // Sincronização inicial com o Banco de Dados Neon Cloud
+      useEffect(() => {
+        async function syncWithNeon() {
+          // 1. Carregar agendamentos reais em nuvem
+          const appts = await neonQuery('SELECT * FROM appointments ORDER BY id DESC;');
+          if (appts) {
+            const mapped = appts.map(a => ({
+              id: Number(a.id),
+              voucherCode: a.voucher_code,
+              client: a.client_name,
+              phone: a.phone,
+              cpf: a.cpf,
+              isCpfVerified: a.is_cpf_verified,
+              service: a.service_name,
+              barber: a.barber_name,
+              barberKey: a.barber_key,
+              day: a.day_name,
+              date: a.appt_date,
+              time: a.appt_time,
+              status: a.status,
+              price: Number(a.price),
+              total: Number(a.total),
+              paymentMethod: a.payment_method,
+              notes: a.notes
+            }));
+            setAppointments(mapped);
+            setDbSynced(true);
+          }
+
+          // 2. Verificar se já existe Dono cadastrado no Neon
+          const users = await neonQuery("SELECT count(*) FROM users WHERE role = 'dono';");
+          if (users && Number(users[0]?.count || 0) === 0) {
+            // Nenhum dono cadastrado ainda -> abre assistente de primeiro login!
+            setIsFirstAccessModalOpen(true);
+          }
+        }
+        syncWithNeon();
+      }, []);
+
+      // Handler para Criação do Primeiro Usuário Master (Luis Valverde)
+      const handleCreateMasterUser = async (e) => {
+        e.preventDefault();
+        if (!firstAccessForm.email.trim() || !firstAccessForm.password.trim()) {
+          alert('Por favor informe seu e-mail e crie uma senha segura.');
+          return;
+        }
+        if (firstAccessForm.password !== firstAccessForm.confirmPassword) {
+          alert('As senhas não coincidem. Digite a mesma senha nos dois campos.');
+          return;
+        }
+
+        try {
+          await neonQuery(`
+            INSERT INTO users (name, email, password_hash, phone, role, barber_key)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+          `, [
+            firstAccessForm.name.trim(),
+            firstAccessForm.email.trim().toLowerCase(),
+            firstAccessForm.password,
+            firstAccessForm.phone,
+            'dono',
+            'luis'
+          ]);
+
+          const logged = {
+            name: firstAccessForm.name,
+            email: firstAccessForm.email.toLowerCase(),
+            role: 'dono',
+            barberKey: 'luis'
+          };
+          setCurrentUser(logged);
+          localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+          setIsFirstAccessModalOpen(false);
+          setCurrentView('reception');
+          alert('🎉 Parabéns, Luis! Seu cadastro de Administrador Master foi criado no Neon PostgreSQL com sucesso.\n\nA base está limpa e pronta para operar!');
+        } catch (err) {
+          alert('Erro ao gravar no banco Neon. Verifique sua conexão.');
+        }
+      };
+
+      // Handler para Login da Equipe
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoginError('');
+        const rows = await neonQuery(`
+          SELECT * FROM users WHERE LOWER(email) = $1 AND password_hash = $2;
+        `, [loginForm.email.trim().toLowerCase(), loginForm.password]);
+
+        if (rows && rows.length > 0) {
+          const u = rows[0];
+          const logged = {
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            barberKey: u.barber_key || (u.role === 'barbeiro' ? 'yago' : 'luis')
+          };
+          setCurrentUser(logged);
+          localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+          setIsLoginModalOpen(false);
+          setCurrentView('reception');
+        } else {
+          setLoginError('E-mail ou senha incorretos.');
+        }
+      };
 
       const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
       const [barberEditEndTime, setBarberEditEndTime] = useState('19:00');
@@ -1279,7 +1438,7 @@
       const netProfitToday = totalRevenueToday - totalTeamCommissionsToday - totalSuppliesCostToday;
       const netMarginPercent = totalRevenueToday > 0 ? (netProfitToday / totalRevenueToday) * 100 : 0;
 
-      const currentBarberName = currentUser.role === 'barbeiro' ? currentUser.name : (currentUser.role === 'dono' ? 'Luis Valverde' : '');
+      const currentBarberName = currentUser.role === 'barbeiro' ? currentUser.name : ((currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'Luis Valverde' : '');
       const myAllAppointments = useMemo(() => appointments.filter(a => a.barber === currentBarberName), [appointments, currentBarberName]);
       const myWeekAppointments = useMemo(() => myAllAppointments.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)), [myAllAppointments, currentWeek]);
       const myTodaysAppointments = useMemo(() => myAllAppointments.filter(a => a.day === 'Seg' && (a.weekId === 0 || a.weekId === undefined)), [myAllAppointments]);
@@ -1478,6 +1637,16 @@
         setAppointments(prev => [newAppt, ...prev]);
         setIsBookingModalOpen(false);
         setConfirmedBookingModal(newAppt);
+
+        // Gravação em Tempo Real no Neon Cloud
+        neonQuery(`
+          INSERT INTO appointments (id, voucher_code, client_name, phone, cpf, is_cpf_verified, service_name, barber_name, barber_key, day_name, appt_date, appt_time, status, price, total, payment_method, notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);
+        `, [
+          newAppt.id, newAppt.voucherCode, newAppt.client, newAppt.phone, newAppt.cpf, newAppt.isCpfVerified,
+          newAppt.service, newAppt.barber, newAppt.barberKey, newAppt.day, newAppt.date, newAppt.time,
+          newAppt.status, newAppt.price, newAppt.total, newAppt.paymentMethod, newAppt.notes
+        ]);
         setBookingForm({ client: '', phone: '', cpf: '', serviceId: 's1', barberKey: 'luis', day: 'Seg', time: '14:00', notes: '' });
       };
 
@@ -1633,7 +1802,7 @@
           </span>
           <button
             onClick={() => switchRole('dono')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${currentUser.role === 'dono' && currentView === 'reception' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 ${(currentUser.role === 'dono' || currentUser.role === 'superadmin') && currentView === 'reception' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white hover:bg-[#25221B]'}`}
             title="Dono: Acesso irrestrito a DRE, todas as cadeiras e equipe"
           >
             <Icons.Crown className="w-3.5 h-3.5" />
@@ -1662,6 +1831,15 @@
           >
             <Icons.User className="w-3.5 h-3.5" />
             <span>Cliente</span>
+          </button>
+          <div className="w-[1px] h-4 bg-[#3A3326] mx-0.5 hidden xs:block"></div>
+          <button
+            onClick={() => setIsLoginModalOpen(true)}
+            className="px-2.5 py-1 rounded-full text-[11px] font-serif font-bold text-gray-300 hover:text-white hover:bg-[#25221B] transition-all flex items-center gap-1"
+            title="Login com Senha"
+          >
+            <Icons.Lock className="w-3 h-3 text-[#C9A356]" />
+            <span className="hidden sm:inline">Entrar</span>
           </button>
           <div className="w-[1px] h-4 bg-[#3A3326] mx-0.5 hidden xs:block"></div>
           <ThemeToggle />
@@ -2385,9 +2563,9 @@
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-serif font-bold text-base tracking-wider text-white">VALVERD'S</span>
-                        <span className={`text-[10px] font-serif font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow flex items-center gap-1.5 ${currentUser.role === 'dono' ? 'bg-[#C9A356] text-black' : currentUser.role === 'barbeiro' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                          {currentUser.role === 'dono' ? <Icons.Crown className="w-3 h-3" /> : currentUser.role === 'barbeiro' ? <Icons.Scissors className="w-3 h-3" /> : <Icons.Clipboard className="w-3 h-3" />}
-                          <span>{currentUser.role === 'dono' ? 'PROPRIETÁRIO' : currentUser.role === 'barbeiro' ? 'PORTAL DO BARBEIRO' : 'RECEPÇÃO & BALCÃO'}</span>
+                        <span className={`text-[10px] font-serif font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow flex items-center gap-1.5 ${(currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'bg-[#C9A356] text-black' : currentUser.role === 'barbeiro' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                          {(currentUser.role === 'dono' || currentUser.role === 'superadmin') ? <Icons.Crown className="w-3 h-3" /> : currentUser.role === 'barbeiro' ? <Icons.Scissors className="w-3 h-3" /> : <Icons.Clipboard className="w-3 h-3" />}
+                          <span>{currentUser.role === 'superadmin' ? '⚡ SUPER ADMIN MASTER' : (currentUser.role === 'dono' ? 'PROPRIETÁRIO' : currentUser.role === 'barbeiro' ? 'PORTAL DO BARBEIRO' : 'RECEPÇÃO & BALCÃO')}</span>
                         </span>
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
@@ -3020,11 +3198,11 @@
                 )}
 
                 {/* 2. SEÇÃO DO DONO E RECEPÇÃO */}
-                {(currentUser.role === 'dono' || currentUser.role === 'recepcao') && (
+                {((currentUser.role === 'dono' || currentUser.role === 'superadmin') || currentUser.role === 'recepcao') && (
                   <div className="space-y-6">
 
                     {/* VISÃO MACRO EXECUTIVA (DONO) */}
-                    {receptionTab === 'macro' && currentUser.role === 'dono' && (
+                    {receptionTab === 'macro' && (currentUser.role === 'dono' || currentUser.role === 'superadmin') && (
                       <div className="space-y-6">
                         {/* Header com indicador executivo */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#161410] p-6 rounded-3xl border border-[#282319] gap-4 shadow-xl">
@@ -3371,7 +3549,7 @@
                       </div>
                     )}
 
-                    {receptionTab === 'escalas' && currentUser.role === 'dono' && (
+                    {receptionTab === 'escalas' && (currentUser.role === 'dono' || currentUser.role === 'superadmin') && (
                       <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-6">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#252018]">
                           <div>
@@ -3523,7 +3701,7 @@
                     {/* ========================================================================= */}
                     {/* NOVO MODULO: SERVICOS & PRECOS (100% EDITAVEL)                           */}
                     {/* ========================================================================= */}
-                    {receptionTab === 'servicos' && currentUser.role === 'dono' && (
+                    {receptionTab === 'servicos' && (currentUser.role === 'dono' || currentUser.role === 'superadmin') && (
                       <div className="space-y-6">
                         <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                           <div>
@@ -5423,6 +5601,174 @@
                     >
                       <Icons.Check className="w-3.5 h-3.5" />
                       <span>Salvar no Estoque</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: PRIMEIRO ACESSO / SETUP MASTER DO PROPRIETÁRIO (LUIS VALVERDE)     */}
+          {/* ========================================================================= */}
+          {isFirstAccessModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+              <div className="bg-[#161410] border-2 border-[#C9A356] rounded-3xl max-w-lg w-full p-6 sm:p-8 text-white shadow-2xl space-y-6 animate-modal relative">
+                <div className="text-center space-y-2">
+                  <div className="w-14 h-14 rounded-full bg-[#C9A356]/20 border border-[#C9A356] text-[#C9A356] flex items-center justify-center mx-auto text-2xl shadow">
+                    👑
+                  </div>
+                  <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">
+                    PRIMEIRO ACESSO DA BARBEARIA • SETUP OFICIAL
+                  </span>
+                  <h3 className="font-serif text-2xl font-bold text-white">Criar Conta Master do Dono</h3>
+                  <p className="text-xs text-gray-400">
+                    O banco de dados <strong>Neon PostgreSQL</strong> está conectado. Crie seu acesso de proprietário para iniciar as operações oficiais da Valverd's.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateMasterUser} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-gray-300 font-serif uppercase mb-1 font-semibold">Nome Completo *</label>
+                      <input
+                        type="text"
+                        required
+                        value={firstAccessForm.name}
+                        onChange={e => setFirstAccessForm({ ...firstAccessForm, name: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white font-bold focus:outline-none focus:border-[#C9A356]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 font-serif uppercase mb-1 font-semibold">WhatsApp Oficial *</label>
+                      <input
+                        type="text"
+                        required
+                        value={firstAccessForm.phone}
+                        onChange={e => setFirstAccessForm({ ...firstAccessForm, phone: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-300 font-serif uppercase mb-1 font-semibold">E-mail de Acesso do Dono *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Ex: luis@valverdsbarbershop.com.br"
+                      value={firstAccessForm.email}
+                      onChange={e => setFirstAccessForm({ ...firstAccessForm, email: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                    <span className="text-[10px] text-gray-500 block mt-1">Este e-mail terá acesso irrestrito ao DRE, financeiro e equipe.</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-gray-300 font-serif uppercase mb-1 font-semibold">Senha Master *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Mínimo 6 dígitos"
+                        value={firstAccessForm.password}
+                        onChange={e => setFirstAccessForm({ ...firstAccessForm, password: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 font-serif uppercase mb-1 font-semibold">Confirmar Senha *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Repita a senha"
+                        value={firstAccessForm.confirmPassword}
+                        onChange={e => setFirstAccessForm({ ...firstAccessForm, confirmPassword: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[#1B1914] rounded-2xl border border-[#3A3222] text-[11px] text-gray-300 space-y-1">
+                    <strong className="text-[#C9A356] font-serif block">Permissões da Conta Master:</strong>
+                    <p>• Visualização e controle total de faturamento diário/semanal e DRE.</p>
+                    <p>• Gerenciamento das Cadeira 01 (Luis) e Cadeira 02 (Yago) com cálculo de comissões.</p>
+                    <p>• Base de agendamentos limpa e conectada em tempo real com o Neon Cloud.</p>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2"
+                    >
+                      <Icons.Check className="w-4 h-4" />
+                      <span>Criar Conta Master &amp; Iniciar Barbearia</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: LOGIN DA EQUIPE (DONO / BARBEIRO / RECEPÇÃO)                        */}
+          {/* ========================================================================= */}
+          {isLoginModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+              <div className="bg-[#161410] border border-[#2D271E] rounded-3xl max-w-sm w-full p-6 text-white shadow-2xl space-y-4 animate-modal relative">
+                <button
+                  onClick={() => setIsLoginModalOpen(false)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#201D17]"
+                  aria-label="Fechar"
+                >
+                  <Icons.X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center space-y-1">
+                  <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">
+                    ÁREA DA EQUIPE
+                  </span>
+                  <h3 className="font-serif text-xl font-bold text-white">Entrar no Sistema</h3>
+                  <p className="text-xs text-gray-400">Acesse com seu e-mail e senha cadastrados.</p>
+                </div>
+
+                {loginError && (
+                  <div className="p-2.5 bg-red-950/60 border border-red-800/60 text-red-200 rounded-xl text-xs text-center font-bold">
+                    {loginError}
+                  </div>
+                )}
+
+                <form onSubmit={handleLogin} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">E-mail:</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="seu@email.com"
+                      value={loginForm.email}
+                      onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 uppercase font-serif mb-1">Senha:</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={loginForm.password}
+                      onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-xl transition-all shadow"
+                    >
+                      Acessar Painel
                     </button>
                   </div>
                 </form>
