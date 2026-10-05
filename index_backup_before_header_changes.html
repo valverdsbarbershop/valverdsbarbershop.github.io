@@ -109,33 +109,10 @@
     @media (min-width: 1024px) {
       .app-container { padding-left: 2rem; padding-right: 2rem; }
     }
-    /* Barra de rolagem visivel e refinada (Obsidian & Gold) no navegador */
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-track { background: #12110E; }
-    ::-webkit-scrollbar-thumb { 
-      background: linear-gradient(180deg, #C9A356 0%, #8C6D2D 100%); 
-      border-radius: 99px; 
-      border: 2px solid #12110E;
-    }
-    ::-webkit-scrollbar-thumb:hover { 
-      background: linear-gradient(180deg, #DFBD78 0%, #B59044 100%); 
-    }
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: #C9A356 #12110E;
-    }
-    /* Protecao contra cursor/caret de texto piscando indevidamente */
-    aside, nav, header, button, .select-none {
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-      caret-color: transparent !important;
-    }
-    input, textarea {
-      caret-color: #C9A356 !important;
-      user-select: text !important;
-    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0B0B0B; }
+    ::-webkit-scrollbar-thumb { background: #28241E; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: #C9A356; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     /* Gradiente metálico de ouro nobre com profundidade */
@@ -299,16 +276,6 @@
     // COLEÇÃO PROFISSIONAL DE ÍCONES VETORIAIS (LUCIDE DESIGN SYSTEM)
     // =========================================================================
     const IconsBase = {
-      ChevronDown: ({ className = "w-4 h-4" }) => (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      ),
-      LogOut: ({ className = "w-4 h-4" }) => (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-      ),
       Home: ({ className = "w-4 h-4" }) => (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
           <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
@@ -699,7 +666,22 @@
       { dayNum: 30, weekDay: 'Qua', isOpen: true }
     ];
 
-    const INITIAL_APPOINTMENTS = [];
+    const INITIAL_APPOINTMENTS = [
+      { id: 101, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Roberto Andrade', phone: '(21) 98877-1122', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:00', status: 'concluido', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: 'PIX', notes: 'Cliente Ouro, degradê clássico na tesoura.' },
+      { id: 102, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Marcio Nogueira', phone: '(21) 97766-2233', service: 'Barba + Cabelo (Combo Especial)', barber: 'Luis Valverde', time: '10:00', status: 'em_atendimento', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }, { name: 'Cerveja Heineken Long Neck (330ml)', price: 14 }], total: 79, paymentMethod: '', notes: 'Toalha quente com essência de eucalipto.' },
+      { id: 103, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Rodrigo Medeiros', phone: '(21) 98111-2233', service: 'Corte Masculino', barber: 'Luis Valverde', time: '11:00', status: 'aguardando', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Chegou e está no lounge tomando café.' },
+      { id: 104, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Lucas Pereira & Filho', phone: '(21) 98123-4567', service: 'Corte Infantil', barber: 'Yago Barber', time: '09:30', status: 'concluido', price: 50, items: [{ name: 'Corte Infantil', price: 50 }], total: 50, paymentMethod: 'CARTÃO', notes: 'Atendimento calmo para o pequeno.' },
+      { id: 105, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Felipe Alcantara', phone: '(21) 99988-3344', service: 'Somente Barba', barber: 'Yago Barber', time: '10:30', status: 'em_atendimento', price: 35, items: [{ name: 'Somente Barba', price: 35 }], total: 35, paymentMethod: '', notes: 'Alinhamento navalhado na bochecha e queixo.' },
+      { id: 106, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Guilherme Castro', phone: '(21) 97123-9988', service: 'Corte Masculino', barber: 'Yago Barber', time: '11:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Degradê na zero alta.' },
+      { id: 107, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Thiago Martins', phone: '(21) 99222-3344', service: 'Barba + Cabelo (Combo Especial)', barber: 'Luis Valverde', time: '14:00', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Agendado pelo portal.' },
+      { id: 108, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Gabriel Souza', phone: '(21) 98777-6655', service: 'Design de Sobrancelha', barber: 'Yago Barber', time: '15:00', status: 'agendado', price: 20, items: [{ name: 'Design de Sobrancelha', price: 20 }], total: 20, paymentMethod: '', notes: 'Alinhamento rápido na navalha.' },
+      { id: 109, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Carlos Eduardo', phone: '(21) 98111-9988', service: 'Corte Masculino', barber: 'Luis Valverde', time: '16:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Corte clássico executivo.' },
+      { id: 110, weekId: 0, day: 'Seg', date: '08/09', dayNum: 8, client: 'Rafael Lima', phone: '(21) 99887-5544', service: 'Corte Masculino', barber: 'Yago Barber', time: '17:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Fade navalhado moderno.' },
+      { id: 201, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Bruno Silveira', phone: '(21) 97654-3210', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:30', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Manutenção mensal.' },
+      { id: 202, weekId: 0, day: 'Ter', date: '09/09', dayNum: 9, client: 'Diego Santos', phone: '(21) 98765-4321', service: 'Barba + Cabelo (Combo Especial)', barber: 'Yago Barber', time: '10:00', status: 'agendado', price: 65, items: [{ name: 'Barba + Cabelo (Combo)', price: 65 }], total: 65, paymentMethod: '', notes: 'Barba cheia alinhada.' },
+      { id: 301, weekId: 0, day: 'Qua', date: '10/09', dayNum: 10, client: 'Fernando Dias', phone: '(21) 99456-7890', service: 'Corte Masculino', barber: 'Luis Valverde', time: '10:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Corte executivo.' },
+      { id: 701, weekId: 1, day: 'Seg', date: '14/09', dayNum: 14, client: 'Otávio Mesquita', phone: '(21) 98111-4455', service: 'Corte Masculino', barber: 'Luis Valverde', time: '09:00', status: 'agendado', price: 40, items: [{ name: 'Corte Masculino', price: 40 }], total: 40, paymentMethod: '', notes: 'Agendamento antecipado.' }
+    ];
 
     const INITIAL_CLIENT_PROFILE = {
       id: 'c101',
@@ -933,14 +915,7 @@
       const [confirmedBookingModal, setConfirmedBookingModal] = useState(null);
 
       const [appointments, setAppointments] = useState(() => {
-        try {
-        const s = localStorage.getItem('valverds_appointments');
-        if (s) {
-          const parsed = JSON.parse(s);
-          return parsed.filter(a => a.id >= 1000 || typeof a.id === 'string');
-        }
-        return INITIAL_APPOINTMENTS;
-      } catch(e) { return INITIAL_APPOINTMENTS; }
+        try { const s = localStorage.getItem('valverds_appointments'); return s ? JSON.parse(s) : INITIAL_APPOINTMENTS; } catch(e) { return INITIAL_APPOINTMENTS; }
       });
       const [products, setProducts] = useState(() => {
         try { const s = localStorage.getItem('valverds_products'); return s ? JSON.parse(s) : INITIAL_PRODUCTS; } catch(e) { return INITIAL_PRODUCTS; }
@@ -1174,28 +1149,6 @@
 
       const [clientProfile, setClientProfile] = useState(INITIAL_CLIENT_PROFILE);
 
-      // Estado de Autenticacao e Sessao Segura
-      const [isAuthenticated, setIsAuthenticated] = useState(() => {
-        try {
-          return localStorage.getItem('valverds_auth') === 'true';
-        } catch(e) { return false; }
-      });
-
-      // Detecao de proximidade com o rodape para recolher o botao flutuante de agendamento
-      const [isNearFooter, setIsNearFooter] = useState(false);
-
-      useEffect(() => {
-        const handleScroll = () => {
-          const scrollBottom = window.innerHeight + window.scrollY;
-          const docHeight = document.documentElement.scrollHeight;
-          // Se estiver nos ultimos 380px da pagina (zona do rodape)
-          setIsNearFooter(scrollBottom >= docHeight - 380);
-        };
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        handleScroll();
-        return () => window.removeEventListener('scroll', handleScroll);
-      }, []);
-
       // Estados de Autenticação Real & Banco Neon Cloud
       const [dbSynced, setDbSynced] = useState(false);
       const [isFirstAccessModalOpen, setIsFirstAccessModalOpen] = useState(false);
@@ -1401,25 +1354,9 @@
       const handleLogin = async (e) => {
         e.preventDefault();
         setLoginError('');
-        const inputEmail = loginForm.email.trim().toLowerCase();
-        const inputPassword = loginForm.password;
-
-        let rows = await neonQuery(`
+        const rows = await neonQuery(`
           SELECT * FROM users WHERE LOWER(email) = $1 AND password_hash = $2;
-        `, [inputEmail, inputPassword]);
-
-        // Fallback robusto para contas master (garante acesso mesmo se offline)
-        if (!rows || rows.length === 0) {
-          if (inputEmail === 'bernardolamin3@gmail.com' && inputPassword === 'admin123') {
-            rows = [{ name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', barber_key: 'luis' }];
-          } else if (inputEmail === 'valverdsbarbeshop@gmail.com' && inputPassword === 'valverds2026') {
-            rows = [{ name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', barber_key: 'luis' }];
-          } else if (inputEmail === 'yago@valverds.com' && inputPassword === 'yago123') {
-            rows = [{ name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', barber_key: 'yago' }];
-          } else if (inputEmail === 'recepcao@valverds.com' && inputPassword === 'recepcao123') {
-            rows = [{ name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', barber_key: 'recepcao' }];
-          }
-        }
+        `, [loginForm.email.trim().toLowerCase(), loginForm.password]);
 
         if (rows && rows.length > 0) {
           const u = rows[0];
@@ -1427,35 +1364,15 @@
             name: u.name,
             email: u.email,
             role: u.role,
-            barberKey: u.barber_key || (u.role === 'barbeiro' ? 'yago' : 'luis'),
-            title: u.role === 'superadmin' ? 'Administrador' : (u.role === 'dono' ? 'Proprietário' : u.role === 'barbeiro' ? 'Barbeiro' : 'Recepção'),
-            avatar: u.role === 'barbeiro' ? 'foto_barbeiro_yago.jpg' : 'luis_valverde.jpg'
+            barberKey: u.barber_key || (u.role === 'barbeiro' ? 'yago' : 'luis')
           };
           setCurrentUser(logged);
-          setIsAuthenticated(true);
-          localStorage.setItem('valverds_auth', 'true');
           localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
           setIsLoginModalOpen(false);
           setCurrentView('reception');
-          setReceptionTab('agenda');
         } else {
           setLoginError('E-mail ou senha incorretos.');
         }
-      };
-
-      const handleLogout = () => {
-        setIsAuthenticated(false);
-        localStorage.removeItem('valverds_auth');
-        localStorage.removeItem('valverds_logged_user');
-        setCurrentUser({
-          name: 'Cliente Visitante',
-          email: '',
-          role: 'cliente',
-          barberKey: 'cliente',
-          title: 'Visitante',
-          avatar: 'logo_valverds_clean.png'
-        });
-        setCurrentView('site');
       };
 
       const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
@@ -1557,12 +1474,6 @@
       };
 
       const switchRole = (roleKey) => {
-        if (roleKey === 'dono' || roleKey === 'barbeiro' || roleKey === 'recepcao') {
-          if (!isAuthenticated) {
-            setIsLoginModalOpen(true);
-            return;
-          }
-        }
         if (roleKey === 'dono') {
           setCurrentUser({
             name: 'Luis Valverde',
@@ -2103,11 +2014,7 @@
         </button>
       );
 
-      const DemoRoleSwitcher = () => {
-        if (!isAuthenticated || (currentUser.role !== 'dono' && currentUser.role !== 'superadmin')) {
-          return null;
-        }
-        return (
+      const DemoRoleSwitcher = () => (
         <div className="bg-[#191713] border border-[#3A3326] rounded-full p-1 flex items-center gap-1 shadow-2xl flex-wrap sm:flex-nowrap">
           <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold px-2 hidden sm:inline">
             PERFIL:
@@ -2172,8 +2079,7 @@
           <div className="w-[1px] h-4 bg-[#3A3326] mx-0.5 hidden xs:block"></div>
           <ThemeToggle />
         </div>
-        );
-      };
+      );
 
       return (
         <div className="min-h-screen bg-[#0B0B0B] text-[#E0DDD5] font-sans antialiased flex flex-col selection:bg-[#C9A356] selection:text-black">
@@ -2185,7 +2091,7 @@
             <div className="flex flex-col md:flex-row min-h-screen max-w-[1440px] mx-auto w-full relative">
               
               {/* SIDEBAR VERTICAL ESQUERDA REFINADA & RESPONSIVA */}
-              <aside className="w-full md:w-[130px] md:sticky md:top-0 md:h-screen md:shrink-0 sticky top-0 bg-[#0B0B0B]/95 md:bg-[#0B0B0B] border-b md:border-b-0 md:border-r border-[#211F1C] z-40 flex flex-col justify-between p-3 md:py-6 text-white shadow-2xl backdrop-blur-md select-none">
+              <aside className="w-full md:w-[140px] md:sticky md:top-0 md:h-screen md:shrink-0 sticky top-0 bg-[#0B0B0B]/95 md:bg-[#0B0B0B] border-b md:border-b-0 md:border-r border-[#211F1C] z-40 flex flex-col justify-between p-3 md:py-6 text-white shadow-2xl backdrop-blur-md">
                 
                 {/* TOPO: LOGO & ATALHOS MOBILE / LOGO DESKTOP */}
                 <div className="w-full flex md:flex-col items-center justify-between md:justify-center text-center cursor-pointer mb-2 md:mb-3">
@@ -2198,23 +2104,21 @@
                   </div>
 
                   {/* Ações Rápidas Mobile */}
-                  <div className="flex md:hidden items-center gap-2 select-none">
-                    <ThemeToggle className="px-2 py-1" />
+                  <div className="flex md:hidden items-center gap-2">
+                    <ThemeToggle className="px-2.5 py-1" />
                     <button
                       onClick={() => switchRole('cliente')}
-                      className="px-2.5 py-1 rounded-full bg-[#C9A356] text-black text-[10px] font-serif font-bold uppercase tracking-wider flex items-center gap-1 shadow"
+                      className="px-3 py-1.5 rounded-full bg-[#C9A356] text-black text-[10px] font-serif font-bold uppercase tracking-wider flex items-center gap-1 shadow"
                     >
                       <Icons.User className="w-3 h-3" />
-                      <span>VIP</span>
+                      <span>Área VIP</span>
                     </button>
                     <button
-                      onClick={() => {
-                        if (isAuthenticated) { setCurrentView('reception'); } else { setIsLoginModalOpen(true); }
-                      }}
+                      onClick={() => switchRole('dono')}
                       className="p-1.5 rounded-full bg-[#161512] text-gray-400 hover:text-white border border-[#2A261F]"
-                      title="Acesso da Gestão"
+                      title="Painel Gerencial"
                     >
-                      <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
+                      <Icons.Lock className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -2251,67 +2155,36 @@
                   })}
                 </nav>
 
-                {/* RODAPÉ DA SIDEBAR: APENAS OS POINTS NO LADO ESQUERDO */}
-                <div className="hidden md:flex flex-col items-center text-center pt-2 select-none">
-                  <span className="text-[8px] text-gray-500 font-serif tracking-[0.25em]">EST. 2022</span>
-                  <span className="text-[7px] text-gray-600 font-serif tracking-widest">RESENDE • RJ</span>
+                {/* AÇÕES INFERIORES: EXIBIDAS NO DESKTOP */}
+                <div className="hidden md:flex w-full pt-3 border-t border-[#211F1C] flex-col gap-2">
+                  <ThemeToggle className="w-full justify-center py-2" />
+                  <button
+                    onClick={handleInstallApp}
+                    className="w-full py-2 px-1 rounded-xl bg-[#C9A356] hover:bg-[#B59044] text-black font-bold text-[8px] tracking-wider uppercase transition-all flex flex-col items-center text-center shadow"
+                    title="Instalar App na tela do celular"
+                  >
+                    <Icons.Package className="w-3.5 h-3.5 mb-0.5" />
+                    <span>INSTALAR APP</span>
+                  </button>
+                  <button
+                    onClick={() => switchRole('cliente')}
+                    className="w-full py-2 px-1 rounded-xl bg-[#C9A356]/15 hover:bg-[#C9A356] border border-[#C9A356]/40 text-[#C9A356] hover:text-black transition-all flex flex-col items-center text-center shadow"
+                  >
+                    <Icons.User className="w-3.5 h-3.5 mb-0.5" />
+                    <span className="text-[8px] uppercase tracking-wider font-bold">ÁREA CLIENTE</span>
+                  </button>
+                  <button
+                    onClick={() => switchRole('dono')}
+                    className="w-full py-2 px-1 rounded-xl bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-400 hover:text-white transition-all flex flex-col items-center text-center"
+                  >
+                    <Icons.Lock className="w-3.5 h-3.5 mb-0.5" />
+                    <span className="text-[8px] uppercase tracking-wider font-bold">GESTÃO / LOGIN</span>
+                  </button>
                 </div>
               </aside>
 
-              {/* CONTEÚDO PRINCIPAL */}
-              <main className="flex-1 min-w-0 bg-[#0B0B0B] min-h-screen text-[#E0DDD5] relative">
-                
-                {/* BARRA SUPERIOR ELEGANTE (AS 4 INFORMAÇÕES EM CIMA) */}
-                <header className="sticky top-0 z-30 w-full backdrop-blur-md bg-[#0B0B0B]/85 border-b border-[#211F1C]/80 px-4 sm:px-8 py-3 flex items-center justify-between select-none">
-                  <div className="flex items-center gap-2.5">
-                    <span className="font-serif font-bold text-xs sm:text-sm tracking-[0.2em] text-[#C9A356] uppercase">
-                      VALVERD'S BARBERSHOP
-                    </span>
-                    <span className="hidden lg:inline text-[10px] text-gray-500 font-serif tracking-widest">• CAMPOS ELÍSEOS, RESENDE / RJ</span>
-                  </div>
-
-                  {/* AS 4 INFORMAÇÕES REUNIDAS NO TOPO */}
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {/* 1. TEMA CLARO / ESCURO */}
-                    <ThemeToggle className="px-2.5 py-1 sm:px-3 sm:py-1.5" />
-
-                    {/* 2. INSTALAR APP */}
-                    <button
-                      onClick={handleInstallApp}
-                      className="px-3 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-semibold shadow-sm"
-                      title="Instalar App no Celular ou Computador"
-                    >
-                      <Icons.Package className="w-3.5 h-3.5 text-[#C9A356]" />
-                      <span className="hidden sm:inline">Instalar App</span>
-                    </button>
-
-                    {/* 3. ÁREA CLIENTE */}
-                    <button
-                      onClick={() => switchRole('cliente')}
-                      className="px-3.5 py-1.5 rounded-full bg-[#C9A356]/15 hover:bg-[#C9A356] border border-[#C9A356]/50 text-[#C9A356] hover:text-black transition-all flex items-center gap-1.5 text-xs font-serif font-bold uppercase tracking-wider shadow-sm"
-                      title="Meu Espaço VIP / Cartão Fidelidade"
-                    >
-                      <Icons.User className="w-3.5 h-3.5" />
-                      <span>Área Cliente</span>
-                    </button>
-
-                    {/* 4. GESTÃO / LOGIN (COM PROTEÇÃO DE SENHA) */}
-                    <button
-                      onClick={() => {
-                        if (isAuthenticated) {
-                          setCurrentView('reception');
-                        } else {
-                          setIsLoginModalOpen(true);
-                        }
-                      }}
-                      className="px-3.5 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-bold tracking-wider shadow-sm"
-                      title="Acesso Restrito: Dono & Barbeiros"
-                    >
-                      <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
-                      <span>{isAuthenticated ? 'Painel Gestão' : 'Gestão / Login'}</span>
-                    </button>
-                  </div>
-                </header>
+              {/* CONTEÚDO PRINCIPAL (sem margem forçada graças ao sticky flex) */}
+              <main className="flex-1 min-w-0 bg-[#0B0B0B] min-h-screen text-[#E0DDD5]">
                 
                 {/* HERO COM LOGO CENTRAL */}
                 <section id="home" className="relative min-h-[92vh] flex flex-col items-center justify-center text-center px-4 py-16 bg-cover bg-center" style={{ backgroundImage: `linear-gradient(rgba(11, 11, 11, 0.86), rgba(11, 11, 11, 0.94)), url('espaco_interior_1.png')` }}>
@@ -2353,21 +2226,6 @@
                         <Icons.User className="w-3.5 h-3.5 text-[#C9A356]" />
                         <span>Meu Espaço VIP / Fidelidade</span>
                       </button>
-                    </div>
-
-                    {/* Indicador Elegante de Rolagem (Mostra que tem conteudo abaixo) */}
-                    <div
-                      onClick={() => scrollToSection('sobre-nos')}
-                      className="mt-12 flex flex-col items-center gap-1.5 cursor-pointer group select-none opacity-85 hover:opacity-100 transition-all hover:translate-y-1"
-                      title="Role para baixo para explorar a barbearia"
-                    >
-                      <span className="text-[10px] font-serif uppercase tracking-[0.25em] text-[#C9A356] group-hover:text-[#F5E0AA] transition-colors font-semibold">
-                        Role para explorar
-                      </span>
-                      <div className="w-5 h-8 rounded-full border-2 border-[#C9A356]/70 flex items-start justify-center p-1 group-hover:border-[#C9A356] shadow-sm">
-                        <div className="w-1.5 h-2 bg-[#C9A356] rounded-full animate-bounce mt-0.5"></div>
-                      </div>
-                      <Icons.ChevronDown className="w-4 h-4 text-[#C9A356] animate-pulse" />
                     </div>
                   </div>
                 </section>
@@ -2908,20 +2766,16 @@
                     <div className="flex items-center gap-3">
                       <button onClick={() => switchRole('cliente')} className="text-[#C9A356] hover:underline font-serif text-xs">Área do Cliente</button>
                       <span>•</span>
-                      <button onClick={() => { if (isAuthenticated) { setCurrentView('reception'); } else { setIsLoginModalOpen(true); } }} className="text-gray-400 hover:underline font-serif text-xs">Painel Gerencial</button>
+                      <button onClick={() => switchRole('dono')} className="text-gray-400 hover:underline font-serif text-xs">Painel Gerencial</button>
                     </div>
                   </div>
                 </footer>
               </main>
 
               {/* BOTAO FLUTUANTE DE AGENDAMENTO */}
-              {/* BOTAO FLUTUANTE DE AGENDAMENTO (Some ao chegar no rodapé para exibir apenas as informações) */}
               <button
                 onClick={() => { setBookingForm(prev => ({ ...prev, serviceId: 's1', barberKey: 'luis' })); setIsBookingModalOpen(true); }}
-                className={`fixed bottom-6 right-6 z-50 bg-[#C9A356] hover:bg-[#B59044] text-[#0B0B0B] px-6 py-3.5 rounded-full shadow-2xl hover:shadow-gold-glow border border-[#DFBD78] flex items-center gap-2.5 font-serif text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                  isNearFooter ? 'opacity-0 pointer-events-none translate-y-8 scale-90' : 'opacity-100 translate-y-0 scale-100 hover:scale-105 active:scale-95'
-                }`}
-                aria-hidden={isNearFooter}
+                className="fixed bottom-6 right-6 z-50 bg-[#C9A356] hover:bg-[#B59044] text-[#0B0B0B] px-6 py-3.5 rounded-full shadow-2xl hover:shadow-gold-glow border border-[#DFBD78] flex items-center gap-2.5 font-serif text-xs font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95"
               >
                 <Icons.Scissors className="w-4 h-4" />
                 <span>Agendar Horário</span>
@@ -2932,35 +2786,7 @@
           {/* ========================================================================= */}
           {/* MODO 2: PAINEL GERENCIAL (DONO, RECEPÇÃO, BARBEIRO)                      */}
           {/* ========================================================================= */}
-          {currentView === 'reception' && !isAuthenticated && (
-            <div className="min-h-screen w-full bg-[#0D0C0A] text-[#E0DDD5] flex flex-col items-center justify-center p-6 text-center select-none">
-              <div className="max-w-md w-full bg-[#161410] border border-[#2A2419] p-8 rounded-3xl shadow-2xl flex flex-col items-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-[#C9A356]/15 border border-[#C9A356]/40 flex items-center justify-center">
-                  <Icons.Lock className="w-8 h-8 text-[#C9A356]" />
-                </div>
-                <h2 className="font-serif text-2xl font-bold text-white">Acesso Restrito</h2>
-                <p className="text-gray-400 text-xs">
-                  O painel de gestão da Valverd's BarberShop requer autenticação do proprietário ou barbeiro.
-                </p>
-                <div className="flex gap-3 w-full pt-2">
-                  <button
-                    onClick={() => setCurrentView('site')}
-                    className="flex-1 py-2.5 rounded-xl bg-[#201D17] hover:bg-[#2A261F] text-gray-300 text-xs font-serif font-semibold transition-all"
-                  >
-                    Voltar ao Site
-                  </button>
-                  <button
-                    onClick={() => setIsLoginModalOpen(true)}
-                    className="flex-1 py-2.5 rounded-xl bg-[#C9A356] hover:bg-[#B59044] text-black text-xs font-serif font-bold transition-all shadow"
-                  >
-                    Fazer Login
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentView === 'reception' && isAuthenticated && (
+          {currentView === 'reception' && (
             <div className="min-h-screen w-full bg-[#0D0C0A] text-[#E0DDD5] flex flex-col">
               
               {/* TOPBAR EXECUTIVA */}
@@ -3002,17 +2828,9 @@
 
                     <button
                       onClick={() => setCurrentView('site')}
-                      className="px-3.5 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
+                      className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
                     >
                       Site Público
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="px-3.5 py-1.5 rounded-full bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 hover:text-white transition-all text-xs font-serif font-bold flex items-center gap-1.5"
-                      title="Sair do Sistema e Encerrar Sessão"
-                    >
-                      <Icons.LogOut className="w-3.5 h-3.5" />
-                      <span>Sair</span>
                     </button>
                   </div>
                 </div>
