@@ -1,32 +1,31 @@
-﻿const CACHE_NAME = 'valverds-cache-v1';
-const ASSETS = [
-  './index.html',
-  './manifest.json',
-  './logo_valverds_clean.png',
-  './luis_valverde.jpg',
-  './yago_barber.png',
-  './espaco_interior_1.png',
-  './espaco_interior_2.png',
-  './espaco_real_maps.png',
-  './neon_folhagem.jpg'
-];
+const CACHE_NAME = 'valverds-cache-v2';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys.map((k) => { if (k !== CACHE_NAME) return caches.delete(k); })
+      keys.map((k) => {
+        if (k !== CACHE_NAME) return caches.delete(k);
+      })
     )).then(() => self.clients.claim())
   );
 });
 
+// Estrategia Network-First: Garante que atualizacoes no GitHub aparecam imediatamente
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((res) => res || fetch(e.request).catch(() => caches.match('./index.html')))
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const resClone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
