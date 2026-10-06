@@ -885,7 +885,6 @@
         const res = await fetch(NEON_CONFIG.url, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             'neon-connection-string': NEON_CONFIG.conn
           },
           body: JSON.stringify(payload)
