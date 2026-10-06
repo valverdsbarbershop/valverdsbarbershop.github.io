@@ -2005,6 +2005,12 @@
         const checkNeonSession = async () => {
           const urlParams = new URLSearchParams(window.location.search);
           const verifier = urlParams.get('neon_auth_session_verifier');
+          // Se o usuario acabou de clicar em sair ou nao esta vindo de login Google com verifier e nao tem auth salvo, nao forcar re-login
+          const wasLoggedOut = sessionStorage.getItem('valverds_just_logged_out');
+          if (wasLoggedOut && !verifier) {
+            sessionStorage.removeItem('valverds_just_logged_out');
+            return;
+          }
           try {
             const sessionUrl = verifier
               ? `${NEON_AUTH_URL}/get-session?neon_auth_session_verifier=${encodeURIComponent(verifier)}`
@@ -2091,12 +2097,13 @@
         setReceptionTab(logged.role === 'superadmin' ? 'admin_master' : 'agenda');
       };
 
-      const handleLogout = () => {
-        setIsAuthenticated(false);
+      const handleLogout = async () => {
         try {
+          sessionStorage.setItem('valverds_just_logged_out', 'true');
           localStorage.removeItem('valverds_auth');
           localStorage.removeItem('valverds_logged_user');
         } catch(e){}
+        setIsAuthenticated(false);
         setCurrentUser({
           name: 'Visitante',
           email: '',
@@ -2106,7 +2113,16 @@
           avatar: 'logo_valverds_clean.png'
         });
         setCurrentView('site');
-        // Redirecionamento limpo que garante encerramento imediato da sessao
+        // Encerrar sessao na nuvem do Neon Auth tambem
+        try {
+          await fetch(`${NEON_AUTH_URL}/sign-out`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+          });
+        } catch(e){}
+        // Redirecionamento limpo para o site publico
         window.location.href = window.location.origin + window.location.pathname;
       };
 
