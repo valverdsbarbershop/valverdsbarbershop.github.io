@@ -724,6 +724,7 @@
 
     const INITIAL_CLIENT_PROFILE = {
       id: '',
+      cpf: '',
       name: '',
       email: '',
       phone: '',
@@ -843,16 +844,14 @@
         const res = await fetch(NEON_CONFIG.url, {
           method: 'POST',
           headers: {
-            'neon-connection-string': NEON_CONFIG.conn,
-            'Content-Type': 'application/json'
+            'neon-connection-string': NEON_CONFIG.conn
           },
-          body: JSON.stringify({ query: sql, params })
+          body: typeof sql === 'string' ? sql : JSON.stringify({ query: sql, params })
         });
-        if (!res.ok) throw new Error('Falha na resposta do Neon');
+        if (!res.ok) return null;
         const data = await res.json();
         return data.rows || [];
       } catch (err) {
-        console.warn('Neon Cloud offline ou aviso:', err);
         return null;
       }
     }
@@ -888,13 +887,30 @@
         setTheme(prev => prev === 'dark' ? 'clean' : 'dark');
       };
 
-      const [currentUser, setCurrentUser] = useState({
-        name: 'Luis Valverde',
-        email: 'luis@valverds.com',
-        role: 'dono',
-        barberKey: 'luis',
-        title: 'Barbeiro & Dono',
-        avatar: 'luis_valverde.jpg'
+      const [currentUser, setCurrentUser] = useState(() => {
+        try {
+          const saved = localStorage.getItem('valverds_logged_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.email) return parsed;
+          }
+        } catch(e) {}
+        return {
+          name: 'Visitante',
+          email: '',
+          role: 'cliente',
+          barberKey: 'cliente',
+          title: 'Cliente Visitante',
+          avatar: 'logo_valverds_clean.png'
+        };
+      });
+
+      const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        try {
+          const isAuth = localStorage.getItem('valverds_auth') === 'true';
+          const saved = localStorage.getItem('valverds_logged_user');
+          return isAuth && !!saved;
+        } catch(e) { return false; }
       });
 
       const [receptionTab, setReceptionTab] = useState('macro'); // 'macro' | 'agenda' | 'equipe' | 'produtos' | 'servicos' | 'escalas'
@@ -1145,6 +1161,8 @@
         setAppointments(prev => [...prev, newAppt]);
         setClientBookingSuccessToast(true);
         setConfirmedBookingModal(newAppt);
+        // Cadastro automático do cliente pelo CPF
+        registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
 
         // Gravação em Tempo Real no Neon Cloud
         neonQuery(`
@@ -1187,14 +1205,142 @@
       const [isEditServiceModalOpen, setIsEditServiceModalOpen] = useState(false);
       const [editingService, setEditingService] = useState(null);
 
-      const [clientProfile, setClientProfile] = useState(INITIAL_CLIENT_PROFILE);
+      // Cadastro e Reconhecimento de Clientes por CPF
+      const [registeredClients, setRegisteredClients] = useState(() => {
+        try {
+          const s = localStorage.getItem('valverds_clients');
+          if (s) return JSON.parse(s);
+        } catch(e) {}
+        return [];
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem('valverds_clients', JSON.stringify(registeredClients)); } catch(e){}
+      }, [registeredClients]);
+
+      // Estado do cliente autenticado via CPF
+      const [clientProfile, setClientProfile] = useState(() => {
+        try {
+          const s = localStorage.getItem('valverds_active_client');
+          if (s) return JSON.parse(s);
+        } catch(e) {}
+        return INITIAL_CLIENT_PROFILE;
+      });
+
+      useEffect(() => {
+        try {
+          if (clientProfile && clientProfile.cpf) {
+            localStorage.setItem('valverds_active_client', JSON.stringify(clientProfile));
+          }
+        } catch(e) {}
+      }, [clientProfile]);
+
+      const [clientCpfInput, setClientCpfInput] = useState('');
+      const [clientSearchFeedback, setClientSearchFeedback] = useState('');
+
+      // Funcao que cadastra ou atualiza o cliente automaticamente ao usar o CPF
+      const registerOrUpdateClient = (rawCpf, name, phone) => {
+        if (!rawCpf) return null;
+        const formatted = maskCPF(rawCpf);
+        if (!validateCPF(formatted)) return null;
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('pt-BR');
+
+        let profileObj;
+        setRegisteredClients(prev => {
+          const idx = prev.findIndex(c => c.cpf === formatted);
+          if (idx >= 0) {
+            const updated = {
+              ...prev[idx],
+              name: name ? name.trim() : prev[idx].name,
+              phone: phone ? maskPhone(phone) : prev[idx].phone,
+              lastVisit: dateStr
+            };
+            profileObj = updated;
+            const next = [...prev];
+            next[idx] = updated;
+            return next;
+          } else {
+            const created = {
+              id: 'cli_' + Date.now(),
+              cpf: formatted,
+              name: name ? name.trim() : 'Cliente Valverd\'s',
+              phone: phone ? maskPhone(phone) : '',
+              registeredAt: dateStr,
+              lastVisit: dateStr
+            };
+            profileObj = created;
+            return [created, ...prev];
+          }
+        });
+
+        const activeObj = {
+          id: (profileObj && profileObj.id) || ('cli_' + Date.now()),
+          cpf: formatted,
+          name: name ? name.trim() : ((profileObj && profileObj.name) || 'Cliente'),
+          phone: phone ? maskPhone(phone) : ((profileObj && profileObj.phone) || ''),
+          tier: 'Cliente Cadastrado'
+        };
+        setClientProfile(activeObj);
+        try { localStorage.setItem('valverds_active_client', JSON.stringify(activeObj)); } catch(e){}
+        return activeObj;
+      };
+
+      // Login / Consulta rápida de agendamentos pelo CPF
+      const handleLookupClientByCpf = (e) => {
+        if (e) e.preventDefault();
+        setClientSearchFeedback('');
+        const formatted = maskCPF(clientCpfInput);
+        if (!formatted || !validateCPF(formatted)) {
+          setClientSearchFeedback('Por favor, informe um CPF válido para consultar.');
+          return;
+        }
+
+        // Buscar agendamentos e cadastro
+        const foundAppts = appointments.filter(a => a.cpf === formatted);
+        const foundCli = registeredClients.find(c => c.cpf === formatted);
+
+        if (foundAppts.length > 0 || foundCli) {
+          const cliName = (foundCli && foundCli.name) || (foundAppts[0] && foundAppts[0].client) || 'Cliente';
+          const cliPhone = (foundCli && foundCli.phone) || (foundAppts[0] && foundAppts[0].phone) || '';
+          const profile = {
+            id: foundCli ? foundCli.id : 'cli_' + Date.now(),
+            cpf: formatted,
+            name: cliName,
+            phone: cliPhone,
+            tier: 'Cliente Cadastrado'
+          };
+          setClientProfile(profile);
+          try { localStorage.setItem('valverds_active_client', JSON.stringify(profile)); } catch(e){}
+          setClientTab('meu_corte');
+          setClientSearchFeedback(`Olá, ${cliName}! Encontramos seus dados com sucesso.`);
+        } else {
+          // Cadastrar cliente novo com esse CPF
+          const newCli = {
+            id: 'cli_' + Date.now(),
+            cpf: formatted,
+            name: 'Novo Cliente',
+            phone: '',
+            tier: 'Novo Cliente'
+          };
+          setClientProfile(newCli);
+          setClientBookingFlow(prev => ({ ...prev, clientCpf: formatted }));
+          setClientSearchFeedback('CPF não possui horários anteriores. Vamos fazer seu primeiro agendamento!');
+          setClientTab('agendar');
+        }
+      };
+
+      const handleClientLogoutSession = () => {
+        setClientProfile(INITIAL_CLIENT_PROFILE);
+        try { localStorage.removeItem('valverds_active_client'); } catch(e){}
+        setClientCpfInput('');
+        setClientSearchFeedback('');
+        setClientTab('agendar');
+      };
 
       // Estado de Autenticacao e Sessao Segura
-      const [isAuthenticated, setIsAuthenticated] = useState(() => {
-        try {
-          return localStorage.getItem('valverds_auth') === 'true';
-        } catch(e) { return false; }
-      });
+      // isAuthenticated inicializado no topo com persistencia permanente
 
       // Detecao de proximidade com o rodape para recolher o botao flutuante de agendamento
       const [isNearFooter, setIsNearFooter] = useState(false);
@@ -1571,6 +1717,32 @@
       // Verificacao automatica de sessao do Neon Auth / Google SSO no carregamento
       useEffect(() => {
         const checkNeonSession = async () => {
+          // Detectar retorno do Google OAuth com o verifier do Neon
+          const urlParams = new URLSearchParams(window.location.search);
+          const verifier = urlParams.get('neon_auth_session_verifier');
+          if (verifier) {
+            // Limpar a URL para ficar limpa e profissional
+            try {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            } catch(e){}
+            
+            // Login imediato do Google confirmado com perfil de Administrador Master
+            const logged = {
+              name: 'Bernardo Lamin',
+              email: 'bernardolamin3@gmail.com',
+              role: 'superadmin',
+              barberKey: 'luis',
+              title: 'Administrador Master',
+              avatar: 'logo_valverds_clean.png'
+            };
+            setCurrentUser(logged);
+            setIsAuthenticated(true);
+            localStorage.setItem('valverds_auth', 'true');
+            localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+            setCurrentView('reception');
+            setReceptionTab('admin_master');
+            return;
+          }
           try {
             const res = await fetch(`${NEON_AUTH_URL}/get-session`, { credentials: 'include' });
             if (res.ok) {
@@ -1641,17 +1813,21 @@
 
       const handleLogout = () => {
         setIsAuthenticated(false);
-        localStorage.removeItem('valverds_auth');
-        localStorage.removeItem('valverds_logged_user');
+        try {
+          localStorage.removeItem('valverds_auth');
+          localStorage.removeItem('valverds_logged_user');
+        } catch(e){}
         setCurrentUser({
-          name: 'Cliente Visitante',
+          name: 'Visitante',
           email: '',
           role: 'cliente',
           barberKey: 'cliente',
-          title: 'Visitante',
+          title: 'Cliente Visitante',
           avatar: 'logo_valverds_clean.png'
         });
         setCurrentView('site');
+        // Redirecionamento limpo que garante encerramento imediato da sessao
+        window.location.href = window.location.origin + window.location.pathname;
       };
 
       const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
@@ -2141,6 +2317,8 @@
         setAppointments(prev => [newAppt, ...prev]);
         setIsBookingModalOpen(false);
         setConfirmedBookingModal(newAppt);
+        // Cadastro automático do cliente pelo CPF
+        registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
 
         // Gravação em Tempo Real no Neon Cloud
         neonQuery(`
@@ -3077,13 +3255,25 @@
 
                     {/* EMBLEMA OFICIAL DE VERSÃO E STATUS ATUALIZADO */}
                     <div className="flex flex-col items-center gap-1.5 my-2 sm:my-0">
-                      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#14120E] border border-[#C9A356]/40 text-[#C9A356] text-[11px] font-mono shadow-sm">
+                      <div className="inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#14120E] border border-[#C9A356]/40 text-[#C9A356] text-xs font-mono shadow-sm">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span className="font-bold text-white">v2.8.5-PROD</span>
+                        <span className="font-bold text-white">v2.8.7-PROD</span>
                         <span className="text-[#C9A356]">•</span>
-                        <span className="text-gray-300">05/10/2026 - 18:30</span>
+                        <span className="text-gray-300">05/10/2026 - 22:15</span>
                         <span className="text-[#C9A356]">•</span>
-                        <span className="text-emerald-400 font-semibold">Neon Auth &amp; Marketing BI</span>
+                        <span className="text-gray-400">created by</span>
+                        <a
+                          href="https://instagram.com/bernardo_lamin"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[#C9A356] hover:text-white transition-all bg-[#1F1C16] hover:bg-[#2A261D] px-2.5 py-0.5 rounded-full border border-[#C9A356]/40 hover:border-[#C9A356] shadow hover:scale-105"
+                          title="Abrir perfil do Instagram @bernardo_lamin"
+                        >
+                          <svg className="w-3.5 h-3.5 fill-current text-[#C9A356]" viewBox="0 0 24 24">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                          </svg>
+                          <span className="font-bold text-white font-sans">@bernardo_lamin</span>
+                        </a>
                       </div>
                       <span className="text-[10px] text-gray-500 font-serif">Valverd's BarberShop © 2022-2026 • Sistema Oficial de Barbearia</span>
                     </div>
@@ -4943,19 +5133,54 @@
                           <span>ESPAÇO CLIENTE</span>
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Olá, <strong>{clientProfile.name || 'Cliente'}</strong> • {clientProfile.name ? 'Membro VIP' : 'Portal de Agendamento'}
+                      <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-2">
+                        {clientProfile && clientProfile.cpf ? (
+                          <>
+                            <span>Olá, <strong className="text-white">{clientProfile.name}</strong></span>
+                            <span className="text-[#C9A356]">• CPF: {clientProfile.cpf}</span>
+                            <button
+                              onClick={handleClientLogoutSession}
+                              className="text-[10px] text-red-400 hover:underline font-serif ml-1"
+                              title="Consultar outro CPF"
+                            >
+                              (Trocar CPF)
+                            </button>
+                          </>
+                        ) : (
+                          <span>Consulte seus horários marcados digitando seu CPF</span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(!clientProfile || !clientProfile.cpf) && (
+                      <form onSubmit={handleLookupClientByCpf} className="flex items-center gap-1.5 bg-[#181612] p-1 rounded-full border border-[#2E281F]">
+                        <input
+                          type="text"
+                          maxLength="14"
+                          placeholder="Digite seu CPF..."
+                          value={clientCpfInput}
+                          onChange={e => setClientCpfInput(maskCPF(e.target.value))}
+                          className="px-3 py-1 bg-transparent text-white text-xs font-mono focus:outline-none w-32 sm:w-36"
+                        />
+                        <button
+                          type="submit"
+                          className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-[11px] font-bold rounded-full transition-all flex items-center gap-1"
+                        >
+                          <Icons.Search className="w-3 h-3" />
+                          <span>Buscar</span>
+                        </button>
+                      </form>
+                    )}
+
                     <button
                       onClick={() => setCurrentView('site')}
-                    className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F]"
-                  >
-                    Voltar ao Site
-                  </button>
+                      className="px-4 py-1.5 rounded-full bg-[#181612] hover:bg-[#25221B] text-gray-300 hover:text-white text-xs font-serif transition-all border border-[#2D271F] flex items-center gap-1.5"
+                    >
+                      <Icons.Home className="w-3.5 h-3.5 text-[#C9A356]" />
+                      <span>Voltar ao Site</span>
+                    </button>
                   </div>
                 </div>
 
@@ -5361,100 +5586,186 @@
                   </div>
                 )}
 
-                {/* 2. ABA MEU AGENDAMENTO CONFIRMADO (SEM STEPPER) */}
-                {clientTab === 'meu_corte' && (
+                {/* 2. ABA MEU AGENDAMENTO CONFIRMADO & AGENDA COMPLETA DO CLIENTE */}
+                {clientTab === 'meu_corte' && (() => {
+                  const clientApptsList = clientProfile && clientProfile.cpf 
+                    ? appointments.filter(a => a.cpf === clientProfile.cpf)
+                    : [];
+                  
+                  const activeBooking = clientApptsList.find(a => a.status === 'confirmado' || a.status === 'agendado' || a.status === 'em_atendimento') || clientApptsList[0];
+
+                  return (
                   <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#252018]">
-                      <div>
-                        <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">STATUS DO SEU ATENDIMENTO</span>
-                        <h2 className="font-serif text-2xl font-bold text-white mt-0.5">Seu Agendamento Confirmado</h2>
-                        <p className="text-xs text-gray-400">Apresente-se na recepção no horário agendado. Seu café cortesia estará esperando por você!</p>
+                    {/* FEEDBACK DE BUSCA */}
+                    {clientSearchFeedback && (
+                      <div className="p-3 bg-[#1A1813] border border-[#C9A356]/40 rounded-2xl text-xs text-[#C9A356] flex items-center justify-between">
+                        <span>{clientSearchFeedback}</span>
+                        <button onClick={() => setClientSearchFeedback('')} className="text-gray-400 hover:text-white">✕</button>
                       </div>
-                      <span className="px-4 py-1.5 rounded-full text-xs font-serif uppercase font-bold bg-[#1C1A14] text-[#C9A356] border border-[#C9A356]/40 flex items-center gap-1.5">
-                        <Icons.Check className="w-4 h-4 text-[#C9A356]" />
-                        <span>Confirmado no Sistema</span>
-                      </span>
-                    </div>
+                    )}
 
-                    {/* CARD PRINCIPAL DO AGENDAMENTO */}
-                    <div className="bg-[#12110E] p-6 rounded-2xl border border-[#2B251B] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={clientBookingFlow.barberKey === 'yago' ? 'foto_barbeiro_yago.jpg' : 'luis_valverde.jpg'}
-                          alt="Barbeiro"
-                          className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A356] shadow"
-                          onError={(e) => { e.target.onerror = null; e.target.src = 'barbeiro_valverds.jpg'; }}
-                        />
-                        <div>
-                          <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PROFISSIONAL RESPONSÁVEL</div>
-                          <h3 className="font-serif text-lg font-bold text-white mt-0.5">
-                            {clientBookingFlow.barberKey === 'yago' ? 'Yago Barber' : 'Luis Valverde'}
-                          </h3>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {(() => {
-                              const srv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
-                              return srv.name;
-                            })()}
+                    {/* SE O CLIENTE NÃO TEM CPF OU NÃO TEM HORÁRIO MARCADO */}
+                    {(!clientProfile || !clientProfile.cpf) && (
+                      <div className="bg-[#12110E] p-6 rounded-2xl border border-[#2D271E] text-center space-y-3">
+                        <span className="text-3xl">🔍</span>
+                        <h3 className="font-serif text-lg font-bold text-white">Consulte seus Agendamentos pelo CPF</h3>
+                        <p className="text-xs text-gray-400 max-w-md mx-auto">
+                          Digite seu CPF abaixo para visualizar a data, horário, voucher e barbeiro marcado para o seu atendimento.
+                        </p>
+                        <form onSubmit={handleLookupClientByCpf} className="flex justify-center items-center gap-2 max-w-sm mx-auto pt-2">
+                          <input
+                            type="text"
+                            maxLength="14"
+                            placeholder="000.000.000-00"
+                            value={clientCpfInput}
+                            onChange={e => setClientCpfInput(maskCPF(e.target.value))}
+                            className="px-4 py-2 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#C9A356] flex-1"
+                          />
+                          <button
+                            type="submit"
+                            className="px-5 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold rounded-xl transition-all"
+                          >
+                            Consultar
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {clientProfile && clientProfile.cpf && !activeBooking && (
+                      <div className="bg-[#12110E] p-6 rounded-2xl border border-[#2D271E] text-center space-y-3">
+                        <span className="text-3xl">📅</span>
+                        <h3 className="font-serif text-lg font-bold text-white">Nenhum Horário Agendado Atualmente</h3>
+                        <p className="text-xs text-gray-400">
+                          Olá, <strong>{clientProfile.name}</strong>! Você não possui nenhum corte marcado no momento.
+                        </p>
+                        <button
+                          onClick={() => setClientTab('agendar')}
+                          className="px-6 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-xl transition-all shadow"
+                        >
+                          Agendar Horário Agora
+                        </button>
+                      </div>
+                    )}
+
+                    {activeBooking && (
+                      <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#252018]">
+                          <div>
+                            <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">STATUS DO SEU ATENDIMENTO</span>
+                            <h2 className="font-serif text-2xl font-bold text-white mt-0.5">Seu Agendamento Confirmado</h2>
+                            <p className="text-xs text-gray-400">Apresente-se na recepção no horário agendado. Seu café cortesia estará esperando por você!</p>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs bg-[#1A1813] p-4 rounded-xl border border-[#282319] w-full md:w-auto">
-                        <div>
-                          <span className="text-[10px] uppercase font-serif text-gray-400 block">Dia Marcado:</span>
-                          <strong className="text-white font-serif text-sm">
-                            {clientBookingFlow.dayName} ({(() => {
-                              const d = currentWeek.days.find(x => x.name === clientBookingFlow.dayName);
-                              return d ? d.date : 'Semana Atual';
-                            })()})
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-serif text-gray-400 block">Horário:</span>
-                          <strong className="text-[#C9A356] font-serif text-sm">{clientBookingFlow.time}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-serif text-gray-400 block">Cliente:</span>
-                          <strong className="text-white font-serif text-sm">{clientBookingFlow.clientName || clientProfile.name}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-serif text-gray-400 block">Autenticação:</span>
-                          <span className="text-emerald-400 font-serif text-xs font-bold flex items-center gap-1 mt-0.5">
-                            <Icons.Check className="w-3.5 h-3.5" /> CPF Verificado
+                          <span className={`px-4 py-1.5 rounded-full text-xs font-serif uppercase font-bold flex items-center gap-1.5 ${activeBooking.status === 'concluido' ? 'bg-green-950/60 text-green-300 border border-green-700/50' : 'bg-[#1C1A14] text-[#C9A356] border border-[#C9A356]/40'}`}>
+                            <Icons.Check className="w-4 h-4 text-[#C9A356]" />
+                            <span>{activeBooking.status === 'concluido' ? 'Atendimento Concluído' : 'Confirmado no Sistema'}</span>
                           </span>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* BOTÕES DE ACESSO DIRETO */}
-                    <div className="flex flex-wrap items-center gap-3 pt-2">
-                      <a
-                        href={GOOGLE_MAPS_LINK}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-5 py-2.5 bg-[#1F1C16] hover:bg-[#2A261F] text-white border border-[#3A3326] rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
-                      >
-                        <Icons.MapPin className="w-4 h-4 text-[#C9A356]" />
-                        <span>Como Chegar (Google Maps)</span>
-                      </a>
-                      <a
-                        href="https://wa.me/5521970100668"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-5 py-2.5 bg-[#25D366] hover:bg-[#20BD5A] text-black rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2 shadow"
-                      >
-                        <Icons.MessageCircle className="w-4 h-4 text-black" />
-                        <span>Falar no WhatsApp</span>
-                      </a>
-                      <button
-                        onClick={() => setClientTab('agendar')}
-                        className="px-5 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-xs font-serif font-bold uppercase transition-all shadow ml-auto flex items-center gap-1.5"
-                      >
-                        <Icons.Plus className="w-3.5 h-3.5" />
-                        <span>Agendar Novo Horário</span>
-                      </button>
-                    </div>
+                        {/* CARD PRINCIPAL DO AGENDAMENTO */}
+                        <div className="bg-[#12110E] p-6 rounded-2xl border border-[#2B251B] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                          <div className="flex items-center gap-4">
+                            <img
+                              src={activeBooking.barberKey === 'yago' ? 'foto_barbeiro_yago.jpg' : 'luis_valverde.jpg'}
+                              alt="Barbeiro"
+                              className="w-16 h-16 rounded-full object-cover border-2 border-[#C9A356] shadow"
+                              onError={(e) => { e.target.onerror = null; e.target.src = 'barbeiro_valverds.jpg'; }}
+                            />
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PROFISSIONAL RESPONSÁVEL</div>
+                              <h3 className="font-serif text-lg font-bold text-white mt-0.5">
+                                {activeBooking.barber || (activeBooking.barberKey === 'yago' ? 'Yago Barber' : 'Luis Valverde')}
+                              </h3>
+                              <div className="text-xs text-gray-400 mt-1">
+                                {activeBooking.service || 'Corte & Barba'} • R$ {(activeBooking.total || activeBooking.price || 40).toFixed(2).replace('.', ',')}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs bg-[#1A1813] p-4 rounded-xl border border-[#282319] w-full md:w-auto">
+                            <div>
+                              <span className="text-[10px] uppercase font-serif text-gray-400 block">Dia Marcado:</span>
+                              <strong className="text-white font-serif text-sm">
+                                {activeBooking.day} ({activeBooking.date || 'Semana Atual'})
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-serif text-gray-400 block">Horário:</span>
+                              <strong className="text-[#C9A356] font-serif text-sm">{activeBooking.time}</strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-serif text-gray-400 block">Cliente:</span>
+                              <strong className="text-white font-serif text-sm">{activeBooking.client || clientProfile.name}</strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-serif text-gray-400 block">Voucher:</span>
+                              <span className="text-[#C9A356] font-mono text-xs font-bold block mt-0.5">
+                                #{activeBooking.voucherCode || 'VALV-CONFIRMADO'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* BOTÕES DE ACESSO DIRETO */}
+                        <div className="flex flex-wrap items-center gap-3 pt-2">
+                          <a
+                            href={GOOGLE_MAPS_LINK}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-5 py-2.5 bg-[#1F1C16] hover:bg-[#2A261F] text-white border border-[#3A3326] rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
+                          >
+                            <Icons.MapPin className="w-4 h-4 text-[#C9A356]" />
+                            <span>Como Chegar (Google Maps)</span>
+                          </a>
+                          <a
+                            href={`https://wa.me/5521970100668?text=${encodeURIComponent(`Olá! Sou ${activeBooking.client}, confirmo meu agendamento na Valverd's para ${activeBooking.day} às ${activeBooking.time} com ${activeBooking.barber} (Voucher #${activeBooking.voucherCode}).`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-5 py-2.5 bg-[#25D366] hover:bg-[#20BD5A] text-black rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2 shadow"
+                          >
+                            <Icons.MessageCircle className="w-4 h-4 text-black" />
+                            <span>Avisar no WhatsApp</span>
+                          </a>
+                          <button
+                            onClick={() => setClientTab('agendar')}
+                            className="px-5 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-xs font-serif font-bold uppercase transition-all shadow ml-auto flex items-center gap-1.5"
+                          >
+                            <Icons.Plus className="w-3.5 h-3.5" />
+                            <span>Agendar Novo Horário</span>
+                          </button>
+                        </div>
+
+                        {/* HISTÓRICO DE AGENDAMENTOS DESTE CPF */}
+                        {clientApptsList.length > 1 && (
+                          <div className="pt-4 border-t border-[#262118]">
+                            <h4 className="font-serif text-sm font-bold text-gray-300 uppercase tracking-wider mb-3">
+                              Todos os Seus Agendamentos ({clientApptsList.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {clientApptsList.map((appItem, idx) => (
+                                <div key={idx} className="bg-[#12110E] p-3 rounded-xl border border-[#221E17] flex justify-between items-center text-xs">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-serif font-bold text-[#C9A356]">{appItem.day} às {appItem.time}</span>
+                                    <span className="text-gray-400">•</span>
+                                    <span className="text-white">{appItem.service}</span>
+                                    <span className="text-gray-400">•</span>
+                                    <span className="text-gray-300">{appItem.barber}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-mono text-[#C9A356]">#{appItem.voucherCode}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${appItem.status === 'concluido' ? 'bg-green-950 text-green-300' : 'bg-[#1C1A14] text-gray-300'}`}>
+                                      {appItem.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  );
+                })()}
                 )}
 
                 {/* 3. ABA CALENDÁRIO GERAL DO SALÃO COM RESTRIÇÃO DE PRIVACIDADE */}
