@@ -632,93 +632,110 @@
       { icon: 'Users', title: 'Relacionamento que Gera Lealdade', desc: 'Mais que clientes, cultivamos amigos e uma comunidade fiel.' }
     ];
 
-    const WEEKS_DATA = [
-      {
-        id: -1,
-        label: '31/08 a 05/09',
-        sub: 'Semana Passada',
-        days: [
-          { name: 'Seg', date: '31/08', num: 31 },
-          { name: 'Ter', date: '01/09', num: 1 },
-          { name: 'Qua', date: '02/09', num: 2 },
-          { name: 'Qui', date: '03/09', num: 3 },
-          { name: 'Sex', date: '04/09', num: 4 },
-          { name: 'Sáb', date: '05/09', num: 5 }
-        ]
-      },
-      {
-        id: 0,
-        label: '07/09 a 12/09',
-        sub: 'Semana Atual',
-        days: [
-          { name: 'Seg', date: '07/09', num: 7 },
-          { name: 'Ter', date: '08/09', num: 8 },
-          { name: 'Qua', date: '09/09', num: 9 },
-          { name: 'Qui', date: '10/09', num: 10 },
-          { name: 'Sex', date: '11/09', num: 11 },
-          { name: 'Sáb', date: '12/09', num: 12 }
-        ]
-      },
-      {
-        id: 1,
-        label: '14/09 a 19/09',
-        sub: 'Próxima Semana',
-        days: [
-          { name: 'Seg', date: '14/09', num: 14 },
-          { name: 'Ter', date: '15/09', num: 15 },
-          { name: 'Qua', date: '16/09', num: 16 },
-          { name: 'Qui', date: '17/09', num: 17 },
-          { name: 'Sex', date: '18/09', num: 18 },
-          { name: 'Sáb', date: '19/09', num: 19 }
-        ]
-      },
-      {
-        id: 2,
-        label: '21/09 a 26/09',
-        sub: 'Fim de Setembro',
-        days: [
-          { name: 'Seg', date: '21/09', num: 21 },
-          { name: 'Ter', date: '22/09', num: 22 },
-          { name: 'Qua', date: '23/09', num: 23 },
-          { name: 'Qui', date: '24/09', num: 24 },
-          { name: 'Sex', date: '25/09', num: 25 },
-          { name: 'Sáb', date: '26/09', num: 26 }
-        ]
-      }
-    ];
+    // Utilitários de Calendário e Datas Dinâmicas (Outubro/2026 e em diante)
+    const WEEKDAY_NAMES_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const WEEKDAY_FULL_NAMES_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    const MONTH_NAMES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-    const SEPTEMBER_DAYS = [
-      { dayNum: 1, weekDay: 'Ter', isOpen: true },
-      { dayNum: 2, weekDay: 'Qua', isOpen: true },
-      { dayNum: 3, weekDay: 'Qui', isOpen: true },
-      { dayNum: 4, weekDay: 'Sex', isOpen: true },
-      { dayNum: 5, weekDay: 'Sáb', isOpen: true },
-      { dayNum: 6, weekDay: 'Dom', isOpen: false },
-      { dayNum: 7, weekDay: 'Seg', isOpen: true },
-      { dayNum: 8, weekDay: 'Ter', isOpen: true },
-      { dayNum: 9, weekDay: 'Qua', isOpen: true },
-      { dayNum: 10, weekDay: 'Qui', isOpen: true },
-      { dayNum: 11, weekDay: 'Sex', isOpen: true },
-      { dayNum: 12, weekDay: 'Sáb', isOpen: true },
-      { dayNum: 13, weekDay: 'Dom', isOpen: false },
-      { dayNum: 14, weekDay: 'Seg', isOpen: true },
-      { dayNum: 15, weekDay: 'Ter', isOpen: true },
-      { dayNum: 16, weekDay: 'Qua', isOpen: true },
-      { dayNum: 17, weekDay: 'Qui', isOpen: true },
-      { dayNum: 18, weekDay: 'Sex', isOpen: true },
-      { dayNum: 19, weekDay: 'Sáb', isOpen: true },
-      { dayNum: 20, weekDay: 'Dom', isOpen: false },
-      { dayNum: 21, weekDay: 'Seg', isOpen: true },
-      { dayNum: 22, weekDay: 'Ter', isOpen: true },
-      { dayNum: 23, weekDay: 'Qua', isOpen: true },
-      { dayNum: 24, weekDay: 'Qui', isOpen: true },
-      { dayNum: 25, weekDay: 'Sex', isOpen: true },
-      { dayNum: 26, weekDay: 'Sáb', isOpen: true },
-      { dayNum: 27, weekDay: 'Dom', isOpen: false },
-      { dayNum: 28, weekDay: 'Seg', isOpen: true },
-      { dayNum: 29, weekDay: 'Ter', isOpen: true },
-      { dayNum: 30, weekDay: 'Qua', isOpen: true }
-    ];
+    const getTodayDateISO = () => {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const formatDateBR = (isoStr) => {
+      if (!isoStr) return '';
+      if (isoStr.includes('/')) return isoStr;
+      const parts = isoStr.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return isoStr;
+    };
+
+    const getWeekdayFromISO = (isoStr) => {
+      if (!isoStr) return 'Seg';
+      const parts = isoStr.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      return WEEKDAY_NAMES_PT[d.getDay()] || 'Seg';
+    };
+
+    const getWeekdayFullFromISO = (isoStr) => {
+      if (!isoStr) return 'Segunda-feira';
+      const parts = isoStr.split('-').map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      return WEEKDAY_FULL_NAMES_PT[d.getDay()] || 'Segunda-feira';
+    };
+
+    const generateDynamicWeeks = (baseDate = new Date()) => {
+      const current = new Date(baseDate);
+      const dayOfWeek = current.getDay();
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(current);
+      monday.setDate(current.getDate() + diffToMonday);
+
+      const weeks = [];
+      const offsets = [-1, 0, 1, 2];
+      const labelsSub = ['Semana Passada', 'Semana Atual', 'Próxima Semana', 'Semana Seguinte'];
+
+      offsets.forEach((offset, idx) => {
+        const weekMonday = new Date(monday);
+        weekMonday.setDate(monday.getDate() + (offset * 7));
+
+        const weekSaturday = new Date(weekMonday);
+        weekSaturday.setDate(weekMonday.getDate() + 5);
+
+        const mDay = String(weekMonday.getDate()).padStart(2, '0');
+        const mMonth = String(weekMonday.getMonth() + 1).padStart(2, '0');
+        const sDay = String(weekSaturday.getDate()).padStart(2, '0');
+        const sMonth = String(weekSaturday.getMonth() + 1).padStart(2, '0');
+
+        const days = [];
+        for (let d = 0; d < 6; d++) {
+          const dt = new Date(weekMonday);
+          dt.setDate(weekMonday.getDate() + d);
+          const dayNum = dt.getDate();
+          const dayFormatted = `${String(dayNum).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+          const isoFormatted = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+          days.push({
+            name: WEEKDAY_NAMES_PT[dt.getDay()],
+            fullName: WEEKDAY_FULL_NAMES_PT[dt.getDay()],
+            date: dayFormatted,
+            isoDate: isoFormatted,
+            num: dayNum
+          });
+        }
+
+        weeks.push({
+          id: offset,
+          label: `${mDay}/${mMonth} a ${sDay}/${sMonth}`,
+          sub: labelsSub[idx] || `Semana ${idx + 1}`,
+          days: days
+        });
+      });
+
+      return weeks;
+    };
+
+    const generateCurrentMonthDays = (year = 2026, month = 9) => {
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const list = [];
+      for (let i = 1; i <= daysInMonth; i++) {
+        const dt = new Date(year, month, i);
+        const dayOfWeek = dt.getDay();
+        list.push({
+          dayNum: i,
+          weekDay: WEEKDAY_NAMES_PT[dayOfWeek],
+          isOpen: dayOfWeek !== 0,
+          isoDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+        });
+      }
+      return list;
+    };
+
+    const WEEKS_DATA = generateDynamicWeeks(new Date());
+    const OCTOBER_DAYS = generateCurrentMonthDays(2026, 9);
+    const SEPTEMBER_DAYS = OCTOBER_DAYS;
 
     const INITIAL_APPOINTMENTS = [];
 
@@ -948,17 +965,28 @@
         };
       });
 
-      // Estado do Novo Fluxo de Agendamento do Cliente (Barbeiro -> Serviços + Bar -> Dia -> Horário -> Nome/WhatsApp/CPF)
-      const [clientBookingFlow, setClientBookingFlow] = useState({
-        barberKey: 'luis',
-        serviceId: 's1',
-        selectedExtras: [],
-        dayName: 'Ter',
-        time: '10:30',
-        clientName: '',
-        clientPhone: '',
-        clientCpf: '',
-        agreedAntiNoShow: true
+      // Estado do Novo Fluxo de Agendamento do Cliente (Barbeiro -> Serviços + Bar -> Dia/Data -> Horário -> Nome/WhatsApp/CPF)
+      const [clientBookingFlow, setClientBookingFlow] = useState(() => {
+        const todayIso = getTodayDateISO();
+        const parts = todayIso.split('-').map(Number);
+        const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+        const wDay = WEEKDAY_NAMES_PT[dt.getDay()];
+        const wDayFull = WEEKDAY_FULL_NAMES_PT[dt.getDay()];
+        return {
+          barberKey: 'luis',
+          serviceId: 's1',
+          selectedExtras: [],
+          selectedDate: todayIso,
+          dateFormatted: formatDateBR(todayIso),
+          dayName: wDay === 'Dom' ? 'Seg' : wDay,
+          dayFullName: wDay === 'Dom' ? 'Segunda-feira' : wDayFull,
+          dayNum: dt.getDate(),
+          time: '10:30',
+          clientName: '',
+          clientPhone: '',
+          clientCpf: '',
+          agreedAntiNoShow: true
+        };
       });
       const [clientBookingSuccessToast, setClientBookingSuccessToast] = useState(false);
       const [confirmedBookingModal, setConfirmedBookingModal] = useState(null);
@@ -1021,8 +1049,8 @@
       useEffect(() => { try { localStorage.setItem('valverds_barber_schedules', JSON.stringify(barberSchedules)); } catch(e){} }, [barberSchedules]);
       useEffect(() => { try { localStorage.setItem('valverds_daily_settings', JSON.stringify(dailyBarberSettings)); } catch(e){} }, [dailyBarberSettings]);
 
-      // Helper para obter horários livres de um barbeiro em um dia específico da semana atual
-      const getAvailableSlotsForBarberAndDay = (barberKey, dayName) => {
+      // Helper para obter horários livres de um barbeiro em um dia/data específica
+      const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null) => {
         const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00' };
         if (!barberSetting.available) return [];
 
@@ -1032,9 +1060,10 @@
         const bookedTimes = appointments
           .filter(a => {
             const matchBarber = a.barberKey === barberKey || (barberKey === 'luis' && a.barber && a.barber.includes('Luis')) || (barberKey === 'yago' && a.barber && a.barber.includes('Yago'));
-            const matchDay = a.day === dayName;
             const notCancelled = a.status !== 'cancelado' && a.status !== 'recusado';
-            return matchBarber && matchDay && notCancelled;
+            if (!matchBarber || !notCancelled) return false;
+            if (targetDate && (a.isoDate === targetDate || a.date === targetDate)) return true;
+            return a.day === dayName;
           })
           .map(a => a.time);
 
@@ -1115,7 +1144,7 @@
         // TRAVA 3: BLOQUEIO DE HORÁRIO DUPLICADO (ANTI-COLISÃO)
         const isSlotTaken = appointments.some(a => 
           a.barberKey === clientBookingFlow.barberKey &&
-          a.day === clientBookingFlow.dayName &&
+          ((clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName) &&
           a.time === clientBookingFlow.time &&
           a.status !== 'cancelado' && a.status !== 'recusado'
         );
@@ -1130,15 +1159,18 @@
         const extrasTotal = extrasList.reduce((acc, p) => acc + p.price, 0);
         const totalPrice = selectedSrv.price + extrasTotal;
 
-        const dayObj = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
+        const matchedDay = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
+        const finalIsoDate = clientBookingFlow.selectedDate || matchedDay.isoDate || getTodayDateISO();
+        const finalDateBR = clientBookingFlow.dateFormatted || formatDateBR(finalIsoDate);
         const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
         const newAppt = {
           id: Date.now(),
           weekId: currentWeek.id,
           day: clientBookingFlow.dayName,
-          date: dayObj.date,
-          dayNum: dayObj.num,
+          date: finalDateBR,
+          isoDate: finalIsoDate,
+          dayNum: clientBookingFlow.dayNum || matchedDay.num,
           client: clientBookingFlow.clientName.trim(),
           phone: maskPhone(clientBookingFlow.clientPhone),
           cpf: maskCPF(clientBookingFlow.clientCpf),
@@ -1149,6 +1181,7 @@
           barberKey: selectedBarber.barberKey,
           time: clientBookingFlow.time,
           status: 'confirmado',
+          source: 'online',
           price: totalPrice,
           items: [
             { name: selectedSrv.name, price: selectedSrv.price },
@@ -1156,10 +1189,10 @@
           ],
           total: totalPrice,
           paymentMethod: 'Presencial / PIX',
-          notes: `Voucher #${voucherCode} • CPF Verificado: ${maskCPF(clientBookingFlow.clientCpf)}`
+          notes: `Voucher #${voucherCode} • Agendado online via site • CPF: ${maskCPF(clientBookingFlow.clientCpf)}`
         };
 
-        setAppointments(prev => [...prev, newAppt]);
+        setAppointments(prev => [newAppt, ...prev]);
         setClientBookingSuccessToast(true);
         setConfirmedBookingModal(newAppt);
         // Cadastro automático do cliente pelo CPF
@@ -2052,16 +2085,30 @@
       const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
       const [newProductForm, setNewProductForm] = useState({ name: '', category: 'Bar', price: 15, stock: 24, minStock: 8, type: 'Cerveja' });
 
-      const [bookingForm, setBookingForm] = useState({
-        client: '',
-        phone: '',
-        cpf: '',
-        serviceId: 's1',
-        barberKey: 'luis',
-        day: 'Seg',
-        time: '14:00',
-        notes: ''
+      const [bookingForm, setBookingForm] = useState(() => {
+        const todayIso = getTodayDateISO();
+        const parts = todayIso.split('-').map(Number);
+        const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+        const wDay = WEEKDAY_NAMES_PT[dt.getDay()];
+        return {
+          client: '',
+          phone: '',
+          cpf: '',
+          serviceId: 's1',
+          barberKey: 'luis',
+          isoDate: todayIso,
+          date: formatDateBR(todayIso),
+          day: wDay === 'Dom' ? 'Seg' : wDay,
+          dayNum: dt.getDate(),
+          time: '14:00',
+          notes: ''
+        };
       });
+
+      // Estados de Navegação e Visibilidade da Agenda (Recepção e Barbeiro)
+      const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => getTodayDateISO());
+      const [agendaViewMode, setAgendaViewMode] = useState('dia'); // 'dia' ou 'todos_online'
+      const [agendaSearchQuery, setAgendaSearchQuery] = useState('');
 
       const [counterSales, setCounterSales] = useState(() => {
         try {
@@ -2159,9 +2206,34 @@
         }
       };
 
+      const selectedAgendaWeekday = useMemo(() => getWeekdayFromISO(selectedAgendaDate), [selectedAgendaDate]);
+      const selectedAgendaDateBR = useMemo(() => formatDateBR(selectedAgendaDate), [selectedAgendaDate]);
+      const selectedAgendaWeekdayFull = useMemo(() => getWeekdayFullFromISO(selectedAgendaDate), [selectedAgendaDate]);
+
       const todaysAppointments = useMemo(() => {
-        return appointments.filter(a => a.day === 'Seg' && (a.weekId === 0 || a.weekId === undefined));
-      }, [appointments]);
+        return appointments.filter(a => {
+          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
+          if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
+          if (a.day && a.day === selectedAgendaWeekday) return true;
+          return false;
+        });
+      }, [appointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
+
+      const allOnlineAppointments = useMemo(() => {
+        return appointments.filter(a => {
+          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (agendaSearchQuery.trim()) {
+            const q = agendaSearchQuery.toLowerCase();
+            const matchClient = (a.client || '').toLowerCase().includes(q);
+            const matchBarber = (a.barber || '').toLowerCase().includes(q);
+            const matchVoucher = (a.voucherCode || '').toLowerCase().includes(q);
+            const matchService = (a.service || '').toLowerCase().includes(q);
+            return matchClient || matchBarber || matchVoucher || matchService;
+          }
+          return true;
+        });
+      }, [appointments, agendaSearchQuery]);
 
       const completedToday = todaysAppointments.filter(a => a.status === 'concluido');
       const inChairToday = todaysAppointments.filter(a => a.status === 'em_atendimento');
@@ -2221,7 +2293,19 @@
       const currentBarberName = currentUser.role === 'barbeiro' ? currentUser.name : ((currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'Luis Valverde' : '');
       const myAllAppointments = useMemo(() => appointments.filter(a => a.barber === currentBarberName), [appointments, currentBarberName]);
       const myWeekAppointments = useMemo(() => myAllAppointments.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)), [myAllAppointments, currentWeek]);
-      const myTodaysAppointments = useMemo(() => myAllAppointments.filter(a => a.day === 'Seg' && (a.weekId === 0 || a.weekId === undefined)), [myAllAppointments]);
+      const myTodaysAppointments = useMemo(() => {
+        return myAllAppointments.filter(a => {
+          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
+          if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
+          if (a.day && a.day === selectedAgendaWeekday) return true;
+          return false;
+        });
+      }, [myAllAppointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
+
+      const myOnlineAppointments = useMemo(() => {
+        return myAllAppointments.filter(a => a.status !== 'cancelado' && a.status !== 'recusado');
+      }, [myAllAppointments]);
       const myCompletedToday = myTodaysAppointments.filter(a => a.status === 'concluido');
       const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + a.price, 0);
       const myBarberObj = barbers.find(b => b.name === currentUser.name || b.barberKey === currentUser.barberKey);
@@ -2448,7 +2532,7 @@
         // TRAVA 2: ANTI-COLISÃO
         const isManualSlotTaken = appointments.some(a => 
           a.barberKey === bookingForm.barberKey &&
-          a.day === bookingForm.day &&
+          ((bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day) &&
           a.time === bookingForm.time &&
           a.status !== 'cancelado' && a.status !== 'recusado'
         );
@@ -2461,14 +2545,17 @@
         const brb = barbers.find(b => b.barberKey === bookingForm.barberKey) || barbers[0];
 
         const matchedDay = currentWeek.days.find(d => d.name === bookingForm.day) || currentWeek.days[0];
+        const manualIso = bookingForm.isoDate || matchedDay.isoDate || getTodayDateISO();
+        const manualDateBR = bookingForm.date || formatDateBR(manualIso);
         const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
         const newAppt = {
           id: Date.now(),
           weekId: currentWeek.id,
           day: bookingForm.day,
-          date: matchedDay.date,
-          dayNum: matchedDay.num,
+          date: manualDateBR,
+          isoDate: manualIso,
+          dayNum: bookingForm.dayNum || matchedDay.num,
           client: bookingForm.client.trim(),
           phone: maskPhone(bookingForm.phone),
           cpf: maskCPF(bookingForm.cpf),
@@ -2479,11 +2566,12 @@
           barberKey: brb.barberKey,
           time: bookingForm.time,
           status: 'confirmado',
+          source: 'recepcao',
           price: srv.price,
           items: [{ name: srv.name, price: srv.price }],
           total: srv.price,
           paymentMethod: 'Presencial / PIX',
-          notes: bookingForm.notes ? `${bookingForm.notes} • Voucher #${voucherCode}` : `Voucher #${voucherCode} • CPF ${maskCPF(bookingForm.cpf)}`
+          notes: bookingForm.notes ? `${bookingForm.notes} • Voucher #${voucherCode}` : `Voucher #${voucherCode} • Encaixe Recepção • CPF ${maskCPF(bookingForm.cpf)}`
         };
 
         setAppointments(prev => [newAppt, ...prev]);
@@ -2501,7 +2589,20 @@
           newAppt.service, newAppt.barber, newAppt.barberKey, newAppt.day, newAppt.date, newAppt.time,
           newAppt.status, newAppt.price, newAppt.total, newAppt.paymentMethod, newAppt.notes
         ]);
-        setBookingForm({ client: '', phone: '', cpf: '', serviceId: 's1', barberKey: 'luis', day: 'Seg', time: '14:00', notes: '' });
+        const todayIsoReset = getTodayDateISO();
+        setBookingForm({
+          client: '',
+          phone: '',
+          cpf: '',
+          serviceId: 's1',
+          barberKey: 'luis',
+          isoDate: todayIsoReset,
+          date: formatDateBR(todayIsoReset),
+          day: getWeekdayFromISO(todayIsoReset),
+          dayNum: new Date().getDate(),
+          time: '14:00',
+          notes: ''
+        });
       };
 
       const openCheckout = (appt) => {
@@ -3862,7 +3963,7 @@
                             <div className="flex justify-between items-center pb-4 border-b border-[#282319]">
                               <div>
                                 <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">CALENDÁRIO MENSAL DO BARBEIRO</span>
-                                <h3 className="font-serif text-xl font-bold text-white mt-0.5">Setembro 2026</h3>
+                                <h3 className="font-serif text-xl font-bold text-white mt-0.5">Outubro 2026</h3>
                               </div>
                               <div className="text-xs text-gray-400">Clique em um dia para inspecionar clientes</div>
                             </div>
@@ -3872,12 +3973,22 @@
                             </div>
 
                             <div className="grid grid-cols-7 gap-2">
+                              {/* 01/10/2026 é Quinta-feira: 3 slots vazios para Seg, Ter, Qua */}
                               <div className="bg-transparent rounded-2xl p-2 opacity-0"></div>
-                              {SEPTEMBER_DAYS.map((d) => {
-                                const dayAppts = myAllAppointments.filter(a => a.dayNum === d.dayNum);
+                              <div className="bg-transparent rounded-2xl p-2 opacity-0"></div>
+                              <div className="bg-transparent rounded-2xl p-2 opacity-0"></div>
+                              {OCTOBER_DAYS.map((d) => {
+                                const dayAppts = myAllAppointments.filter(a => (a.dayNum === d.dayNum || a.isoDate === d.isoDate));
                                 const isSelected = selectedMonthDay === d.dayNum;
                                 return (
-                                  <button key={d.dayNum} onClick={() => setSelectedMonthDay(d.dayNum)} className={`p-3 rounded-2xl border text-center transition-all flex flex-col justify-between aspect-square ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-105 font-bold' : d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]/50' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}>
+                                  <button
+                                    key={d.dayNum}
+                                    onClick={() => {
+                                      setSelectedMonthDay(d.dayNum);
+                                      if (d.isoDate) setSelectedAgendaDate(d.isoDate);
+                                    }}
+                                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col justify-between aspect-square ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-105 font-bold' : d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]/50' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}
+                                  >
                                     <div className="flex justify-between items-center w-full">
                                       <span className="text-xs font-serif font-bold">{d.dayNum}</span>
                                       <span className="text-[9px] uppercase">{d.weekDay}</span>
@@ -3979,11 +4090,35 @@
                         )}
 
                         {barberCalendarMode === 'diaria' && (
-                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
-                            <h3 className="font-serif text-lg font-bold text-white mb-4">Meus Atendimentos de Hoje (Segunda-feira)</h3>
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-[#282319]">
+                              <div>
+                                <h3 className="font-serif text-lg font-bold text-white">
+                                  Meus Atendimentos de {selectedAgendaWeekdayFull} ({selectedAgendaDateBR})
+                                </h3>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {myTodaysAppointments.length} cliente(s) agendado(s) para você nesta data.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setSelectedAgendaDate(getTodayDateISO())}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${selectedAgendaDate === getTodayDateISO() ? 'bg-[#C9A356] text-black shadow' : 'bg-[#1E1B15] text-[#C9A356] border border-[#C9A356]/30 hover:border-[#C9A356]'}`}
+                                >
+                                  Hoje
+                                </button>
+                                <input
+                                  type="date"
+                                  value={selectedAgendaDate}
+                                  onChange={(e) => { if (e.target.value) setSelectedAgendaDate(e.target.value); }}
+                                  className="px-3 py-1.5 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-[#C9A356] font-serif font-bold focus:outline-none focus:border-[#C9A356]"
+                                />
+                              </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {myTodaysAppointments.map((a) => (
-                                <div key={a.id} className="bg-[#1A1813] p-5 rounded-3xl border border-[#2D271E] flex flex-col justify-between">
+                                <div key={a.id} className="bg-[#1A1813] p-5 rounded-3xl border border-[#2D271E] flex flex-col justify-between hover:border-[#C9A356]/40 transition-colors">
                                   <div>
                                     <div className="flex justify-between items-start mb-2">
                                       <div className="font-serif font-bold text-base text-white">{a.client}</div>
@@ -4000,8 +4135,17 @@
                                       <span className="text-[10px] text-gray-400">Minha Comissão: </span>
                                       <strong className="text-green-400 text-xs font-serif">R$ {(a.price * myCommissionRate).toFixed(2).replace('.', ',')}</strong>
                                     </div>
-                                    <div className="flex gap-2">
-                                      <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all">
+                                    <div className="flex gap-2 items-center">
+                                      <a
+                                        href={`https://wa.me/55${(a.phone || '21970100668').replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${a.client}! Passando para confirmar seu horário na Valverd's BarberShop hoje às ${a.time} (${a.service}). Até logo!`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-800 text-emerald-400 hover:text-white transition-all"
+                                        title="Enviar WhatsApp"
+                                      >
+                                        <Icons.MessageCircle className="w-3.5 h-3.5" />
+                                      </a>
+                                      <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
                                         <Icons.Edit className="w-3.5 h-3.5" />
                                       </button>
                                       {a.status === 'aguardando' && (
@@ -4019,6 +4163,12 @@
                                 </div>
                               ))}
                             </div>
+
+                            {myTodaysAppointments.length === 0 && (
+                              <div className="text-center py-10 text-gray-500 text-xs font-serif">
+                                Nenhum cliente agendado para você nesta data ({selectedAgendaDateBR}). Horários livres!
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -4411,100 +4561,288 @@
 
                     {receptionTab === 'agenda' && (
                       <div className="space-y-6">
+                        {/* BARRA SUPERIOR DE CONEXÃO & VISIBILIDADE DOS AGENDAMENTOS */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#161410] p-6 rounded-3xl border border-[#282319] gap-4 shadow-xl">
                           <div>
-                            <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">VISÃO GERAL DO SALÃO</div>
-                            <h2 className="font-serif text-2xl font-bold text-white mt-0.5">Agenda das Cadeiras</h2>
-                            <p className="text-xs text-gray-400">Segunda-feira (08/09) • Acompanhamento e edição direta de atendimentos.</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PAINEL DE ATENDIMENTOS &amp; RECEPÇÃO</span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/50 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Conectado ao Site
+                              </span>
+                            </div>
+                            <h2 className="font-serif text-2xl font-bold text-white mt-0.5">
+                              {agendaViewMode === 'todos_online' ? 'Todos os Agendamentos Online' : 'Agenda das Cadeiras'}
+                            </h2>
+                            <p className="text-xs text-gray-400">
+                              {agendaViewMode === 'todos_online'
+                                ? `Lista completa de clientes agendados pelo site (${allOnlineAppointments.length} confirmados).`
+                                : `${selectedAgendaWeekdayFull}, ${selectedAgendaDateBR} • Acompanhamento direto de atendimentos.`}
+                            </p>
                           </div>
-                          <div className="flex gap-3">
-                            <button onClick={() => setIsQuickSaleModalOpen(true)} className="px-4 py-2 bg-[#1C1A14] hover:bg-[#25221B] text-[#C9A356] border border-[#C9A356]/40 font-serif text-xs font-bold uppercase rounded-full transition-all flex items-center gap-1.5">
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Alternador de Modo: Cadeiras por Dia vs Todos Online */}
+                            <div className="flex bg-[#100F0C] p-1 rounded-full border border-[#2A241A]">
+                              <button
+                                onClick={() => setAgendaViewMode('dia')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${agendaViewMode === 'dia' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Cadeiras ({todaysAppointments.length})
+                              </button>
+                              <button
+                                onClick={() => setAgendaViewMode('todos_online')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-serif font-bold transition-all ${agendaViewMode === 'todos_online' ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                              >
+                                Agendamentos do Site ({allOnlineAppointments.length})
+                              </button>
+                            </div>
+
+                            <button onClick={() => setIsQuickSaleModalOpen(true)} className="px-3.5 py-2 bg-[#1C1A14] hover:bg-[#25221B] text-[#C9A356] border border-[#C9A356]/40 font-serif text-xs font-bold uppercase rounded-full transition-all flex items-center gap-1.5">
                               <Icons.Package className="w-3.5 h-3.5" />
-                              <span>Venda Balcão (PDV)</span>
+                              <span className="hidden sm:inline">Venda Balcão</span>
                             </button>
+
                             <button
                               onClick={() => { setBookingForm(prev => ({ ...prev, barberKey: 'luis' })); setIsBookingModalOpen(true); }}
-                              className="px-5 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
+                              className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow flex items-center gap-1.5 transition-all"
                             >
                               <Icons.Plus className="w-4 h-4" /> Novo Encaixe
                             </button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {barbers.map((barber) => {
-                            const barberAppts = todaysAppointments.filter(a => a.barber === barber.name);
-                            const sched = barberSchedules.find(b => b.id === barber.barberKey) || barber;
-                            return (
-                              <div key={barber.id} className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
-                                <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#282319]">
-                                  <div className="flex items-center gap-3">
-                                    <img src={barber.avatar} alt={barber.name} className="w-12 h-12 rounded-full object-cover border border-[#C9A356]" />
-                                    <div>
-                                      <h3 className="font-serif font-bold text-white text-base">{barber.name}</h3>
-                                      <div className="text-[11px] text-[#C9A356] font-serif">{barber.chair}</div>
-                                      <div className="text-[10px] text-gray-400">Escala: {sched.startTime || '09:00'} às {sched.endTime || '19:00'}</div>
+                        {/* MODO 1: VISÃO DAS CADEIRAS POR DIA SELECIONADO */}
+                        {agendaViewMode === 'dia' && (
+                          <div className="space-y-4">
+                            {/* BARRA DE SELEÇÃO DE DIA & CALENDÁRIO */}
+                            <div className="bg-[#14120E] p-4 rounded-2xl border border-[#262118] flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => setSelectedAgendaDate(getTodayDateISO())}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${selectedAgendaDate === getTodayDateISO() ? 'bg-[#C9A356] text-black shadow' : 'bg-[#1C1A14] text-[#C9A356] border border-[#C9A356]/30 hover:border-[#C9A356]'}`}
+                                >
+                                  Hoje
+                                </button>
+                                {currentWeek.days.map((d) => {
+                                  const isSelected = selectedAgendaDate === d.isoDate || (selectedAgendaWeekday === d.name && selectedAgendaDate === getTodayDateISO());
+                                  const dayCount = appointments.filter(a => (a.isoDate === d.isoDate || a.date === d.date || a.day === d.name) && a.status !== 'cancelado' && a.status !== 'recusado').length;
+                                  return (
+                                    <button
+                                      key={`agenda-day-pill-${d.name}`}
+                                      onClick={() => setSelectedAgendaDate(d.isoDate)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-serif transition-all flex items-center gap-1.5 ${isSelected ? 'bg-[#C9A356] text-black font-bold shadow' : 'bg-[#1A1813] text-gray-300 border border-[#2B251B] hover:border-[#C9A356]/40'}`}
+                                    >
+                                      <span>{d.name} {d.date}</span>
+                                      {dayCount > 0 && (
+                                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${isSelected ? 'bg-black text-[#C9A356]' : 'bg-[#C9A356]/20 text-[#C9A356]'}`}>
+                                          {dayCount}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                                <span className="text-[11px] font-serif text-gray-400">Outra data:</span>
+                                <input
+                                  type="date"
+                                  value={selectedAgendaDate}
+                                  onChange={(e) => { if (e.target.value) setSelectedAgendaDate(e.target.value); }}
+                                  className="px-3 py-1.5 bg-[#0C0B09] border border-[#C9A356]/50 rounded-xl text-xs text-[#C9A356] font-serif font-bold focus:outline-none focus:ring-1 focus:ring-[#C9A356]"
+                                />
+                              </div>
+                            </div>
+
+                            {/* CADEIRAS DOS BARBEIROS */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              {barbers.map((barber) => {
+                                const barberAppts = todaysAppointments.filter(a => a.barber === barber.name || a.barberKey === barber.barberKey);
+                                const sched = barberSchedules.find(b => b.id === barber.barberKey) || barber;
+                                return (
+                                  <div key={barber.id} className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
+                                    <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#282319]">
+                                      <div className="flex items-center gap-3">
+                                        <img src={barber.avatar} alt={barber.name} className="w-12 h-12 rounded-full object-cover border border-[#C9A356]" />
+                                        <div>
+                                          <h3 className="font-serif font-bold text-white text-base">{barber.name}</h3>
+                                          <div className="text-[11px] text-[#C9A356] font-serif">{barber.chair}</div>
+                                          <div className="text-[10px] text-gray-400">Escala: {sched.startTime || '09:00'} às {sched.endTime || '19:00'}</div>
+                                        </div>
+                                      </div>
+                                      <span className="text-xs text-gray-400">{barberAppts.length} agendados na data</span>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      {barberAppts.map((a) => (
+                                        <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs hover:border-[#C9A356]/40 transition-colors gap-3">
+                                          <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <span className="font-serif font-bold text-sm text-[#C9A356]">{a.time}</span>
+                                              <strong className="text-white text-xs">{a.client}</strong>
+                                              {a.voucherCode && (
+                                                <span className="font-mono text-[9px] bg-[#C9A356]/15 border border-[#C9A356]/40 text-[#C9A356] px-1.5 py-0.5 rounded font-bold">
+                                                  #{a.voucherCode}
+                                                </span>
+                                              )}
+                                              {a.source === 'online' && (
+                                                <span className="text-[9px] bg-blue-950/70 border border-blue-600/50 text-blue-300 px-1.5 py-0.5 rounded font-bold">
+                                                  🌐 Site
+                                                </span>
+                                              )}
+                                              {(a.cpf || a.isCpfVerified) && (
+                                                <span className="text-[9px] bg-emerald-950/60 border border-emerald-700/50 text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold" title={a.cpf ? `CPF: ${a.cpf}` : 'CPF Validado'}>
+                                                  <Icons.Check className="w-2.5 h-2.5" /> CPF OK
+                                                </span>
+                                              )}
+                                              <StatusBadge status={a.status} />
+                                            </div>
+                                            <div className="text-gray-400 text-[11px] mt-0.5">{a.service} — R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                            {a.phone && <div className="text-[10px] text-gray-500 mt-0.5">WhatsApp: {a.phone}</div>}
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
+                                            <a
+                                              href={`https://wa.me/55${(a.phone || '21970100668').replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${a.client}! Passando para confirmar seu horário na Valverd's BarberShop no dia ${a.date || selectedAgendaDateBR} às ${a.time} (${a.service}). Nos vemos em breve!`)}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="p-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-800 text-emerald-400 hover:text-white transition-all"
+                                              title="Abrir WhatsApp do Cliente"
+                                            >
+                                              <Icons.MessageCircle className="w-3.5 h-3.5" />
+                                            </a>
+                                            {a.status !== 'concluido' && (
+                                              <button onClick={() => openCheckout(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase transition-all shadow">
+                                                Cobrar
+                                              </button>
+                                            )}
+                                            <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#24211A] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
+                                              <Icons.Edit className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => deleteAppointment(a.id)} className="p-1.5 rounded-lg bg-[#24211A] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
+                                              <Icons.Trash className="w-3.5 h-3.5" />
+                                            </button>
+                                            {a.cpf && (
+                                              <button
+                                                onClick={() => handleToggleBlockCpf(a.cpf, a.client)}
+                                                className={`p-1.5 rounded-lg transition-all ${blockedCpfs.includes(a.cpf) ? 'bg-red-900/80 text-white shadow' : 'bg-[#24211A] hover:bg-red-950 text-gray-400 hover:text-red-400'}`}
+                                                title={blockedCpfs.includes(a.cpf) ? 'CPF Bloqueado (Clique para Desbloquear)' : 'Bloquear CPF (Lista Negra Anti No-Show)'}
+                                              >
+                                                <Icons.Shield className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {barberAppts.length === 0 && (
+                                        <div className="text-center py-6 text-gray-500 text-xs font-serif">
+                                          Nenhum cliente agendado nesta cadeira para {selectedAgendaDateBR} ({selectedAgendaWeekdayFull}).
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
-                                  <span className="text-xs text-gray-400">{barberAppts.length} clientes hoje</span>
-                                </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
-                                <div className="space-y-3">
-                                  {barberAppts.map((a) => (
-                                    <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex justify-between items-center text-xs hover:border-[#C9A356]/40 transition-colors">
-                                      <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="font-serif font-bold text-sm text-[#C9A356]">{a.time}</span>
-                                          <strong className="text-white text-xs">{a.client}</strong>
-                                          {a.voucherCode && (
-                                            <span className="font-mono text-[9px] bg-[#C9A356]/15 border border-[#C9A356]/40 text-[#C9A356] px-1.5 py-0.5 rounded font-bold">
-                                              #{a.voucherCode}
-                                            </span>
-                                          )}
-                                          {(a.cpf || a.isCpfVerified) && (
-                                            <span className="text-[9px] bg-emerald-950/60 border border-emerald-700/50 text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold" title={a.cpf ? `CPF: ${a.cpf}` : 'CPF Validado'}>
-                                              <Icons.Check className="w-2.5 h-2.5" /> CPF OK
-                                            </span>
-                                          )}
-                                          <StatusBadge status={a.status} />
-                                        </div>
-                                        <div className="text-gray-400 text-[11px] mt-0.5">{a.service} — R$ {a.price.toFixed(2).replace('.', ',')}</div>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2">
-                                        {a.status !== 'concluido' && (
-                                          <button onClick={() => openCheckout(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase transition-all shadow">
-                                            Cobrar
-                                          </button>
-                                        )}
-                                        <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#24211A] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
-                                          <Icons.Edit className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => deleteAppointment(a.id)} className="p-1.5 rounded-lg bg-[#24211A] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
-                                          <Icons.Trash className="w-3.5 h-3.5" />
-                                        </button>
-                                        {a.cpf && (
-                                          <button
-                                            onClick={() => handleToggleBlockCpf(a.cpf, a.client)}
-                                            className={`p-1.5 rounded-lg transition-all ${blockedCpfs.includes(a.cpf) ? 'bg-red-900/80 text-white shadow' : 'bg-[#24211A] hover:bg-red-950 text-gray-400 hover:text-red-400'}`}
-                                            title={blockedCpfs.includes(a.cpf) ? 'CPF Bloqueado (Clique para Desbloquear)' : 'Bloquear CPF (Lista Negra Anti No-Show)'}
-                                          >
-                                            <Icons.Shield className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {barberAppts.length === 0 && (
-                                    <div className="text-center py-6 text-gray-500 text-xs font-serif">
-                                      Nenhum cliente agendado nesta cadeira hoje.
-                                    </div>
-                                  )}
-                                </div>
+                        {/* MODO 2: LISTA GERAL DE TODOS OS AGENDAMENTOS ONLINE */}
+                        {agendaViewMode === 'todos_online' && (
+                          <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-[#282319]">
+                              <div>
+                                <h3 className="font-serif text-lg font-bold text-white">
+                                  Central de Agendamentos Online &amp; Reservas
+                                </h3>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  Todos os clientes que marcaram horário no site ou encaixe na recepção.
+                                </p>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="w-full sm:w-72">
+                                <input
+                                  type="text"
+                                  placeholder="Buscar por cliente, barbeiro, serviço..."
+                                  value={agendaSearchQuery}
+                                  onChange={(e) => setAgendaSearchQuery(e.target.value)}
+                                  className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#C9A356]"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              {allOnlineAppointments.map((a) => (
+                                <div key={a.id} className="p-4 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex flex-col md:flex-row justify-between items-start md:items-center gap-3 hover:border-[#C9A356]/40 transition-colors">
+                                  <div className="flex items-start sm:items-center gap-3">
+                                    <div className="text-center p-2.5 bg-[#12110E] rounded-xl border border-[#292319] shrink-0">
+                                      <div className="font-serif font-bold text-xs text-[#C9A356]">{a.date || selectedAgendaDateBR}</div>
+                                      <div className="font-serif font-bold text-sm text-white">{a.time}</div>
+                                      <div className="text-[9px] uppercase text-gray-400 font-serif">{a.day}</div>
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <strong className="text-white text-sm font-serif">{a.client}</strong>
+                                        <span className="text-[11px] text-[#C9A356] font-serif bg-[#231E15] px-2 py-0.5 rounded-full border border-[#3A3222]">
+                                          💈 {a.barber}
+                                        </span>
+                                        {a.voucherCode && (
+                                          <span className="font-mono text-[9px] bg-[#C9A356]/15 border border-[#C9A356]/40 text-[#C9A356] px-1.5 py-0.5 rounded font-bold">
+                                            #{a.voucherCode}
+                                          </span>
+                                        )}
+                                        {a.source === 'online' && (
+                                          <span className="text-[9px] bg-blue-950/70 border border-blue-600/50 text-blue-300 px-1.5 py-0.5 rounded font-bold">
+                                            🌐 Online
+                                          </span>
+                                        )}
+                                        <StatusBadge status={a.status} />
+                                      </div>
+                                      <div className="text-xs text-gray-300 mt-1">{a.service} — R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                      <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-2">
+                                        <span>Tel: {a.phone}</span>
+                                        {a.cpf && <span>• CPF: {a.cpf}</span>}
+                                        {a.notes && <span className="italic">• "{a.notes}"</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+                                    <a
+                                      href={`https://wa.me/55${(a.phone || '21970100668').replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${a.client}! Passando para confirmar seu horário na Valverd's BarberShop com ${a.barber} no dia ${a.date || selectedAgendaDateBR} às ${a.time} (${a.service}). Até breve!`)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3 py-1.5 bg-[#25D366]/20 hover:bg-[#25D366] text-[#25D366] hover:text-black border border-[#25D366]/40 rounded-xl text-xs font-serif font-bold transition-all flex items-center gap-1.5"
+                                      title="Abrir conversa no WhatsApp"
+                                    >
+                                      <Icons.MessageCircle className="w-3.5 h-3.5" />
+                                      <span>WhatsApp</span>
+                                    </a>
+
+                                    {a.status !== 'concluido' && (
+                                      <button onClick={() => openCheckout(a)} className="px-3 py-1.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-xl text-xs font-serif font-bold uppercase transition-all shadow">
+                                        Cobrar
+                                      </button>
+                                    )}
+
+                                    <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
+                                      <Icons.Edit className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button onClick={() => deleteAppointment(a.id)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
+                                      <Icons.Trash className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {allOnlineAppointments.length === 0 && (
+                                <div className="text-center py-12 text-gray-500 text-xs font-serif">
+                                  Nenhum agendamento online registrado no momento. Quando os clientes marcarem no site, eles aparecerão aqui instantaneamente!
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -5608,39 +5946,97 @@
                         </div>
                       </div>
 
-                      {/* PASSO 3: CALENDÁRIO COM DIAS E OCUPAÇÕES */}
-                      <div className="space-y-3">
-                        <label className="block text-xs font-serif uppercase tracking-wider text-[#C9A356] font-bold">
-                          Passo 3 • Escolha o Dia (Disponibilidade &amp; Ocupação)
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                          {currentWeek.days.map((d) => {
-                            const isSelected = clientBookingFlow.dayName === d.name;
-                            const slots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name);
-                            const barberDayConf = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][d.name]) || { available: true };
-                            const isAvailable = barberDayConf.available !== false;
-                            return (
-                              <button
-                                key={d.name}
-                                type="button"
-                                disabled={!isAvailable}
-                                onClick={() => setClientBookingFlow(prev => ({ ...prev, dayName: d.name }))}
-                                className={`p-3.5 rounded-2xl border text-center transition-all ${!isAvailable ? 'opacity-40 cursor-not-allowed bg-[#11100D] border-[#221E17] text-gray-600' : isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-[1.02]' : 'bg-[#12110E] text-gray-300 border-[#262118] hover:border-[#C9A356]/40'}`}
-                              >
-                                <div className="text-[10px] font-serif uppercase font-bold">{d.name}</div>
-                                <div className="text-xl font-bold font-serif my-0.5">{d.num}</div>
-                                <div className="text-[10px] font-bold mt-1">
-                                  {isAvailable ? (
-                                    <span className={isSelected ? 'text-black/80' : 'text-[#C9A356]'}>
-                                      {slots.length} {slots.length === 1 ? 'vaga' : 'vagas'}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500">Folga</span>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
+                      {/* PASSO 3: CALENDÁRIO COM DIAS, CALENDÁRIO COMPLETO & DISPONIBILIDADE */}
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+                          <label className="block text-xs font-serif uppercase tracking-wider text-[#C9A356] font-bold">
+                            Passo 3 • Escolha a Data no Calendário ou Semana Atual
+                          </label>
+                          <span className="text-xs font-serif text-gray-300">
+                            Selecionado: <strong className="text-[#C9A356] font-bold">{clientBookingFlow.dateFormatted || formatDateBR(clientBookingFlow.selectedDate)} ({clientBookingFlow.dayFullName || clientBookingFlow.dayName})</strong>
+                          </span>
+                        </div>
+
+                        {/* SELETOR DE CALENDÁRIO COMPLETO (QUALQUER DATA) */}
+                        <div className="p-4 bg-[#14120E] rounded-2xl border border-[#2A241A] flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                          <div>
+                            <div className="text-xs font-serif text-[#DFBD78] font-bold flex items-center gap-2">
+                              <Icons.Calendar className="w-4 h-4 text-[#C9A356]" />
+                              <span>Abrir Calendário Completo (Escolha Qualquer Data Futura):</span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-0.5">
+                              Clique no campo para selecionar qualquer dia do mês no calendário interativo.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              min={getTodayDateISO()}
+                              value={clientBookingFlow.selectedDate || getTodayDateISO()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) return;
+                                const parts = val.split('-').map(Number);
+                                const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+                                const wDay = WEEKDAY_NAMES_PT[dt.getDay()];
+                                const wDayFull = WEEKDAY_FULL_NAMES_PT[dt.getDay()];
+                                if (wDay === 'Dom') {
+                                  alert('A Valverd\'s BarberShop não abre aos domingos. Por favor escolha uma data de segunda a sábado.');
+                                  return;
+                                }
+                                setClientBookingFlow(prev => ({
+                                  ...prev,
+                                  selectedDate: val,
+                                  dateFormatted: formatDateBR(val),
+                                  dayName: wDay,
+                                  dayFullName: wDayFull,
+                                  dayNum: dt.getDate()
+                                }));
+                              }}
+                              className="px-3.5 py-2 bg-[#0E0D0A] border border-[#C9A356]/60 rounded-xl text-xs text-[#C9A356] font-serif font-bold focus:outline-none focus:ring-1 focus:ring-[#C9A356] cursor-pointer shadow"
+                            />
+                          </div>
+                        </div>
+
+                        {/* DIAS DA SEMANA ATUAL COM VAGAS */}
+                        <div>
+                          <span className="text-[11px] font-serif text-gray-400 mb-2 block">Ou clique direto em um dia da semana atual:</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {currentWeek.days.map((d) => {
+                              const isSelected = clientBookingFlow.selectedDate === d.isoDate || (clientBookingFlow.dayName === d.name && (!clientBookingFlow.selectedDate || clientBookingFlow.selectedDate === d.isoDate));
+                              const slots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name, d.isoDate);
+                              const barberDayConf = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][d.name]) || { available: true };
+                              const isAvailable = barberDayConf.available !== false;
+                              return (
+                                <button
+                                  key={d.name}
+                                  type="button"
+                                  disabled={!isAvailable}
+                                  onClick={() => setClientBookingFlow(prev => ({
+                                    ...prev,
+                                    dayName: d.name,
+                                    dayFullName: d.fullName,
+                                    selectedDate: d.isoDate,
+                                    dateFormatted: formatDateBR(d.isoDate),
+                                    dayNum: d.num
+                                  }))}
+                                  className={`p-3.5 rounded-2xl border text-center transition-all ${!isAvailable ? 'opacity-40 cursor-not-allowed bg-[#11100D] border-[#221E17] text-gray-600' : isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-[1.02]' : 'bg-[#12110E] text-gray-300 border-[#262118] hover:border-[#C9A356]/40'}`}
+                                >
+                                  <div className="text-[10px] font-serif uppercase font-bold">{d.name} ({d.date})</div>
+                                  <div className="text-xl font-bold font-serif my-0.5">{d.num}</div>
+                                  <div className="text-[10px] font-bold mt-1">
+                                    {isAvailable ? (
+                                      <span className={isSelected ? 'text-black/80 font-bold' : 'text-[#C9A356]'}>
+                                        {slots.length} {slots.length === 1 ? 'vaga' : 'vagas'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500">Folga</span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
 
@@ -5651,12 +6047,12 @@
                             Passo 4 • Escolha o Horário (Grade Completa 00:00 às 23:30)
                           </label>
                           <span className="text-xs font-serif text-gray-400">
-                            Selecionado: <strong className="text-[#C9A356] text-sm">{clientBookingFlow.time}</strong>
+                            Data &amp; Horário: <strong className="text-[#C9A356] text-sm">{clientBookingFlow.dateFormatted || formatDateBR(clientBookingFlow.selectedDate)} às {clientBookingFlow.time}</strong>
                           </span>
                         </div>
 
                         {(() => {
-                          const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, clientBookingFlow.dayName);
+                          const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, clientBookingFlow.dayName, clientBookingFlow.selectedDate);
                           return (
                             <div className="space-y-3">
                               {availableSlots.length > 0 && (
@@ -6344,19 +6740,29 @@
                     </div>
 
                     <div>
-                      <label className="block text-gray-400 font-serif uppercase mb-1">Dia:</label>
-                      <select
-                        value={bookingForm.day}
-                        onChange={e => setBookingForm({ ...bookingForm, day: e.target.value })}
-                        className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none"
-                      >
-                        <option value="Seg">Segunda (08/09)</option>
-                        <option value="Ter">Terça (09/09)</option>
-                        <option value="Qua">Quarta (10/09)</option>
-                        <option value="Qui">Quinta (11/09)</option>
-                        <option value="Sex">Sexta (12/09)</option>
-                        <option value="Sáb">Sábado (13/09)</option>
-                      </select>
+                      <label className="block text-gray-400 font-serif uppercase mb-1">Data:</label>
+                      <input
+                        type="date"
+                        value={bookingForm.isoDate || getTodayDateISO()}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (!val) return;
+                          const parts = val.split('-').map(Number);
+                          const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+                          const wDay = WEEKDAY_NAMES_PT[dt.getDay()];
+                          setBookingForm(prev => ({
+                            ...prev,
+                            isoDate: val,
+                            date: formatDateBR(val),
+                            day: wDay,
+                            dayNum: dt.getDate()
+                          }));
+                        }}
+                        className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
+                      />
+                      <div className="text-[10px] text-[#C9A356] mt-1 font-serif">
+                        {getWeekdayFullFromISO(bookingForm.isoDate || getTodayDateISO())} ({formatDateBR(bookingForm.isoDate || getTodayDateISO())})
+                      </div>
                     </div>
 
                     <div>
