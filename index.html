@@ -1979,10 +1979,12 @@
           const callback = window.location.origin + window.location.pathname;
           const res = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               provider: 'google',
-              callbackURL: callback
+              callbackURL: callback,
+              newUserCallbackURL: callback
             })
           });
           const data = await res.json();
@@ -2003,16 +2005,19 @@
         const checkNeonSession = async () => {
           const urlParams = new URLSearchParams(window.location.search);
           const verifier = urlParams.get('neon_auth_session_verifier');
-          if (verifier) {
-            try {
-              window.history.replaceState({}, document.title, window.location.pathname);
-            } catch(e){}
-          }
           try {
-            const res = await fetch(`${NEON_AUTH_URL}/get-session`, { credentials: 'include' });
+            const sessionUrl = verifier
+              ? `${NEON_AUTH_URL}/get-session?neon_auth_session_verifier=${encodeURIComponent(verifier)}`
+              : `${NEON_AUTH_URL}/get-session`;
+            const res = await fetch(sessionUrl, { credentials: 'include' });
             if (res.ok) {
               const data = await res.json();
               if (data && data.user && data.user.email) {
+                if (verifier) {
+                  try {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                  } catch(e){}
+                }
                 const email = data.user.email.toLowerCase();
                 let loggedRole = 'cliente';
                 let title = 'Cliente VIP';
