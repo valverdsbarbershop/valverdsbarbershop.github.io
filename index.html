@@ -1741,7 +1741,7 @@
           if (s) return JSON.parse(s);
         } catch(e) {}
         return [
-          { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador', phone: '(21) 99999-0001', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
+          { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador', phone: '(24) 99952-1371', cpf: '168.101.437-85', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
           { id: 2, name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', roleLabel: 'Proprietário', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Proprietário (Gestão Geral)' },
           { id: 3, name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', roleLabel: 'Barbeiro Oficial', phone: '(21) 97260-9782', status: 'Ativo', accessLevel: 'Portal do Barbeiro' },
           { id: 4, name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', roleLabel: 'Recepção & Balcão', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Fila & Encaixes' }
@@ -2687,6 +2687,96 @@
         };
       });
 
+      // Identidade do cliente logado para auto-preenchimento inteligente de agendamentos
+      const getEffectiveClientIdentity = useCallback(() => {
+        let name = '';
+        let phone = '';
+        let cpf = '';
+
+        // 1. A partir do currentUser logado
+        if (currentUser && currentUser.name && currentUser.name !== 'Visitante') {
+          name = currentUser.name;
+          if (currentUser.phone) phone = currentUser.phone;
+          if (currentUser.cpf) cpf = currentUser.cpf;
+        }
+
+        // 2. A partir de registeredClients
+        if (registeredClients && registeredClients.length > 0) {
+          const matched = registeredClients.find(c =>
+            (currentUser?.email && c.email && c.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+            (currentUser?.name && c.name && (c.name.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(c.name.toLowerCase()))) ||
+            (currentUser?.phone && c.phone && c.phone.replace(/\D/g, '') === currentUser.phone.replace(/\D/g, ''))
+          );
+          if (matched) {
+            if (!name) name = matched.name;
+            if (!phone && matched.phone) phone = matched.phone;
+            if (!cpf && matched.cpf) cpf = matched.cpf;
+          }
+        }
+
+        // 3. A partir de systemUsers
+        if (systemUsers && systemUsers.length > 0) {
+          const matchedU = systemUsers.find(u =>
+            (currentUser?.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+            (currentUser?.name && u.name && u.name.toLowerCase() === currentUser.name.toLowerCase())
+          );
+          if (matchedU) {
+            if (!name) name = matchedU.name;
+            if (!phone && matchedU.phone) phone = matchedU.phone;
+            if (!cpf && matchedU.cpf) cpf = matchedU.cpf;
+          }
+        }
+
+        // 4. A partir de valverds_booking_identity do localStorage
+        try {
+          const savedId = localStorage.getItem('valverds_booking_identity');
+          if (savedId) {
+            const p = JSON.parse(savedId);
+            if (!name && p.name) name = p.name;
+            if (!phone && p.phone) phone = p.phone;
+            if (!cpf && p.cpf) cpf = p.cpf;
+          }
+        } catch(e) {}
+
+        // 5. Fallback específico para Bernardo Lamin
+        if (name && name.toLowerCase().includes('bernardo')) {
+          if (!phone) phone = '(24) 99952-1371';
+          if (!cpf) cpf = '168.101.437-85';
+        }
+
+        return {
+          name: name ? name.trim() : '',
+          phone: phone ? maskPhone(phone) : '',
+          cpf: cpf ? maskCPF(cpf) : ''
+        };
+      }, [currentUser, registeredClients, systemUsers]);
+
+      // Preenchimento automático quando abre o modal de agendamento rápido
+      useEffect(() => {
+        if (isBookingModalOpen) {
+          const ident = getEffectiveClientIdentity();
+          setBookingForm(prev => ({
+            ...prev,
+            client: prev.client || ident.name || '',
+            phone: prev.phone || ident.phone || '',
+            cpf: prev.cpf || ident.cpf || ''
+          }));
+        }
+      }, [isBookingModalOpen, getEffectiveClientIdentity]);
+
+      // Preenchimento automático também no fluxo de agendamento online do cliente
+      useEffect(() => {
+        const ident = getEffectiveClientIdentity();
+        if (ident.name || ident.phone || ident.cpf) {
+          setClientBookingFlow(prev => ({
+            ...prev,
+            clientName: prev.clientName || ident.name || '',
+            clientPhone: prev.clientPhone || ident.phone || '',
+            clientCpf: prev.clientCpf || ident.cpf || ''
+          }));
+        }
+      }, [getEffectiveClientIdentity]);
+
       // Estados de Navegação e Visibilidade da Agenda (Recepção e Barbeiro)
       const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => getTodayDateISO());
       const [agendaViewMode, setAgendaViewMode] = useState('dia'); // 'dia' ou 'todos_online'
@@ -3525,10 +3615,11 @@
           newAppt.status, newAppt.price, newAppt.total, newAppt.paymentMethod, newAppt.notes, JSON.stringify(newAppt.items)
         ]);
         const todayIsoReset = getTodayDateISO();
+        const identReset = getEffectiveClientIdentity();
         setBookingForm({
-          client: '',
-          phone: '',
-          cpf: '',
+          client: identReset.name || '',
+          phone: identReset.phone || '',
+          cpf: identReset.cpf || '',
           serviceId: 's1',
           barberKey: 'luis',
           isoDate: todayIsoReset,
@@ -8917,6 +9008,22 @@
                     <Icons.X className="w-5 h-5" />
                   </button>
                 </div>
+
+                {currentUser && currentUser.name && currentUser.name !== 'Visitante' && (
+                  <div className="p-2.5 bg-[#1A1813] border border-[#C9A356]/40 rounded-2xl text-[11px] text-[#C9A356] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-sm">
+                    <span className="flex items-center gap-1.5 font-serif font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                      <span>Identificado como <strong>{currentUser.name}</strong> (dados preenchidos automaticamente)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBookingForm(prev => ({ ...prev, client: '', phone: '', cpf: '' }))}
+                      className="text-[10px] text-gray-400 hover:text-white underline font-serif whitespace-nowrap"
+                    >
+                      Limpar p/ agendar para outro
+                    </button>
+                  </div>
+                )}
 
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
