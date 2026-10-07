@@ -9622,8 +9622,8 @@
                       <input
                         type="text"
                         required
-                        value={firstAccessForm.phone}
-                        onChange={e => setFirstAccessForm({ ...firstAccessForm, phone: e.target.value })}
+                        value={maskPhone(firstAccessForm.phone)}
+                        onChange={e => setFirstAccessForm({ ...firstAccessForm, phone: maskPhone(e.target.value) })}
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
                       />
                     </div>
@@ -9760,8 +9760,8 @@
                       type="tel"
                       required
                       placeholder="(21) 98888-7777"
-                      value={leadForm.phone}
-                      onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })}
+                      value={maskPhone(leadForm.phone)}
+                      onChange={e => setLeadForm({ ...leadForm, phone: maskPhone(e.target.value) })}
                       className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
                     />
                   </div>
@@ -10433,8 +10433,8 @@
                       <input
                         type="text"
                         placeholder="(21) 98888-7777"
-                        value={userFormData.phone}
-                        onChange={e => setUserFormData({ ...userFormData, phone: e.target.value })}
+                        value={maskPhone(userFormData.phone)}
+                        onChange={e => setUserFormData({ ...userFormData, phone: maskPhone(e.target.value) })}
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
                       />
                     </div>
@@ -10534,8 +10534,8 @@
                         type="text"
                         required
                         placeholder="(21) 98888-7777"
-                        value={clientFormData.phone}
-                        onChange={e => setClientFormData({ ...clientFormData, phone: e.target.value })}
+                        value={maskPhone(clientFormData.phone)}
+                        onChange={e => setClientFormData({ ...clientFormData, phone: maskPhone(e.target.value) })}
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
                       />
                     </div>
@@ -10636,6 +10636,51 @@
         }
       }
       new MutationObserver(update).observe(document.documentElement, { childList: true, subtree: true });
+    })();
+  </script>
+  <script id="valverds-live-version-refresh">
+    (function () {
+      // GitHub Pages publica diretamente na branch main. O SHA do último
+      // commit funciona como uma versão compartilhada entre todos os aparelhos.
+      var repoCommitsUrl = 'https://api.github.com/repos/valverdsbarbershop/valverdsbarbershop.github.io/commits/main?per_page=1';
+      var versionKey = 'valverds_github_commit_sha';
+      var isChecking = false;
+
+      async function refreshWhenPublished() {
+        if (isChecking || !navigator.onLine || !location.hostname.endsWith('github.io')) return;
+        isChecking = true;
+        try {
+          var response = await fetch(repoCommitsUrl, {
+            cache: 'no-store',
+            headers: { 'Accept': 'application/vnd.github+json' }
+          });
+          if (!response.ok) return;
+          var commit = await response.json();
+          var latestSha = commit && commit.sha;
+          if (!latestSha) return;
+          var previousSha = localStorage.getItem(versionKey);
+          if (previousSha && previousSha !== latestSha) {
+            localStorage.setItem(versionKey, latestSha);
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+              var registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.map(function (registration) { return registration.update(); }));
+            }
+            window.location.reload();
+            return;
+          }
+          localStorage.setItem(versionKey, latestSha);
+        } catch (error) {
+          // Uma falha temporária não interrompe a operação do sistema.
+        } finally {
+          isChecking = false;
+        }
+      }
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(function () {});
+      }
+      refreshWhenPublished();
+      window.setInterval(refreshWhenPublished, 300000);
     })();
   </script>
 </body>
