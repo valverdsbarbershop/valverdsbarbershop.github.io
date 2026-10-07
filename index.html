@@ -189,29 +189,30 @@
     }
 
     /* ========================================================================= */
-    /* CLEAN MODE (MODO CLARO DE LUXO COM TOQUE APPLE / BOUTIQUE)                 */
+    /* CLEAN MODE (PALETA LUXO QUENTE / CHAMPAGNE, MARFIM & DOURADO VALVERD'S)   */
     /* ========================================================================= */
     html.clean-mode,
     html.clean-mode body,
     html.clean-mode #root {
-      background-color: #F8F9FA !important;
-      color: #111827 !important;
+      background-color: #F7F5F0 !important;
+      color: #1C1917 !important;
     }
     html.clean-mode main {
-      background-color: #F8F9FA !important;
-      color: #111827 !important;
+      background-color: #F7F5F0 !important;
+      color: #1C1917 !important;
     }
     html.clean-mode aside {
       background-color: #FFFFFF !important;
-      border-color: #E5E7EB !important;
-      color: #1F2937 !important;
+      border-color: #E6E1D6 !important;
+      color: #292524 !important;
     }
     html.clean-mode header {
-      background-color: rgba(255, 255, 255, 0.95) !important;
-      border-color: #E5E7EB !important;
-      color: #111827 !important;
+      background-color: rgba(250, 248, 245, 0.98) !important;
+      border-color: #E6E1D6 !important;
+      color: #1C1917 !important;
+      box-shadow: 0 1px 4px 0 rgba(40, 30, 20, 0.04) !important;
     }
-    /* Todas as superfícies e cartões escuros viram branco Apple com sombra suave */
+    /* Superfícies e cartões viram warm white com bordas champagne douradas */
     html.clean-mode [class*="bg-[#"]:not([class*="bg-[#C9A356]"]):not([class*="bg-[#B59044]"]):not([class*="bg-[#DFBD78]"]):not([class*="bg-[#F5E0AA]"]):not([class*="bg-[#25D366]"]):not([class*="bg-[#20BD5A]"]),
     html.clean-mode [class*="bg-black"]:not([class*="text-black"]):not([class*="bg-black/"]):not([class*="hover:bg-black"]),
     html.clean-mode [class*="bg-gray-900"],
@@ -219,16 +220,16 @@
     html.clean-mode [class*="bg-stone-"],
     html.clean-mode [class*="bg-zinc-"] {
       background-color: #FFFFFF !important;
-      color: #1F2937 !important;
-      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+      color: #292524 !important;
+      box-shadow: 0 1px 4px 0 rgba(40, 30, 20, 0.05), 0 1px 2px 0 rgba(40, 30, 20, 0.03) !important;
     }
-    /* Bordas escuras viram cinza claro refinado */
+    /* Bordas sutis em tom marfim/champagne quente que ornam com dourado */
     html.clean-mode [class*="border-[#"]:not([class*="border-[#C9A356]"]):not([class*="border-[#B59044]"]):not([class*="border-[#DFBD78]"]):not([class*="border-[#25D366]"]):not([class*="border-emerald-"]):not([class*="border-red-"]) {
-      border-color: #E5E7EB !important;
+      border-color: #E6E1D6 !important;
     }
-    /* Textos claros e brancos viram preto/cinza executivo legível */
+    /* Textos executivos em espresso profundo de alto contraste */
     html.clean-mode .text-white {
-      color: #111827 !important;
+      color: #1C1917 !important;
     }
     html.clean-mode [class*="text-[#E0"],
     html.clean-mode [class*="text-[#D8"],
@@ -236,41 +237,42 @@
     html.clean-mode [class*="text-[#C5"],
     html.clean-mode [class*="text-[#F3"],
     html.clean-mode [class*="text-[#F5"] {
-      color: #374151 !important;
+      color: #44403C !important;
     }
     html.clean-mode [class*="text-gray-400"],
     html.clean-mode [class*="text-gray-300"],
     html.clean-mode [class*="text-gray-500"] {
-      color: #4B5563 !important;
+      color: #57534E !important;
     }
-    /* Entradas e formulários */
+    /* Entradas e formulários com fundo suave e foco em dourado */
     html.clean-mode input,
     html.clean-mode select,
     html.clean-mode textarea {
-      background-color: #F9FAFB !important;
-      color: #111827 !important;
-      border-color: #D1D5DB !important;
+      background-color: #FAF8F5 !important;
+      color: #1C1917 !important;
+      border-color: #D6CEBE !important;
     }
     html.clean-mode input:focus,
     html.clean-mode select:focus,
     html.clean-mode textarea:focus {
       background-color: #FFFFFF !important;
       border-color: #C9A356 !important;
+      box-shadow: 0 0 0 2px rgba(201, 163, 86, 0.25) !important;
     }
     html.clean-mode input::placeholder,
     html.clean-mode textarea::placeholder {
-      color: #9CA3AF !important;
+      color: #A8A29E !important;
     }
-    /* Tabelas */
+    /* Tabelas refinadas */
     html.clean-mode table thead tr,
     html.clean-mode table th {
-      background-color: #F3F4F6 !important;
-      color: #374151 !important;
-      border-color: #E5E7EB !important;
+      background-color: #F4EFE6 !important;
+      color: #44403C !important;
+      border-color: #E6E1D6 !important;
     }
     html.clean-mode table td {
-      color: #1F2937 !important;
-      border-color: #F3F4F6 !important;
+      color: #292524 !important;
+      border-color: #F4EFE6 !important;
     }
     /* Modais */
     html.clean-mode .fixed.inset-0 {
@@ -666,6 +668,20 @@
       { icon: 'Users', title: 'Relacionamento que Gera Lealdade', desc: 'Mais que clientes, cultivamos amigos e uma comunidade fiel.' }
     ];
 
+        // Paleta de cores exclusivas para os barbeiros nos gráficos e calendários
+    const BARBER_PALETTE = ['#C9A356', '#3B82F6', '#10B981', '#A855F7', '#EC4899', '#F59E0B', '#06B6D4', '#84CC16'];
+    const getBarberColor = (barberIdentifier, allBarbersList = []) => {
+      if (!barberIdentifier) return '#C9A356';
+      const str = String(barberIdentifier).toLowerCase();
+      if (str.includes('luis')) return '#C9A356'; // Luis Valverde = Dourado Oficial
+      if (str.includes('yago')) return '#3B82F6'; // Yago Barber = Azul Real
+      const idx = allBarbersList.findIndex(b => b.name === barberIdentifier || b.barberKey === barberIdentifier || b.id === barberIdentifier);
+      if (idx !== -1 && idx < BARBER_PALETTE.length) return BARBER_PALETTE[idx];
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      return BARBER_PALETTE[Math.abs(hash) % BARBER_PALETTE.length];
+    };
+
     // Utilitários de Calendário e Datas Dinâmicas (Outubro/2026 e em diante)
     const WEEKDAY_NAMES_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const WEEKDAY_FULL_NAMES_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -701,33 +717,31 @@
       return WEEKDAY_FULL_NAMES_PT[d.getDay()] || 'Segunda-feira';
     };
 
-    const generateDynamicWeeks = (baseDate = new Date()) => {
+    // Geração de semanas estritamente de Domingo a Sábado (padrão calendário oficial)
+    const generateDynamicWeeks = (baseDate = new Date(), totalWeeksBefore = 8, totalWeeksAfter = 12) => {
       const current = new Date(baseDate);
-      const dayOfWeek = current.getDay();
-      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(current);
-      monday.setDate(current.getDate() + diffToMonday);
+      const dayOfWeek = current.getDay(); // 0 = Domingo
+      const diffToSunday = -dayOfWeek;
+      const sunday = new Date(current);
+      sunday.setDate(current.getDate() + diffToSunday);
 
       const weeks = [];
-      const offsets = [-1, 0, 1, 2];
-      const labelsSub = ['Semana Passada', 'Semana Atual', 'Próxima Semana', 'Semana Seguinte'];
+      for (let offset = -totalWeeksBefore; offset <= totalWeeksAfter; offset++) {
+        const weekSunday = new Date(sunday);
+        weekSunday.setDate(sunday.getDate() + (offset * 7));
 
-      offsets.forEach((offset, idx) => {
-        const weekMonday = new Date(monday);
-        weekMonday.setDate(monday.getDate() + (offset * 7));
+        const weekSaturday = new Date(weekSunday);
+        weekSaturday.setDate(weekSunday.getDate() + 6);
 
-        const weekSaturday = new Date(weekMonday);
-        weekSaturday.setDate(weekMonday.getDate() + 5);
-
-        const mDay = String(weekMonday.getDate()).padStart(2, '0');
-        const mMonth = String(weekMonday.getMonth() + 1).padStart(2, '0');
-        const sDay = String(weekSaturday.getDate()).padStart(2, '0');
-        const sMonth = String(weekSaturday.getMonth() + 1).padStart(2, '0');
+        const sunDay = String(weekSunday.getDate()).padStart(2, '0');
+        const sunMonth = String(weekSunday.getMonth() + 1).padStart(2, '0');
+        const satDay = String(weekSaturday.getDate()).padStart(2, '0');
+        const satMonth = String(weekSaturday.getMonth() + 1).padStart(2, '0');
 
         const days = [];
-        for (let d = 0; d < 6; d++) {
-          const dt = new Date(weekMonday);
-          dt.setDate(weekMonday.getDate() + d);
+        for (let d = 0; d < 7; d++) {
+          const dt = new Date(weekSunday);
+          dt.setDate(weekSunday.getDate() + d);
           const dayNum = dt.getDate();
           const dayFormatted = `${String(dayNum).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
           const isoFormatted = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
@@ -742,11 +756,11 @@
 
         weeks.push({
           id: offset,
-          label: `${mDay}/${mMonth} a ${sDay}/${sMonth}`,
-          sub: labelsSub[idx] || `Semana ${idx + 1}`,
+          label: `${sunDay}/${sunMonth} a ${satDay}/${satMonth}`,
+          sub: offset === 0 ? 'Semana Atual' : offset === -1 ? 'Semana Anterior' : offset === 1 ? 'Próxima Semana' : `Semana ${offset > 0 ? '+' : ''}${offset}`,
           days: days
         });
-      });
+      }
 
       return weeks;
     };
@@ -976,7 +990,7 @@
       const [receptionTab, setReceptionTab] = useState('macro'); // 'macro' | 'agenda' | 'equipe' | 'produtos' | 'servicos' | 'escalas'
       const [barberTab, setBarberTab] = useState('minha_agenda');
       const [barberCalendarMode, setBarberCalendarMode] = useState('semanal');
-      const [selectedWeekIndex, setSelectedWeekIndex] = useState(1);
+      const [selectedWeekIndex, setSelectedWeekIndex] = useState(8);
       const [selectedWeekDay, setSelectedWeekDay] = useState('Seg');
       const [selectedMonthDay, setSelectedMonthDay] = useState(8);
 
@@ -1535,7 +1549,7 @@
           if (s) return JSON.parse(s);
         } catch(e) {}
         return [
-          { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador Master', phone: '(21) 99999-0001', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
+          { id: 1, name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', roleLabel: 'Administrador', phone: '(21) 99999-0001', status: 'Ativo', accessLevel: 'Acesso Total (BI + DB)' },
           { id: 2, name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', roleLabel: 'Proprietário', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Proprietário (Gestão Geral)' },
           { id: 3, name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', roleLabel: 'Barbeiro Oficial', phone: '(21) 98888-2222', status: 'Ativo', accessLevel: 'Portal do Barbeiro' },
           { id: 4, name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', roleLabel: 'Recepção & Balcão', phone: '(21) 97010-0668', status: 'Ativo', accessLevel: 'Fila & Encaixes' }
@@ -1600,7 +1614,7 @@
         }
 
         const roleLabels = {
-          superadmin: { label: 'Administrador Master', access: 'Acesso Total (BI + DB)' },
+          superadmin: { label: 'Administrador', access: 'Acesso Total (BI + DB)' },
           dono: { label: 'Proprietário', access: 'Proprietário (Gestão Geral)' },
           barbeiro: { label: 'Barbeiro Oficial', access: 'Portal do Barbeiro' },
           recepcao: { label: 'Recepção & Balcão', access: 'Fila & Encaixes' },
@@ -2245,7 +2259,7 @@
             email: 'bernardolamin3@gmail.com',
             role: 'superadmin',
             barberKey: 'luis',
-            title: 'Administrador Master',
+            title: 'Administrador',
             avatar: 'logo_valverds_clean.png'
           };
         } else {
@@ -2576,6 +2590,52 @@
       const myBarberObj = barbers.find(b => b.name === currentUser.name || b.barberKey === currentUser.barberKey);
       const myCommissionRate = myBarberObj ? (myBarberObj.commissionRate / 100) : (currentUser.name.includes('Luis') ? 0.60 : 0.50);
       const myCommissionToday = myRevenueToday * myCommissionRate;
+
+      // Dados para o Gráfico de Faturamento dos Barbeiros Dia a Dia (totalmente linkado com novos barbeiros)
+      const barberDailyRevenueData = useMemo(() => {
+        const days = currentWeek.days; // Dom, Seg, Ter, Qua, Qui, Sex, Sáb
+        const list = barbers.map((b, idx) => {
+          const color = getBarberColor(b.id || b.barberKey || b.name, barbers);
+          const daily = {};
+          days.forEach(d => { daily[d.name] = 0; });
+
+          appointments.forEach(a => {
+            const matchBarber = a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber && a.barber.includes('Luis')) || (b.name.includes('Yago') && a.barber && a.barber.includes('Yago'));
+            if (matchBarber && a.status === 'concluido') {
+              // Match day of current week
+              const matchDay = days.find(d => d.name === a.day || d.isoDate === a.isoDate || d.date === a.date);
+              if (matchDay) {
+                daily[matchDay.name] += Number(a.total || a.price || 0);
+              }
+            }
+          });
+
+          const totalWeek = Object.values(daily).reduce((acc, v) => acc + v, 0);
+          return {
+            barber: b,
+            color,
+            daily,
+            totalWeek
+          };
+        });
+
+        let peakBarber = list[0]?.barber?.name || '';
+        let peakDay = 'Seg';
+        let peakVal = 0;
+
+        list.forEach(item => {
+          days.forEach(d => {
+            const v = item.daily[d.name];
+            if (v > peakVal) {
+              peakVal = v;
+              peakDay = d.name;
+              peakBarber = item.barber.name;
+            }
+          });
+        });
+
+        return { days, list, peakBarber, peakDay, peakVal };
+      }, [barbers, appointments, currentWeek]);
 
       // Dados para o Gráfico de Faturamento por Forma de Pagamento ao longo dos dias da semana
       const paymentMethodsData = useMemo(() => {
@@ -4817,9 +4877,36 @@
                               <Icons.Download className="w-3.5 h-3.5" />
                               <span>Exportar Excel</span>
                             </button>
-                            <span className="text-xs font-serif bg-[#1F1C15] text-gray-400 border border-[#2B251B] px-3.5 py-2 rounded-full hidden lg:inline">
-                              Semana Atual ({currentWeek.label})
-                            </span>
+                            <div className="flex items-center gap-1.5 bg-[#1C1A14] border border-[#2B251B] px-3 py-1.5 rounded-full text-xs font-serif shadow-sm">
+                              <button
+                                disabled={selectedWeekIndex === 0}
+                                onClick={() => setSelectedWeekIndex(prev => Math.max(0, prev - 1))}
+                                className="p-1 hover:text-[#C9A356] disabled:opacity-30 transition-colors"
+                                title="Semana Anterior"
+                              >
+                                <Icons.ChevronLeft className="w-4 h-4" />
+                              </button>
+                              <span className="font-bold text-[#C9A356] px-1 font-mono">
+                                {currentWeek.label}
+                              </span>
+                              <button
+                                disabled={selectedWeekIndex === WEEKS_DATA.length - 1}
+                                onClick={() => setSelectedWeekIndex(prev => Math.min(WEEKS_DATA.length - 1, prev + 1))}
+                                className="p-1 hover:text-[#C9A356] disabled:opacity-30 transition-colors"
+                                title="Próxima Semana"
+                              >
+                                <Icons.ChevronRight className="w-4 h-4" />
+                              </button>
+                              {selectedWeekIndex !== 8 && (
+                                <button
+                                  onClick={() => setSelectedWeekIndex(8)}
+                                  className="ml-1 text-[10px] text-gray-400 hover:text-white uppercase font-bold underline"
+                                  title="Voltar para a Semana Atual"
+                                >
+                                  Atual
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -5005,7 +5092,151 @@
                           </div>
                         </div>
 
-                        {/* 4. GRÁFICO DE FATURAMENTO POR FORMA DE PAGAMENTO (LINHAS / EVOLUÇÃO POR DIA) */}
+                        {/* 4. GRÁFICO DE FATURAMENTO DOS BARBEIROS DIA A DIA (LINKADO A TODOS OS PROFISSIONAIS) */}
+                        <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-5">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-[#262118]">
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
+                                <Icons.Users className="w-3.5 h-3.5 text-[#C9A356]" />
+                                <span>PRODUTIVIDADE &amp; FATURAMENTO POR BARBEIRO</span>
+                              </div>
+                              <h3 className="font-serif text-xl font-bold text-white mt-0.5">Evolução do Faturamento dos Barbeiros (Dia a Dia)</h3>
+                              <p className="text-xs text-gray-400">Acompanhe a curva de receita gerada por cada profissional de Domingo a Sábado na semana selecionada ({currentWeek.label}).</p>
+                            </div>
+
+                            <div className="bg-[#1C1A14] border border-[#C9A356]/40 px-4 py-2.5 rounded-2xl text-xs font-serif text-right shadow">
+                              <span className="text-[10px] text-gray-400 block uppercase font-bold">Barbeiro em Alta na Semana:</span>
+                              <strong className="text-[#C9A356] font-serif font-bold text-sm">
+                                {barberDailyRevenueData.peakBarber} em {barberDailyRevenueData.peakDay} (R$ {barberDailyRevenueData.peakVal.toFixed(2).replace('.', ',')})
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* LEGENDA DINÂMICA DE TODOS OS BARBEIROS COM SUAS CORES EXCLUSIVAS */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {barberDailyRevenueData.list.map(({ barber, color, totalWeek }) => (
+                              <div key={barber.id} className="p-3.5 bg-[#1C1A14] rounded-2xl border border-[#2A2419] flex items-center justify-between gap-3 shadow-sm hover:border-[#C9A356]/40 transition-all">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative">
+                                    <img src={barber.avatar} alt={barber.name} className="w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: color }} onError={(e) => { e.target.onerror = null; e.target.src = 'barbeiro_valverds.jpg'; }} />
+                                    <span className="w-3 h-3 rounded-full absolute -bottom-0.5 -right-0.5 border border-[#161410]" style={{ backgroundColor: color }}></span>
+                                  </div>
+                                  <div>
+                                    <span className="font-serif font-bold text-xs text-white block">{barber.name}</span>
+                                    <span className="text-[10px] text-gray-400 font-serif">{barber.chair}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] text-gray-400 block uppercase">Na Semana:</span>
+                                  <strong className="font-serif font-bold text-xs" style={{ color }}>R$ {totalWeek.toFixed(2).replace('.', ',')}</strong>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* GRÁFICO SVG RESPONSIVO COM AS LINHAS DE CADA BARBEIRO */}
+                          {(() => {
+                            const days = barberDailyRevenueData.days;
+                            const maxVal = Math.max(300, barberDailyRevenueData.peakVal * 1.25);
+                            const width = 640;
+                            const height = 240;
+                            const paddingLeft = 60;
+                            const paddingRight = 40;
+                            const paddingTop = 30;
+                            const paddingBottom = 40;
+                            const chartWidth = width - paddingLeft - paddingRight;
+                            const chartHeight = height - paddingTop - paddingBottom;
+
+                            const getX = (idx) => paddingLeft + (idx * (chartWidth / (days.length - 1)));
+                            const getY = (val) => paddingTop + chartHeight - ((val / maxVal) * chartHeight);
+
+                            return (
+                              <div className="w-full bg-[#12110E] p-4 sm:p-6 rounded-2xl border border-[#262118] overflow-x-auto">
+                                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 min-w-[560px]">
+                                  {/* Linhas de Grade Horizontal */}
+                                  {[0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
+                                    const y = paddingTop + chartHeight * (1 - pct);
+                                    const val = Math.round(maxVal * pct);
+                                    return (
+                                      <g key={idx}>
+                                        <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="#221E17" strokeDasharray="4,4" />
+                                        <text x={paddingLeft - 10} y={y + 3} textAnchor="end" fill="#6B7280" fontSize="10" fontFamily="serif">
+                                          R$ {val}
+                                        </text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Rótulos dos Dias de Domingo a Sábado */}
+                                  {days.map((d, idx) => {
+                                    const x = getX(idx);
+                                    return (
+                                      <g key={d.name}>
+                                        <line x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom} stroke="#1A1813" />
+                                        <text x={x} y={height - paddingBottom + 18} textAnchor="middle" fill="#D8D4CA" fontSize="11" fontWeight="bold" fontFamily="serif">
+                                          {d.name} ({d.date.split('/')[0]})
+                                        </text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Linhas Polylines para cada Barbeiro */}
+                                  {barberDailyRevenueData.list.map(({ barber, color, daily }) => {
+                                    const pts = days.map((d, idx) => {
+                                      const val = daily[d.name] || 0;
+                                      return `${getX(idx)},${getY(val)}`;
+                                    }).join(' ');
+
+                                    return (
+                                      <g key={barber.id}>
+                                        <polyline
+                                          fill="none"
+                                          stroke={color}
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          points={pts}
+                                        />
+                                        {days.map((d, idx) => {
+                                          const val = daily[d.name] || 0;
+                                          const cx = getX(idx);
+                                          const cy = getY(val);
+                                          return (
+                                            <g key={`${barber.id}-${d.name}`}>
+                                              <circle
+                                                cx={cx}
+                                                cy={cy}
+                                                r="4.5"
+                                                fill="#12110E"
+                                                stroke={color}
+                                                strokeWidth="2.5"
+                                              />
+                                              {val > 0 && (
+                                                <text
+                                                  x={cx}
+                                                  y={cy - 9}
+                                                  textAnchor="middle"
+                                                  fill={color}
+                                                  fontSize="9"
+                                                  fontWeight="bold"
+                                                  fontFamily="serif"
+                                                >
+                                                  R$ {Math.round(val)}
+                                                </text>
+                                              )}
+                                            </g>
+                                          );
+                                        })}
+                                      </g>
+                                    );
+                                  })}
+                                </svg>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* 5. GRÁFICO DE FATURAMENTO POR FORMA DE PAGAMENTO (LINHAS / EVOLUÇÃO POR DIA) */}
                         <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-5">
                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-[#262118]">
                             <div>
@@ -5354,18 +5585,61 @@
                                             if (d.isoDate) setSelectedAgendaDate(d.isoDate);
                                             setCalendarNavMode('semana');
                                           }}
-                                          className={`p-2 rounded-xl border text-center transition-all flex flex-col justify-between aspect-square ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow font-bold scale-105' : d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}
+                                          className={`p-2 rounded-2xl border text-center transition-all flex flex-col justify-between min-h-[72px] ${isSelected ? 'bg-[#C9A356]/15 border-[#C9A356] ring-2 ring-[#C9A356] font-bold shadow-lg' : d.isOpen ? 'bg-[#1C1A14] text-gray-200 border-[#2C261D] hover:border-[#C9A356]' : 'bg-[#12110E] text-gray-600 border-transparent cursor-not-allowed'}`}
                                         >
-                                          <span className="text-xs font-serif font-bold">{d.dayNum}</span>
-                                          <div className="mt-0.5">
-                                            {dayAppts.length > 0 ? (
-                                              <span className={`text-[9px] font-bold px-1 rounded-full ${isSelected ? 'bg-black text-[#C9A356]' : 'bg-[#C9A356]/20 text-[#C9A356]'}`}>
-                                                {dayAppts.length}
+                                          <div className="flex justify-between items-center w-full">
+                                            <span className={`text-xs font-serif font-bold ${isSelected ? 'text-[#C9A356]' : 'text-white'}`}>{d.dayNum}</span>
+                                            {dayAppts.length > 0 && (
+                                              <span className="text-[10px] font-mono text-gray-400">
+                                                {dayAppts.length} {dayAppts.length === 1 ? 'corte' : 'cortes'}
                                               </span>
-                                            ) : (
-                                              <span className="text-[8px] text-gray-500">{d.isOpen ? '•' : 'Folga'}</span>
                                             )}
                                           </div>
+
+                                          {/* DIVISÓRIA E BADGES POR BARBEIRO */}
+                                          {dayAppts.length > 0 ? (
+                                            <div className="w-full space-y-1 mt-1">
+                                              {/* Badges de cada barbeiro presente */}
+                                              <div className="flex flex-wrap gap-1 justify-center">
+                                                {barbers.map(b => {
+                                                  const bCount = dayAppts.filter(a => a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber && a.barber.includes('Luis')) || (b.name.includes('Yago') && a.barber && a.barber.includes('Yago'))).length;
+                                                  if (bCount === 0) return null;
+                                                  const bColor = getBarberColor(b.id || b.barberKey || b.name, barbers);
+                                                  return (
+                                                    <span
+                                                      key={b.id}
+                                                      className="px-1.5 py-0.2 rounded-full text-[9px] font-bold text-white flex items-center gap-0.5 shadow-sm"
+                                                      style={{ backgroundColor: bColor }}
+                                                      title={`${b.name}: ${bCount} agendado(s)`}
+                                                    >
+                                                      <span>{b.name.split(' ')[0]}:</span>
+                                                      <span>{bCount}</span>
+                                                    </span>
+                                                  );
+                                                })}
+                                              </div>
+
+                                              {/* Barra Divisória Proporcional por Cor */}
+                                              <div className="w-full h-1.5 rounded-full overflow-hidden flex bg-black/40">
+                                                {barbers.map(b => {
+                                                  const bCount = dayAppts.filter(a => a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber && a.barber.includes('Luis')) || (b.name.includes('Yago') && a.barber && a.barber.includes('Yago'))).length;
+                                                  if (bCount === 0) return null;
+                                                  const pct = Math.round((bCount / dayAppts.length) * 100);
+                                                  const bColor = getBarberColor(b.id || b.barberKey || b.name, barbers);
+                                                  return (
+                                                    <div
+                                                      key={`bar-${b.id}`}
+                                                      style={{ width: `${pct}%`, backgroundColor: bColor }}
+                                                      className="h-full transition-all"
+                                                      title={`${b.name}: ${pct}% (${bCount})`}
+                                                    />
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <span className="text-[9px] text-gray-500">{d.isOpen ? 'Livre' : 'Fechado'}</span>
+                                          )}
                                         </button>
                                       );
                                     })}
@@ -5385,9 +5659,36 @@
                                       <div className="flex items-center gap-3">
                                         <img src={barber.avatar} alt={barber.name} className="w-12 h-12 rounded-full object-cover border border-[#C9A356]" />
                                         <div>
-                                          <h3 className="font-serif font-bold text-white text-base">{barber.name}</h3>
+                                          <div className="flex items-center gap-2">
+                                            <h3 className="font-serif font-bold text-white text-base">{barber.name}</h3>
+                                            {(() => {
+                                              const bKey = barber.barberKey || (barber.name.includes('Luis') ? 'luis' : 'yago');
+                                              const bSetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][selectedAgendaWeekday]) || { available: true, start: '09:00', end: '19:00' };
+                                              if (!bSetting.available) {
+                                                return (
+                                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 animate-pulse">
+                                                    🔴 Folga / Ausente
+                                                  </span>
+                                                );
+                                              }
+                                              if (bSetting.end && bSetting.end < '19:00') {
+                                                return (
+                                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-800/40">
+                                                    ⚠️ Sai às {bSetting.end}
+                                                  </span>
+                                                );
+                                              }
+                                              return null;
+                                            })()}
+                                          </div>
                                           <div className="text-[11px] text-[#C9A356] font-serif">{barber.chair}</div>
-                                          <div className="text-[10px] text-gray-400">Escala: {sched.startTime || '09:00'} às {sched.endTime || '19:00'}</div>
+                                          <div className="text-[10px] text-gray-400">
+                                            {(() => {
+                                              const bKey = barber.barberKey || (barber.name.includes('Luis') ? 'luis' : 'yago');
+                                              const bSetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][selectedAgendaWeekday]) || { available: true, start: '09:00', end: '19:00' };
+                                              return bSetting.available ? `Jornada de hoje: ${bSetting.start || '09:00'} às ${bSetting.end || '19:00'}` : 'Indisponível para agendamentos hoje';
+                                            })()}
+                                          </div>
                                         </div>
                                       </div>
                                       <span className="text-xs text-gray-400">{barberAppts.length} agendados na data</span>
@@ -5780,39 +6081,93 @@
                           {/* ESCALAS ATIVAS POR BARBEIRO COM BOTAO DE EDICAO */}
                           <div className="space-y-4">
                             <div className="flex justify-between items-center pb-1">
-                              <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356]">Escalas Ativas por Barbeiro</h4>
-                              <span className="text-[10px] text-gray-400">Clique em editar para ajustar</span>
-                            </div>
-                            {barberSchedules.map((bs) => (
-                              <div key={bs.id} className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2F291E] space-y-3 hover:border-[#C9A356]/40 transition-all">
-                                <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                                    <span className="font-serif font-bold text-sm text-white">{bs.name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] bg-[#C9A356]/20 text-[#C9A356] px-2.5 py-0.5 rounded-full font-bold border border-[#C9A356]/30">{bs.workDaysDesc}</span>
-                                    <button
-                                      onClick={() => { setEditingBarberSchedule({ ...bs }); setIsEditBarberScheduleModalOpen(true); }}
-                                      className="p-1.5 bg-[#25211A] hover:bg-[#C9A356] text-gray-300 hover:text-black rounded-lg border border-[#3A3326] transition-all"
-                                      title="Editar jornada deste barbeiro"
-                                    >
-                                      <Icons.Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-xs bg-[#14120E] p-3 rounded-xl border border-[#252119]">
-                                  <div>
-                                    <span className="text-gray-400 block text-[10px] uppercase">Jornada:</span>
-                                    <strong className="text-white">{bs.startTime} às {bs.endTime}</strong>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-400 block text-[10px] uppercase">Intervalo de Almoço:</span>
-                                    <strong className="text-[#C9A356]">{bs.lunchBreak}</strong>
-                                  </div>
-                                </div>
+                              <div>
+                                <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356]">Controle Interativo de Horários por Barbeiro</h4>
+                                <p className="text-[11px] text-gray-400">Escolha os checkpoints por dia. Se precisar faltar ou sair mais cedo, ajuste abaixo e a ferramenta bloqueia novos agendamentos imediatamente.</p>
                               </div>
-                            ))}
+                            </div>
+
+                            {barbers.map((b) => {
+                              const bKey = b.barberKey || (b.name.includes('Luis') ? 'luis' : 'yago');
+                              const bColor = getBarberColor(b.id || bKey, barbers);
+                              const daysList = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+                              return (
+                                <div key={b.id} className="bg-[#1C1A14] p-5 rounded-3xl border border-[#2F291E] space-y-4 shadow-lg hover:border-[#C9A356]/40 transition-all">
+                                  <div className="flex justify-between items-center pb-3 border-b border-[#252019]">
+                                    <div className="flex items-center gap-3">
+                                      <img src={b.avatar} alt={b.name} className="w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: bColor }} onError={(e) => { e.target.onerror = null; e.target.src = 'barbeiro_valverds.jpg'; }} />
+                                      <div>
+                                        <h5 className="font-serif font-bold text-sm text-white">{b.name}</h5>
+                                        <div className="text-[10px] text-gray-400 font-serif">{b.chair} • {b.role}</div>
+                                      </div>
+                                    </div>
+                                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border" style={{ color: bColor, borderColor: bColor }}>
+                                      Escala Integrada em Tempo Real
+                                    </span>
+                                  </div>
+
+                                  {/* GRID INTERATIVA DE CHECKPOINTS POR DIA */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                    {daysList.map((dName) => {
+                                      const daySetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][dName]) || { available: true, start: '09:00', end: '19:00', note: '' };
+                                      const isAvail = Boolean(daySetting.available);
+
+                                      return (
+                                        <div
+                                          key={dName}
+                                          className={`p-3 rounded-2xl border transition-all space-y-2 ${isAvail ? 'bg-[#14120E] border-[#2A2419]' : 'bg-red-950/20 border-red-900/40 text-gray-400'}`}
+                                        >
+                                          <div className="flex justify-between items-center">
+                                            <span className="font-serif font-bold text-xs text-white">{dName}</span>
+                                            {/* CHECKPOINT TOGGLE: VAI / NÃO CONSIGO IR */}
+                                            <button
+                                              onClick={() => handleToggleBarberDayAvailability(bKey, dName)}
+                                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-all ${isAvail ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-700/50' : 'bg-red-900 text-white'}`}
+                                              title="Clique para alternar presença (Trabalha / Não posso ir)"
+                                            >
+                                              {isAvail ? '✓ Vai Trabalhar' : '✗ Não posso ir'}
+                                            </button>
+                                          </div>
+
+                                          {isAvail ? (
+                                            <div className="space-y-1.5 text-xs">
+                                              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                                                <span>Entrada:</span>
+                                                <input
+                                                  type="time"
+                                                  value={daySetting.start || '09:00'}
+                                                  onChange={(e) => handleUpdateBarberDayHours(bKey, dName, 'start', e.target.value)}
+                                                  className="bg-[#0B0B0B] border border-[#2D271E] rounded px-1.5 py-0.5 text-[#C9A356] text-[11px] focus:outline-none"
+                                                />
+                                              </div>
+                                              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                                                <span>Saída:</span>
+                                                <input
+                                                  type="time"
+                                                  value={daySetting.end || '19:00'}
+                                                  onChange={(e) => handleUpdateBarberDayHours(bKey, dName, 'end', e.target.value)}
+                                                  className="bg-[#0B0B0B] border border-[#2D271E] rounded px-1.5 py-0.5 text-[#C9A356] text-[11px] focus:outline-none"
+                                                />
+                                              </div>
+                                              {daySetting.end && daySetting.end < '19:00' && (
+                                                <div className="text-[10px] text-amber-400 font-bold bg-amber-950/40 p-1 rounded text-center">
+                                                  ⚠️ Sai mais cedo às {daySetting.end}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <div className="text-[10px] text-red-400 text-center py-2 italic font-serif">
+                                              Ausente / Folga Bloqueada
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -5824,30 +6179,7 @@
                     {receptionTab === 'admin_master' && (currentUser.role === 'superadmin' || currentUser.role === 'dono') && (
                       <div className="space-y-6">
                         
-                        {/* CABEÇALHO DO CENTRO DE COMANDO */}
-                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#2D271E] shadow-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              <span className="text-[10px] font-serif uppercase tracking-[0.25em] text-[#C9A356] font-bold">
-                                CENTRO DE COMANDO &amp; BUSINESS INTELLIGENCE (BI)
-                              </span>
-                            </div>
-                            <h3 className="font-serif text-2xl font-bold text-white">Auditoria &amp; Gestão Operacional</h3>
-                            <p className="text-xs text-gray-400 mt-0.5">Visão executiva da taxa de ocupação, tentativas de fraude neutralizadas e controle de usuários.</p>
-                          </div>
 
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-3 py-1.5 rounded-full bg-[#1C1A14] border border-[#2F291E] text-[11px] text-gray-300 font-serif flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-green-400"></span>
-                              <span>Neon DB São Paulo (sa-east-1)</span>
-                            </span>
-                            <span className="px-3 py-1.5 rounded-full bg-[#C9A356]/15 border border-[#C9A356]/40 text-[11px] text-[#C9A356] font-serif font-bold flex items-center gap-1.5">
-                              <Icons.Shield className="w-3.5 h-3.5" />
-                              <span>Escudo Anti-Fraude Ativo</span>
-                            </span>
-                          </div>
-                        </div>
 
                         {/* TOP 4 KPIS EXECUTIVOS */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -9805,7 +10137,7 @@
                         onChange={e => setUserFormData({ ...userFormData, role: e.target.value })}
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white focus:outline-none focus:border-[#C9A356]"
                       >
-                        <option value="superadmin">Administrador Master</option>
+                        <option value="superadmin">Administrador</option>
                         <option value="dono">Proprietário (Gestão)</option>
                         <option value="barbeiro">Barbeiro Oficial</option>
                         <option value="recepcao">Recepção &amp; Balcão</option>
