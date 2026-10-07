@@ -321,7 +321,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useMemo, useEffect } = React;
+    const { useState, useMemo, useEffect, useRef, useCallback } = React;
 
     // =========================================================================
     // LOGO OFICIAL
@@ -2149,15 +2149,9 @@
                 };
               }).filter(a => !deletedAppointmentIds.includes(String(a.id)));
 
-              setAppointments(prev => {
-                const combined = [...mapped];
-                prev.forEach(p => {
-                  if (!deletedAppointmentIds.includes(String(p.id)) && !combined.some(c => c.id === p.id || (c.voucherCode && p.voucherCode && c.voucherCode === p.voucherCode))) {
-                    combined.push(p);
-                  }
-                });
-                return combined;
-              });
+              // O Neon Cloud é a fonte definitiva de agendamentos reais
+              setAppointments(mapped);
+              try { localStorage.setItem('valverds_appointments', JSON.stringify(mapped)); } catch(e){}
               setDbSynced(true);
             }
 
@@ -2274,23 +2268,16 @@
               }
             } catch(e) {}
 
-            // 2. Se houver agendamentos locais não salvos na nuvem, grava no Neon
+            // 2. Limpeza preventiva de cache local em sincronia com o banco
             try {
-              const localSaved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
-              if (Array.isArray(localSaved)) {
-                const deletedAppointmentIds = getDeletedAppointmentIds();
-                for (const la of localSaved) {
-                  if (deletedAppointmentIds.includes(String(la.id))) continue;
-                  if (la.id >= 1000 && (!appts || !appts.some(na => Number(na.id) === Number(la.id)))) {
-                    await neonQuery(`
-                      INSERT INTO appointments (id, voucher_code, client_name, phone, cpf, is_cpf_verified, service_name, barber_name, barber_key, day_name, appt_date, appt_time, status, price, total, payment_method, notes, items)
-                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb)
-                      ON CONFLICT (id) DO NOTHING;
-                    `, [
-                      la.id, la.voucherCode || '', la.client, la.phone, la.cpf, !!la.isCpfVerified,
-                      la.service, la.barber, la.barberKey, la.day, la.date, la.time,
-                      la.status || 'confirmado', la.price || 0, la.total || la.price || 0, la.paymentMethod || 'Presencial / PIX', la.notes || '', JSON.stringify(Array.isArray(la.items) ? la.items : [])
-                    ]);
+              if (appts && Array.isArray(appts)) {
+                const cloudIds = new Set(appts.map(a => String(a.id)));
+                const cloudVouchers = new Set(appts.map(a => a.voucher_code).filter(Boolean));
+                const localSaved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
+                if (Array.isArray(localSaved) && localSaved.length > 0) {
+                  const cleaned = localSaved.filter(la => cloudIds.has(String(la.id)) || (la.voucherCode && cloudVouchers.has(la.voucherCode)));
+                  if (cleaned.length !== localSaved.length) {
+                    localStorage.setItem('valverds_appointments', JSON.stringify(cleaned));
                   }
                 }
               }
@@ -3048,11 +3035,29 @@
         }
       };
 
-      const deleteAppointment = (id) => {
-        if (confirm('Deseja realmente excluir este agendamento? Essa ação remove da agenda e libera o horário.')) {
-          rememberDeletedAppointment(id);
-          setAppointments(prev => prev.filter(a => a.id !== id));
-          neonQuery('DELETE FROM appointments WHERE id = $1;', [id]);
+      const deleteAppointment = async (id, voucherCode = '') => {
+        if (!confirm('Deseja realmente excluir este agendamento? Essa ação remove da agenda e libera o horário permanentemente.')) return;
+        
+        const strId = String(id);
+        const numId = Number(id) || id;
+        rememberDeletedAppointment(strId);
+        if (voucherCode) rememberDeletedAppointment(voucherCode);
+
+        // 1. Remove do estado React imediatamente
+        setAppointments(prev => prev.filter(a => String(a.id) !== strId && (!voucherCode || a.voucherCode !== voucherCode)));
+
+        // 2. Remove do LocalStorage síncrono imediatamente para nunca ressuscitar
+        try {
+          const localSaved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
+          const filtered = localSaved.filter(a => String(a.id) !== strId && (!voucherCode || a.voucherCode !== voucherCode));
+          localStorage.setItem('valverds_appointments', JSON.stringify(filtered));
+        } catch(e) {}
+
+        // 3. Exclui de forma definitiva no banco de dados Neon Cloud SQL (por ID e por Voucher)
+        try {
+          await neonQuery('DELETE FROM appointments WHERE id = $1 OR voucher_code = $2;', [numId, voucherCode || '']);
+        } catch(e) {
+          console.warn('Erro ao deletar no Neon:', e);
         }
       };
 
@@ -4899,7 +4904,7 @@
                                       <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
                                         <Icons.Edit className="w-3.5 h-3.5" />
                                       </button>
-                                      <button onClick={() => deleteAppointment(a.id)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
+                                      <button onClick={() => deleteAppointment(a.id, a.voucherCode)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
                                         <Icons.Trash className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
@@ -6287,7 +6292,7 @@
                                                       <span>Editar Agendamento</span>
                                                     </button>
                                                     <button
-                                                      onClick={() => { setActiveActionMenuId(null); deleteAppointment(a.id); }}
+                                                      onClick={() => { setActiveActionMenuId(null); deleteAppointment(a.id, a.voucherCode); }}
                                                       className="w-full text-left px-3 py-1.5 hover:bg-red-950/60 text-red-400 flex items-center gap-2"
                                                     >
                                                       <Icons.Trash className="w-3 h-3" />
@@ -6435,7 +6440,7 @@
                                       <Icons.Edit className="w-3.5 h-3.5" />
                                     </button>
 
-                                    <button onClick={() => deleteAppointment(a.id)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
+                                    <button onClick={() => deleteAppointment(a.id, a.voucherCode)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-red-900 text-gray-400 hover:text-white transition-all" title="Excluir">
                                       <Icons.Trash className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
