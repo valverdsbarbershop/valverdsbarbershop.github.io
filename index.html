@@ -3684,18 +3684,36 @@
 
       const handleConfirmCheckout = () => {
         if (!checkoutAppt) return;
+        // O valor digitado deve valer mesmo que o atendente não tenha clicado
+        // em "Aplicar" antes de confirmar o pagamento.
+        const manualValue = String(manualCheckoutTotal || '').trim();
+        const parsedManualTotal = manualValue === ''
+          ? null
+          : Number(manualValue.replace(',', '.'));
+        if (manualValue !== '' && (!Number.isFinite(parsedManualTotal) || parsedManualTotal < 0)) {
+          alert('Informe um valor manual válido.');
+          return;
+        }
+        const finalTotal = parsedManualTotal === null ? Number(checkoutAppt.total) || 0 : parsedManualTotal;
         const updatedServiceName = checkoutAppt.items.map(item => item.name).join(' + ') || 'Comanda ajustada no checkout';
-        setAppointments(prev => prev.map(a => a.id === checkoutAppt.id ? {
-          ...a,
+        const updatedAppointment = {
+          ...checkoutAppt,
           status: 'concluido',
           items: checkoutAppt.items,
-          total: checkoutAppt.total,
+          total: finalTotal,
           service: updatedServiceName,
           paymentMethod: selectedPayment
-        } : a));
+        };
+        setAppointments(prev => prev.map(a => a.id === checkoutAppt.id ? { ...a, ...updatedAppointment } : a));
+        try {
+          const saved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
+          localStorage.setItem('valverds_appointments', JSON.stringify(saved.map(a =>
+            a.id === checkoutAppt.id ? { ...a, ...updatedAppointment } : a
+          )));
+        } catch(e) {}
         persistAppointmentPatch(checkoutAppt.id, {
           status: 'concluido',
-          total: checkoutAppt.total,
+          total: finalTotal,
           service: updatedServiceName,
           items: checkoutAppt.items,
           paymentMethod: selectedPayment
