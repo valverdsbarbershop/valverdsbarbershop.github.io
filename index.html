@@ -2510,6 +2510,7 @@
       const [checkoutAppt, setCheckoutAppt] = useState(null);
       const [selectedPayment, setSelectedPayment] = useState('PIX');
       const [additionalItemId, setAdditionalItemId] = useState('');
+      const [manualCheckoutTotal, setManualCheckoutTotal] = useState('');
 
       const [isQuickSaleModalOpen, setIsQuickSaleModalOpen] = useState(false);
       const [quickSaleProduct, setQuickSaleProduct] = useState(INITIAL_PRODUCTS[0]);
@@ -3232,9 +3233,12 @@
         if (!appt) return;
         setCheckoutAppt({
           ...appt,
-          items: Array.isArray(appt.items) ? [...appt.items] : (appt.items || (appt.service ? [{ type: 'service', name: appt.service, price: appt.price || 0 }] : []))
+          items: Array.isArray(appt.items) && appt.items.length
+            ? [...appt.items]
+            : (appt.service ? [{ type: 'service', name: appt.service, price: appt.price || 0 }] : [])
         });
         setAdditionalItemId('');
+        setManualCheckoutTotal(String(Number(appt.total || appt.price || 0).toFixed(2)));
         setIsCheckoutModalOpen(true);
       };
 
@@ -8594,6 +8598,38 @@
                     <strong className="font-serif text-3xl font-bold text-green-400">
                       R$ {checkoutAppt.total.toFixed(2).replace('.', ',')}
                     </strong>
+                  </div>
+
+                  <div className="p-3.5 bg-[#17150F] rounded-2xl border border-[#5D4B25]">
+                    <label className="block text-[#DFBD78] font-serif uppercase mb-1.5 font-medium text-[10px]">Valor manual da comanda (R$)</label>
+                    <p className="text-[10px] text-gray-400 mb-2">Use quando o valor final for negociado ou diferente dos itens lançados.</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={manualCheckoutTotal}
+                        onChange={e => setManualCheckoutTotal(e.target.value)}
+                        placeholder="Ex: 50,00"
+                        className="flex-1 px-3 py-2 bg-[#0B0B0B] border border-[#3B3321] rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A356]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const parsedValue = Number(String(manualCheckoutTotal).replace(',', '.'));
+                          if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+                            alert('Informe um valor manual válido.');
+                            return;
+                          }
+                          setCheckoutAppt(prev => ({ ...prev, total: parsedValue }));
+                          setManualCheckoutTotal(parsedValue.toFixed(2));
+                        }}
+                        className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-xl transition-all"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
                   </div>
 
                   <div>
