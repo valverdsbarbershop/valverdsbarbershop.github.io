@@ -973,15 +973,13 @@
     `, [key, JSON.stringify(value)]);
 
     const saveProductToNeon = (product) => neonQuery(`
-      INSERT INTO products (id, name, category, price, cost, stock, min_stock, type, active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO products (id, name, category, price, stock, min_stock, type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name, category = EXCLUDED.category, price = EXCLUDED.price,
-        stock = EXCLUDED.stock, min_stock = EXCLUDED.min_stock, type = EXCLUDED.type,
-        active = EXCLUDED.active;
+        stock = EXCLUDED.stock, min_stock = EXCLUDED.min_stock, type = EXCLUDED.type;
     `, [product.id, product.name, product.category || 'Bar', Number(product.price) || 0,
-      Number(product.cost) || 0, Number(product.stock) || 0, Number(product.minStock) || 0,
-      product.type || '', product.active !== false]);
+      Number(product.stock) || 0, Number(product.minStock) || 0, product.type || '']);
 
 // =========================================================================
     // COMPONENTE PRINCIPAL
@@ -1220,21 +1218,25 @@
           localStorage.setItem('valverds_deleted_appointments', JSON.stringify(Array.from(deleted).slice(-500)));
         } catch(e) {}
       };
-      const persistAppointmentPatch = (id, fields = {}) => {
+      const persistAppointmentPatch = async (id, fields = {}) => {
         if (!id) return;
         const updates = [];
         const params = [];
-        if (fields.client) {
-          params.push(fields.client);
-          updates.push(`client_name = ${params.length}`);
+        if (Object.prototype.hasOwnProperty.call(fields, 'client')) {
+          params.push(fields.client || '');
+          updates.push(`client_name = $${params.length}`);
         }
-        if (fields.phone) {
-          params.push(fields.phone);
-          updates.push(`phone = ${params.length}`);
+        if (Object.prototype.hasOwnProperty.call(fields, 'phone')) {
+          params.push(fields.phone || '');
+          updates.push(`phone = $${params.length}`);
         }
         if (fields.status) {
           params.push(normalizeAppointmentStatus(fields.status));
-          updates.push(`status = ${params.length}`);
+          updates.push(`status = $${params.length}`);
+        }
+        if (Object.prototype.hasOwnProperty.call(fields, 'time')) {
+          params.push(fields.time || '');
+          updates.push(`appt_time = $${params.length}`);
         }
         if (Object.prototype.hasOwnProperty.call(fields, 'notes')) {
           params.push(fields.notes || '');
@@ -1262,7 +1264,7 @@
         }
         if (!updates.length) return;
         params.push(id);
-        neonQuery(`UPDATE appointments SET ${updates.join(', ')} WHERE id = $${params.length};`, params);
+        return neonQuery(`UPDATE appointments SET ${updates.join(', ')} WHERE id = $${params.length};`, params);
       };
 
       // Helper para obter horários livres de um barbeiro em um dia/data específica
@@ -2200,7 +2202,7 @@
             try {
               const [settingsRows, productRows, clientRows, blockedRows, saleRows, leadRows, logRows, barberRows, userRows, scheduleRows] = await Promise.all([
                 neonQuery('SELECT setting_key, setting_value FROM app_settings;'),
-                neonQuery('SELECT * FROM products WHERE active = TRUE ORDER BY name;'),
+                neonQuery('SELECT * FROM products ORDER BY name;'),
                 neonQuery('SELECT * FROM clients ORDER BY created_at DESC;'),
                 neonQuery('SELECT cpf FROM blocked_cpfs;'),
                 neonQuery('SELECT * FROM counter_sales ORDER BY sold_at DESC;'),
@@ -3291,9 +3293,11 @@
           client: normalizedEditedAppt.client,
           phone: normalizedEditedAppt.phone,
           status: normalizedEditedAppt.status,
+          time: normalizedEditedAppt.time,
           notes: normalizedEditedAppt.notes,
           price: normalizedEditedAppt.price,
           total: normalizedEditedAppt.total,
+          service: normalizedEditedAppt.service,
           items: normalizedEditedAppt.items
         });
 
