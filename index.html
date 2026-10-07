@@ -1129,6 +1129,9 @@
         return INITIAL_APPOINTMENTS;
       } catch(e) { return INITIAL_APPOINTMENTS; }
       });
+      // Regra de integridade: uma alteração local fica protegida até o Neon confirmar
+      // a gravação. Assim, uma sincronização posterior não restaura dados antigos.
+      const pendingAppointmentPatchesRef = useRef(new Map());
       const [products, setProducts] = useState(() => {
         try { const s = localStorage.getItem('valverds_products'); return s ? JSON.parse(s) : INITIAL_PRODUCTS; } catch(e) { return INITIAL_PRODUCTS; }
       });
@@ -1218,6 +1221,19 @@
           localStorage.setItem('valverds_deleted_appointments', JSON.stringify(Array.from(deleted).slice(-500)));
         } catch(e) {}
       };
+      const applyAppointmentPatchToLocal = (appointment, fields = {}) => ({
+        ...appointment,
+        ...(Object.prototype.hasOwnProperty.call(fields, 'client') ? { client: fields.client || '' } : {}),
+        ...(Object.prototype.hasOwnProperty.call(fields, 'phone') ? { phone: fields.phone || '' } : {}),
+        ...(fields.status ? { status: normalizeAppointmentStatus(fields.status) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(fields, 'time') ? { time: fields.time || '' } : {}),
+        ...(Object.prototype.hasOwnProperty.call(fields, 'notes') ? { notes: fields.notes || '' } : {}),
+        ...(Object.prototype.hasOwnProperty.call(fields, 'paymentMethod') ? { paymentMethod: fields.paymentMethod || '' } : {}),
+        ...(typeof fields.total === 'number' ? { total: fields.total } : {}),
+        ...(typeof fields.price === 'number' ? { price: fields.price } : {}),
+        ...(Object.prototype.hasOwnProperty.call(fields, 'service') ? { service: fields.service || '' } : {}),
+        ...(Array.isArray(fields.items) ? { items: fields.items } : {})
+      });
       const persistAppointmentPatch = async (id, fields = {}) => {
         if (!id) return;
         const updates = [];
@@ -1263,8 +1279,16 @@
           updates.push(`items = $${params.length}::jsonb`);
         }
         if (!updates.length) return;
+        const patchId = String(id);
+        const patchToken = `${Date.now()}-${Math.random()}`;
+        pendingAppointmentPatchesRef.current.set(patchId, { token: patchToken, fields });
         params.push(id);
-        return neonQuery(`UPDATE appointments SET ${updates.join(', ')} WHERE id = $${params.length};`, params);
+        const result = await neonQuery(`UPDATE appointments SET ${updates.join(', ')} WHERE id = $${params.length};`, params);
+        const currentPatch = pendingAppointmentPatchesRef.current.get(patchId);
+        if (result !== null && currentPatch?.token === patchToken) {
+          pendingAppointmentPatchesRef.current.delete(patchId);
+        }
+        return result;
       };
 
       // Helper para obter horários livres de um barbeiro em um dia/data específica
@@ -2168,7 +2192,7 @@
                     iso = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                   }
                 }
-                return {
+                const cloudAppointment = {
                   id: Number(a.id),
                   voucherCode: a.voucher_code,
                   client: a.client_name,
@@ -2189,9 +2213,13 @@
                   paymentMethod: a.payment_method,
                   notes: a.notes
                 };
+                const pendingPatch = pendingAppointmentPatchesRef.current.get(String(cloudAppointment.id));
+                return pendingPatch
+                  ? applyAppointmentPatchToLocal(cloudAppointment, pendingPatch.fields)
+                  : cloudAppointment;
               }).filter(a => !deletedAppointmentIds.includes(String(a.id)));
 
-              // O Neon Cloud é a fonte definitiva de agendamentos reais
+              // O Neon é a fonte definitiva após confirmar as alterações locais pendentes.
               setAppointments(mapped);
               try { localStorage.setItem('valverds_appointments', JSON.stringify(mapped)); } catch(e){}
               setDbSynced(true);
@@ -2938,12 +2966,26 @@
         return 0;
       };
 
-      // Soma real de comissões por barbeiro (calculada exclusivamente sobre serviços: Luis 60%, Yago 50%, bar a 0%)
+      // A comissão sempre segue a taxa registrada no quadro de cada barbeiro.
+      const getBarberCommissionRate = (appointmentOrBarber = {}) => {
+        const reference = typeof appointmentOrBarber === 'object' ? appointmentOrBarber : { barberKey: appointmentOrBarber };
+        const barberObj = barbers.find(b =>
+          String(b.id) === String(reference.barberKey || reference.barber || reference.id || '') ||
+          String(b.barberKey || '').toLowerCase() === String(reference.barberKey || reference.barber || '').toLowerCase() ||
+          String(b.name || '').toLowerCase() === String(reference.barber || reference.name || '').toLowerCase()
+        );
+        const percentage = Number(barberObj?.commissionRate);
+        return Number.isFinite(percentage) && percentage >= 0 ? percentage / 100 : 0;
+      };
+
+      const commissionRatesSummary = barbers
+        .map(b => `${b.name}: ${Number(b.commissionRate) || 0}%`)
+        .join(' • ');
+
+      // Soma real de comissões por barbeiro, exclusivamente sobre serviços.
       const totalTeamCommissionsToday = useMemo(() => {
         return completedToday.reduce((acc, a) => {
-          const barberObj = barbers.find(b => b.name === a.barber || b.barberKey === a.barber || b.id === a.barber);
-          const defaultRate = (a.barber && a.barber.includes('Luis')) ? 0.60 : 0.50;
-          const rate = barberObj ? (barberObj.commissionRate / 100) : defaultRate;
+          const rate = getBarberCommissionRate(a);
           return acc + (a.price * rate);
         }, 0);
       }, [completedToday, barbers]);
@@ -2986,8 +3028,7 @@
       }, [myAllAppointments]);
       const myCompletedToday = myTodaysAppointments.filter(a => a.status === 'concluido');
       const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + a.price, 0);
-      const myBarberObj = barbers.find(b => b.name === currentUser.name || b.barberKey === currentUser.barberKey);
-      const myCommissionRate = myBarberObj ? (myBarberObj.commissionRate / 100) : (currentUser.name.includes('Luis') ? 0.60 : 0.50);
+      const myCommissionRate = getBarberCommissionRate({ barberKey: currentUser.barberKey, barber: currentUser.name });
       const myCommissionToday = myRevenueToday * myCommissionRate;
 
       // Dados para o Gráfico de Faturamento dos Barbeiros Dia a Dia (totalmente linkado com novos barbeiros)
@@ -5112,7 +5153,7 @@
                                           )}
                                           <StatusBadge status={a.status} />
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-0.5">{a.service} • R$ {a.price.toFixed(2).replace('.', ',')} • Tel: {a.phone || '(21) 97010-0668'}</div>
+                                        <div className="text-xs text-gray-400 mt-0.5">{a.service} • R$ {Number(a.total ?? a.price ?? 0).toFixed(2).replace('.', ',')} • Tel: {a.phone || '(21) 97010-0668'}</div>
                                         {a.notes && <div className="text-[11px] text-gray-500 italic mt-0.5">"{a.notes}"</div>}
                                       </div>
                                     </div>
@@ -5804,7 +5845,7 @@
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2C261C]">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-amber-400 font-bold">2. (-) COMISSÕES EQUIPE</div>
                               <div className="font-serif text-2xl font-bold text-amber-400 mt-1">R$ {totalTeamCommissionsToday.toFixed(2).replace('.', ',')}</div>
-                              <div className="text-[10px] text-gray-400 mt-1">Exclusivo em Serviços: Luis 60%, Yago 50% (Bar 0%)</div>
+                              <div className="text-[10px] text-gray-400 mt-1">Exclusivo em Serviços: {commissionRatesSummary || 'taxas definidas no quadro de barbeiros'} (Bar 0%)</div>
                             </div>
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2C261C]">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-red-400 font-bold">3. (-) CUSTO INSUMOS/BAR</div>
@@ -6447,7 +6488,7 @@
                                               )}
                                               <StatusBadge status={a.status} />
                                             </div>
-                                            <div className="text-gray-400 text-[11px] mt-0.5">{a.service} — R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                            <div className="text-gray-400 text-[11px] mt-0.5">{a.service} — R$ {Number(a.total ?? a.price ?? 0).toFixed(2).replace('.', ',')}</div>
                                             {a.phone && <div className="text-[10px] text-gray-500 mt-0.5">WhatsApp: {a.phone}</div>}
                                           </div>
                                           
@@ -6634,7 +6675,7 @@
                                         )}
                                         <StatusBadge status={a.status} />
                                       </div>
-                                      <div className="text-xs text-gray-300 mt-1">{a.service} — R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                                      <div className="text-xs text-gray-300 mt-1">{a.service} — R$ {Number(a.total ?? a.price ?? 0).toFixed(2).replace('.', ',')}</div>
                                       <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-2">
                                         <span>Tel: {a.phone}</span>
                                         {a.cpf && <span>• CPF: {a.cpf}</span>}
@@ -10903,11 +10944,16 @@
                   const barTotal = counterSales.reduce((acc, s) => acc + (s.total || 0), 0);
                   const grossTotal = srvTotal + barTotal;
 
-                  // Comissões dos barbeiros
-                  const luisCom = completedAppts.filter(a => a.barberKey === 'luis' || (a.barber && a.barber.includes('Luis'))).reduce((acc, a) => acc + a.price * 0.6, 0);
-                  const yagoCom = completedAppts.filter(a => a.barberKey === 'yago' || (a.barber && a.barber.includes('Yago'))).reduce((acc, a) => acc + a.price * 0.5, 0);
-                  const totalCom = luisCom + yagoCom;
-                  const shopNet = grossTotal - yagoCom; // O que fica na barbearia
+                  // Comissões calculadas com a taxa atual de cada barbeiro.
+                  const commissionByBarber = barbers.map(barber => {
+                    const serviceTotal = completedAppts
+                      .filter(a => a.barberKey === barber.barberKey || a.barber === barber.name)
+                      .reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+                    const rate = Number(barber.commissionRate) || 0;
+                    return { name: barber.name, rate, amount: serviceTotal * (rate / 100) };
+                  }).filter(item => item.amount > 0);
+                  const totalCom = commissionByBarber.reduce((acc, item) => acc + item.amount, 0);
+                  const shopNet = grossTotal - totalCom;
 
                   const reportMsg = 
                     `*VALVERD'S BARBERSHOP — FECHAMENTO DE CAIXA*\n` +
@@ -10916,8 +10962,7 @@
                     `🍺 *Bar & Produtos:* R$ ${barTotal.toFixed(2).replace('.', ',')}\n` +
                     `💰 *Faturamento Bruto:* R$ ${grossTotal.toFixed(2).replace('.', ',')}\n\n` +
                     `👥 *Repasse Comissões:*\n` +
-                    `• Luis Valverde (60%): R$ ${luisCom.toFixed(2).replace('.', ',')}\n` +
-                    `• Yago Barber (50%): R$ ${yagoCom.toFixed(2).replace('.', ',')}\n\n` +
+                    `${commissionByBarber.map(item => `• ${item.name} (${item.rate}%): R$ ${item.amount.toFixed(2).replace('.', ',')}`).join('\n') || '• Sem comissões no período'}\n\n` +
                     `💎 *SALDO LÍQUIDO EM CAIXA:* R$ ${shopNet.toFixed(2).replace('.', ',')}\n` +
                     `🔒 Caixa conferido e validado.`;
 
