@@ -1025,7 +1025,15 @@
         const s = localStorage.getItem('valverds_appointments');
         if (s) {
           const parsed = JSON.parse(s);
-          return parsed.filter(a => a.id >= 1000 || typeof a.id === 'string');
+          return parsed
+            .filter(a => a.id >= 1000 || typeof a.id === 'string')
+            .map(a => ({
+              ...a,
+              status: a.status === 'no_show' ? 'faltou' : (a.status || 'confirmado'),
+              price: Number.isFinite(Number(a.price)) ? Number(a.price) : 0,
+              total: Number.isFinite(Number(a.total || a.price)) ? Number(a.total || a.price) : 0,
+              items: Array.isArray(a.items) ? a.items : []
+            }));
         }
         return INITIAL_APPOINTMENTS;
       } catch(e) { return INITIAL_APPOINTMENTS; }
@@ -1078,6 +1086,61 @@
       useEffect(() => { try { localStorage.setItem('valverds_barber_schedules', JSON.stringify(barberSchedules)); } catch(e){} }, [barberSchedules]);
       useEffect(() => { try { localStorage.setItem('valverds_daily_settings', JSON.stringify(dailyBarberSettings)); } catch(e){} }, [dailyBarberSettings]);
 
+      const RELEASED_APPOINTMENT_STATUSES = ['cancelado', 'recusado', 'faltou', 'no_show'];
+      const ACTIVE_APPOINTMENT_STATUSES = ['agendado', 'confirmado', 'confirmou_presenca', 'aguardando', 'em_atendimento'];
+      const normalizeAppointmentStatus = (status) => status === 'no_show' ? 'faltou' : (status || 'confirmado');
+      const isAppointmentReleased = (apptOrStatus) => {
+        const status = typeof apptOrStatus === 'string' ? apptOrStatus : apptOrStatus?.status;
+        return RELEASED_APPOINTMENT_STATUSES.includes(normalizeAppointmentStatus(status));
+      };
+      const isAppointmentActive = (apptOrStatus) => {
+        const status = typeof apptOrStatus === 'string' ? apptOrStatus : apptOrStatus?.status;
+        return ACTIVE_APPOINTMENT_STATUSES.includes(normalizeAppointmentStatus(status));
+      };
+      const appendAppointmentNote = (appt, note) => {
+        if (!note) return appt?.notes || '';
+        const currentNotes = (appt?.notes || '').trim();
+        return currentNotes.includes(note) ? currentNotes : (currentNotes ? `${currentNotes} • ${note}` : note);
+      };
+      const getDeletedAppointmentIds = () => {
+        try {
+          return JSON.parse(localStorage.getItem('valverds_deleted_appointments') || '[]').map(String);
+        } catch(e) {
+          return [];
+        }
+      };
+      const rememberDeletedAppointment = (id) => {
+        try {
+          const deleted = new Set(getDeletedAppointmentIds());
+          deleted.add(String(id));
+          localStorage.setItem('valverds_deleted_appointments', JSON.stringify(Array.from(deleted).slice(-500)));
+        } catch(e) {}
+      };
+      const persistAppointmentPatch = (id, fields = {}) => {
+        if (!id) return;
+        const updates = [];
+        const params = [];
+        if (fields.status) {
+          params.push(normalizeAppointmentStatus(fields.status));
+          updates.push(`status = $${params.length}`);
+        }
+        if (Object.prototype.hasOwnProperty.call(fields, 'notes')) {
+          params.push(fields.notes || '');
+          updates.push(`notes = $${params.length}`);
+        }
+        if (fields.paymentMethod) {
+          params.push(fields.paymentMethod);
+          updates.push(`payment_method = $${params.length}`);
+        }
+        if (typeof fields.total === 'number') {
+          params.push(fields.total);
+          updates.push(`total = $${params.length}`);
+        }
+        if (!updates.length) return;
+        params.push(id);
+        neonQuery(`UPDATE appointments SET ${updates.join(', ')} WHERE id = $${params.length};`, params);
+      };
+
       // Helper para obter horários livres de um barbeiro em um dia/data específica
       const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null) => {
         const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00' };
@@ -1089,7 +1152,7 @@
         const bookedTimes = appointments
           .filter(a => {
             const matchBarber = a.barberKey === barberKey || (barberKey === 'luis' && a.barber && a.barber.includes('Luis')) || (barberKey === 'yago' && a.barber && a.barber.includes('Yago'));
-            const notCancelled = a.status !== 'cancelado' && a.status !== 'recusado';
+            const notCancelled = !isAppointmentReleased(a);
             if (!matchBarber || !notCancelled) return false;
             if (targetDate && (a.isoDate === targetDate || a.date === targetDate)) return true;
             return a.day === dayName;
@@ -1163,7 +1226,7 @@
         // TRAVA 2: LIMITE DE 1 AGENDAMENTO ATIVO POR CPF (ANTI TRAVAMENTO DE GRADE)
         const activeAppt = appointments.find(a => 
           a.cpf === formattedCpf && 
-          (a.status === 'agendado' || a.status === 'confirmado' || a.status === 'aguardando' || a.status === 'em_atendimento')
+          isAppointmentActive(a)
         );
         if (activeAppt) {
           alert(`Você já possui um agendamento ativo com este CPF para ${activeAppt.day} às ${activeAppt.time} com ${activeAppt.barber} (Voucher #${activeAppt.voucherCode}).\n\nPara evitar travamento da agenda, cada cliente pode manter 1 horário ativo por vez. Caso precise remarcar, entre em contato pelo WhatsApp.`);
@@ -1175,7 +1238,7 @@
           a.barberKey === clientBookingFlow.barberKey &&
           ((clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName) &&
           a.time === clientBookingFlow.time &&
-          a.status !== 'cancelado' && a.status !== 'recusado'
+          !isAppointmentReleased(a)
         );
         if (isSlotTaken) {
           alert('Este horário acabou de ser reservado por outro cliente nesta mesma cadeira. Por favor, escolha outro horário livre.');
@@ -1708,11 +1771,17 @@
         if (blockedCpfs.includes(cpfToBlock)) {
           if (confirm(`Deseja desbloquear o CPF ${cpfToBlock} (${clientName})?`)) {
             setBlockedCpfs(prev => prev.filter(c => c !== cpfToBlock));
+            neonQuery('DELETE FROM blocked_cpfs WHERE cpf = $1;', [cpfToBlock]);
             alert('CPF desbloqueado com sucesso!');
           }
         } else {
           if (confirm(`Deseja BLOQUEAR o CPF ${cpfToBlock} (${clientName}) por No-Show ou má-fé? Ele não conseguirá mais agendar horários online.`)) {
             setBlockedCpfs(prev => [...prev, cpfToBlock]);
+            neonQuery(`
+              INSERT INTO blocked_cpfs (cpf, reason, blocked_by)
+              VALUES ($1, $2, $3)
+              ON CONFLICT (cpf) DO NOTHING;
+            `, [cpfToBlock, 'No-show / falta sem aviso prévio', currentUser.name || 'Sistema']);
             alert('CPF adicionado à lista de restrição com sucesso!');
           }
         }
@@ -1801,6 +1870,7 @@
             // 1. Carregar agendamentos reais em nuvem
             const appts = await neonQuery('SELECT * FROM appointments ORDER BY id DESC;');
             if (appts && Array.isArray(appts)) {
+              const deletedAppointmentIds = getDeletedAppointmentIds();
               const mapped = appts.map(a => {
                 let iso = '';
                 if (a.appt_date && a.appt_date.includes('/')) {
@@ -1823,18 +1893,18 @@
                   date: a.appt_date,
                   isoDate: iso || a.appt_date,
                   time: a.appt_time,
-                  status: a.status,
-                  price: Number(a.price),
-                  total: Number(a.total),
+                  status: normalizeAppointmentStatus(a.status),
+                  price: Number.isFinite(Number(a.price)) ? Number(a.price) : 0,
+                  total: Number.isFinite(Number(a.total || a.price)) ? Number(a.total || a.price) : 0,
                   paymentMethod: a.payment_method,
                   notes: a.notes
                 };
-              });
+              }).filter(a => !deletedAppointmentIds.includes(String(a.id)));
 
               setAppointments(prev => {
                 const combined = [...mapped];
                 prev.forEach(p => {
-                  if (!combined.some(c => c.id === p.id || (c.voucherCode && p.voucherCode && c.voucherCode === p.voucherCode))) {
+                  if (!deletedAppointmentIds.includes(String(p.id)) && !combined.some(c => c.id === p.id || (c.voucherCode && p.voucherCode && c.voucherCode === p.voucherCode))) {
                     combined.push(p);
                   }
                 });
@@ -1847,7 +1917,9 @@
             try {
               const localSaved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
               if (Array.isArray(localSaved)) {
+                const deletedAppointmentIds = getDeletedAppointmentIds();
                 for (const la of localSaved) {
+                  if (deletedAppointmentIds.includes(String(la.id))) continue;
                   if (la.id >= 1000 && (!appts || !appts.some(na => Number(na.id) === Number(la.id)))) {
                     await neonQuery(`
                       INSERT INTO appointments (id, voucher_code, client_name, phone, cpf, is_cpf_verified, service_name, barber_name, barber_key, day_name, appt_date, appt_time, status, price, total, payment_method, notes)
@@ -2303,7 +2375,7 @@
 
       const todaysAppointments = useMemo(() => {
         return appointments.filter(a => {
-          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (isAppointmentReleased(a)) return false;
           if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
           if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
           if (a.day && a.day === selectedAgendaWeekday) return true;
@@ -2313,7 +2385,7 @@
 
       const allOnlineAppointments = useMemo(() => {
         return appointments.filter(a => {
-          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (isAppointmentReleased(a)) return false;
           if (agendaSearchQuery.trim()) {
             const q = agendaSearchQuery.toLowerCase();
             const matchClient = (a.client || '').toLowerCase().includes(q);
@@ -2386,7 +2458,7 @@
       const myWeekAppointments = useMemo(() => myAllAppointments.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)), [myAllAppointments, currentWeek]);
       const myTodaysAppointments = useMemo(() => {
         return myAllAppointments.filter(a => {
-          if (a.status === 'cancelado' || a.status === 'recusado') return false;
+          if (isAppointmentReleased(a)) return false;
           if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
           if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
           if (a.day && a.day === selectedAgendaWeekday) return true;
@@ -2395,7 +2467,7 @@
       }, [myAllAppointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
 
       const myOnlineAppointments = useMemo(() => {
-        return myAllAppointments.filter(a => a.status !== 'cancelado' && a.status !== 'recusado');
+        return myAllAppointments.filter(a => !isAppointmentReleased(a));
       }, [myAllAppointments]);
       const myCompletedToday = myTodaysAppointments.filter(a => a.status === 'concluido');
       const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + a.price, 0);
@@ -2407,13 +2479,43 @@
         setProducts(prev => prev.map(item => item.id === id ? { ...item, stock: Math.max(0, item.stock + delta) } : item));
       };
 
-      const changeAppointmentStatus = (id, newStatus) => {
-        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+      const changeAppointmentStatus = (id, newStatus, options = {}) => {
+        const normalizedStatus = normalizeAppointmentStatus(newStatus);
+        const currentAppt = appointments.find(a => a.id === id);
+        const nextNotes = options.note ? appendAppointmentNote(currentAppt, options.note) : currentAppt?.notes;
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: normalizedStatus, notes: nextNotes } : a));
+        persistAppointmentPatch(id, { status: normalizedStatus, notes: nextNotes });
+      };
+
+      const confirmAppointmentAttendance = (id) => {
+        changeAppointmentStatus(id, 'confirmou_presenca', { note: 'Cliente confirmou que vai comparecer' });
+      };
+
+      const markAppointmentRefused = (id) => {
+        if (!confirm('O cliente recusou/cancelou este horário? A data e o horário ficarão disponíveis novamente.')) return;
+        changeAppointmentStatus(id, 'recusado', { note: 'Cliente recusou o horário - slot liberado' });
+      };
+
+      const markAppointmentNoShow = (id) => {
+        const appt = appointments.find(a => a.id === id);
+        if (!confirm('Marcar este cliente como falta? O horário ficará disponível novamente.')) return;
+        const note = 'Cliente faltou / no-show - slot liberado';
+        changeAppointmentStatus(id, 'faltou', { note });
+        if (appt?.cpf && !blockedCpfs.includes(appt.cpf) && confirm(`Bloquear o CPF ${appt.cpf} (${appt.client}) para novos agendamentos online?`)) {
+          setBlockedCpfs(prev => prev.includes(appt.cpf) ? prev : [...prev, appt.cpf]);
+          neonQuery(`
+            INSERT INTO blocked_cpfs (cpf, reason, blocked_by)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (cpf) DO NOTHING;
+          `, [appt.cpf, 'No-show / falta sem aviso prévio', currentUser.name || 'Sistema']);
+        }
       };
 
       const deleteAppointment = (id) => {
-        if (confirm('Deseja realmente cancelar e remover este agendamento?')) {
+        if (confirm('Deseja realmente excluir este agendamento? Essa ação remove da agenda e libera o horário.')) {
+          rememberDeletedAppointment(id);
           setAppointments(prev => prev.filter(a => a.id !== id));
+          neonQuery('DELETE FROM appointments WHERE id = $1;', [id]);
         }
       };
 
@@ -2424,7 +2526,9 @@
 
       const handleSaveEditedAppt = (e) => {
         e.preventDefault();
-        setAppointments(prev => prev.map(a => a.id === editingAppt.id ? editingAppt : a));
+        const normalizedEditedAppt = { ...editingAppt, status: normalizeAppointmentStatus(editingAppt.status) };
+        setAppointments(prev => prev.map(a => a.id === normalizedEditedAppt.id ? normalizedEditedAppt : a));
+        persistAppointmentPatch(normalizedEditedAppt.id, { status: normalizedEditedAppt.status, notes: normalizedEditedAppt.notes });
         setIsEditApptModalOpen(false);
       };
 
@@ -2625,7 +2729,7 @@
           a.barberKey === bookingForm.barberKey &&
           ((bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day) &&
           a.time === bookingForm.time &&
-          a.status !== 'cancelado' && a.status !== 'recusado'
+          !isAppointmentReleased(a)
         );
         if (isManualSlotTaken) {
           alert('Este horário já está ocupado por outro cliente nesta cadeira.');
@@ -2728,6 +2832,11 @@
           total: checkoutAppt.total,
           paymentMethod: selectedPayment
         } : a));
+        persistAppointmentPatch(checkoutAppt.id, {
+          status: 'concluido',
+          total: checkoutAppt.total,
+          paymentMethod: selectedPayment
+        });
         setIsCheckoutModalOpen(false);
         setCheckoutAppt(null);
       };
@@ -2792,26 +2901,33 @@
       };
 
       const StatusBadge = ({ status }) => {
+        const normalizedStatus = normalizeAppointmentStatus(status);
         const styles = {
           concluido: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50',
           em_atendimento: 'bg-blue-950/60 text-blue-300 border-blue-700/50',
+          confirmou_presenca: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50',
+          aguardando: 'bg-amber-950/60 text-amber-300 border-amber-700/50',
           confirmado: 'bg-[#1E1D19] text-[#C9A356] border-[#C9A356]/40',
           agendado: 'bg-[#1E1D19] text-[#C9A356] border-[#C9A356]/40',
           cancelado: 'bg-gray-900/60 text-gray-400 border-gray-700/50',
-          recusado: 'bg-red-950/60 text-red-300 border-red-700/50'
+          recusado: 'bg-red-950/60 text-red-300 border-red-700/50',
+          faltou: 'bg-red-950/60 text-red-300 border-red-700/50'
         };
         const labels = {
           concluido: 'Concluído',
           em_atendimento: 'Em Atendimento',
+          confirmou_presenca: 'Vai Comparecer',
+          aguardando: 'Aguardando',
           confirmado: 'Confirmado',
           agendado: 'Confirmado',
           cancelado: 'Cancelado',
-          recusado: 'Recusado / Faltou'
+          recusado: 'Recusado',
+          faltou: 'Faltou'
         };
         return (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-serif font-bold uppercase tracking-wider border ${styles[status] || styles.confirmado}`}>
-            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${status === 'concluido' ? 'bg-emerald-400' : status === 'em_atendimento' ? 'bg-blue-400' : status === 'cancelado' ? 'bg-gray-400' : status === 'recusado' ? 'bg-red-400' : 'bg-[#C9A356]'}`}></span>
-            {labels[status] || status}
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-serif font-bold uppercase tracking-wider border ${styles[normalizedStatus] || styles.confirmado}`}>
+            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${normalizedStatus === 'concluido' || normalizedStatus === 'confirmou_presenca' ? 'bg-emerald-400' : normalizedStatus === 'em_atendimento' ? 'bg-blue-400' : normalizedStatus === 'cancelado' ? 'bg-gray-400' : isAppointmentReleased(normalizedStatus) ? 'bg-red-400' : 'bg-[#C9A356]'}`}></span>
+            {labels[normalizedStatus] || normalizedStatus}
           </span>
         );
       };
@@ -4042,7 +4158,12 @@
                                         <span>WhatsApp</span>
                                       </a>
 
-                                      {a.status === 'confirmado' && (
+                                      {(a.status === 'confirmado' || a.status === 'agendado') && (
+                                        <button onClick={() => confirmAppointmentAttendance(a.id)} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-serif font-bold transition-all">
+                                          Vai
+                                        </button>
+                                      )}
+                                      {(a.status === 'confirmado' || a.status === 'agendado' || a.status === 'confirmou_presenca' || a.status === 'aguardando') && (
                                         <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-serif font-bold transition-all">
                                           Atender
                                         </button>
@@ -4051,6 +4172,16 @@
                                         <button onClick={() => openCheckout(a)} className="px-3 py-1.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-xl text-xs font-serif font-bold transition-all shadow">
                                           Concluir
                                         </button>
+                                      )}
+                                      {!isAppointmentReleased(a) && a.status !== 'concluido' && (
+                                        <>
+                                          <button onClick={() => markAppointmentRefused(a.id)} className="px-3 py-1.5 bg-[#25221B] hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-serif font-bold transition-all">
+                                            Recusou
+                                          </button>
+                                          <button onClick={() => markAppointmentNoShow(a.id)} className="px-3 py-1.5 bg-red-950/70 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-serif font-bold transition-all">
+                                            Faltou
+                                          </button>
+                                        </>
                                       )}
 
                                       <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
@@ -4263,6 +4394,16 @@
                                       <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
                                         <Icons.Edit className="w-3.5 h-3.5" />
                                       </button>
+                                      {(a.status === 'confirmado' || a.status === 'agendado') && (
+                                        <button onClick={() => confirmAppointmentAttendance(a.id)} className="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-full text-[10px] font-bold uppercase">
+                                          Vai
+                                        </button>
+                                      )}
+                                      {(a.status === 'confirmado' || a.status === 'agendado' || a.status === 'confirmou_presenca') && (
+                                        <button onClick={() => changeAppointmentStatus(a.id, 'aguardando')} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded-full text-[10px] font-bold uppercase">
+                                          Chegou
+                                        </button>
+                                      )}
                                       {a.status === 'aguardando' && (
                                         <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-bold uppercase">
                                           Chamar
@@ -4272,6 +4413,16 @@
                                         <button onClick={() => openCheckout(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase">
                                           Concluir
                                         </button>
+                                      )}
+                                      {!isAppointmentReleased(a) && a.status !== 'concluido' && (
+                                        <>
+                                          <button onClick={() => markAppointmentRefused(a.id)} className="px-3 py-1 bg-[#25221B] hover:bg-red-900 text-red-300 rounded-full text-[10px] font-bold uppercase">
+                                            Recusou
+                                          </button>
+                                          <button onClick={() => markAppointmentNoShow(a.id)} className="px-3 py-1 bg-red-950/70 hover:bg-red-900 text-red-300 rounded-full text-[10px] font-bold uppercase">
+                                            Faltou
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -4498,7 +4649,7 @@
                               <Icons.Calendar className="w-4 h-4 text-[#C9A356]" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-white mt-2">
-                              {appointments.filter(a => a.status === 'agendado' || a.status === 'confirmado').length}
+                              {appointments.filter(a => isAppointmentActive(a) && a.status !== 'em_atendimento').length}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Clientes com horário marcado</div>
                           </div>
@@ -4531,7 +4682,7 @@
                               <Icons.Trash className="w-4 h-4 text-red-400" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-red-400 mt-2">
-                              {appointments.filter(a => a.status === 'cancelado' || a.status === 'recusado').length}
+                              {appointments.filter(a => isAppointmentReleased(a)).length}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Horários liberados p/ encaixe</div>
                           </div>
@@ -4551,7 +4702,7 @@
 
                             <div className="space-y-3.5">
                               {currentWeek.days.map((d) => {
-                                const dayAppts = appointments.filter(a => a.day === d.name && a.status !== 'cancelado' && a.status !== 'recusado' && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                                const dayAppts = appointments.filter(a => a.day === d.name && !isAppointmentReleased(a) && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
                                 const maxCapacity = 20;
                                 const percent = Math.min(100, Math.round((dayAppts.length / maxCapacity) * 100));
                                 return (
@@ -4590,7 +4741,7 @@
 
                             <div className="space-y-4">
                               {barbers.map((b) => {
-                                const bAppts = appointments.filter(a => (a.barber === b.name || a.barberKey === b.barberKey) && a.status !== 'cancelado');
+                                const bAppts = appointments.filter(a => (a.barber === b.name || a.barberKey === b.barberKey) && !isAppointmentReleased(a));
                                 const bCompleted = bAppts.filter(a => a.status === 'concluido');
                                 const bRevenue = bCompleted.reduce((acc, a) => acc + (a.total || a.price), 0);
                                 const bCommission = bRevenue * (b.commissionRate / 100);
@@ -4740,7 +4891,7 @@
                                 </button>
                                 {currentWeek.days.map((d) => {
                                   const isSelected = selectedAgendaDate === d.isoDate || (selectedAgendaWeekday === d.name && selectedAgendaDate === getTodayDateISO());
-                                  const dayCount = appointments.filter(a => (a.isoDate === d.isoDate || a.date === d.date || a.day === d.name) && a.status !== 'cancelado' && a.status !== 'recusado').length;
+                                  const dayCount = appointments.filter(a => (a.isoDate === d.isoDate || a.date === d.date || a.day === d.name) && !isAppointmentReleased(a)).length;
                                   return (
                                     <button
                                       key={`agenda-day-pill-${d.name}`}
@@ -4826,10 +4977,35 @@
                                             >
                                               <Icons.MessageCircle className="w-3.5 h-3.5" />
                                             </a>
-                                            {a.status !== 'concluido' && (
+                                            {(a.status === 'confirmado' || a.status === 'agendado') && (
+                                              <button onClick={() => confirmAppointmentAttendance(a.id)} className="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-full text-[10px] font-bold uppercase transition-all">
+                                                Vai
+                                              </button>
+                                            )}
+                                            {(a.status === 'confirmado' || a.status === 'agendado' || a.status === 'confirmou_presenca') && (
+                                              <button onClick={() => changeAppointmentStatus(a.id, 'aguardando')} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded-full text-[10px] font-bold uppercase transition-all">
+                                                Chegou
+                                              </button>
+                                            )}
+                                            {a.status === 'aguardando' && (
+                                              <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-bold uppercase transition-all">
+                                                Atender
+                                              </button>
+                                            )}
+                                            {a.status !== 'concluido' && !isAppointmentReleased(a) && (
                                               <button onClick={() => openCheckout(a)} className="px-3 py-1 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-[10px] font-bold uppercase transition-all shadow">
                                                 Cobrar
                                               </button>
+                                            )}
+                                            {!isAppointmentReleased(a) && a.status !== 'concluido' && (
+                                              <>
+                                                <button onClick={() => markAppointmentRefused(a.id)} className="px-3 py-1 bg-[#24211A] hover:bg-red-900 text-red-300 rounded-full text-[10px] font-bold uppercase transition-all">
+                                                  Recusou
+                                                </button>
+                                                <button onClick={() => markAppointmentNoShow(a.id)} className="px-3 py-1 bg-red-950/70 hover:bg-red-900 text-red-300 rounded-full text-[10px] font-bold uppercase transition-all">
+                                                  Faltou
+                                                </button>
+                                              </>
                                             )}
                                             <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#24211A] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
                                               <Icons.Edit className="w-3.5 h-3.5" />
@@ -4933,10 +5109,39 @@
                                       <span>WhatsApp</span>
                                     </a>
 
-                                    {a.status !== 'concluido' && (
+                                    {(a.status === 'confirmado' || a.status === 'agendado') && (
+                                      <button onClick={() => confirmAppointmentAttendance(a.id)} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-serif font-bold uppercase transition-all">
+                                        Confirmou que vai
+                                      </button>
+                                    )}
+
+                                    {(a.status === 'confirmado' || a.status === 'agendado' || a.status === 'confirmou_presenca') && (
+                                      <button onClick={() => changeAppointmentStatus(a.id, 'aguardando')} className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-serif font-bold uppercase transition-all">
+                                        Chegou
+                                      </button>
+                                    )}
+
+                                    {a.status === 'aguardando' && (
+                                      <button onClick={() => changeAppointmentStatus(a.id, 'em_atendimento')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-serif font-bold uppercase transition-all">
+                                        Atender
+                                      </button>
+                                    )}
+
+                                    {a.status !== 'concluido' && !isAppointmentReleased(a) && (
                                       <button onClick={() => openCheckout(a)} className="px-3 py-1.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-xl text-xs font-serif font-bold uppercase transition-all shadow">
                                         Cobrar
                                       </button>
+                                    )}
+
+                                    {!isAppointmentReleased(a) && a.status !== 'concluido' && (
+                                      <>
+                                        <button onClick={() => markAppointmentRefused(a.id)} className="px-3 py-1.5 bg-[#25221B] hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-serif font-bold uppercase transition-all">
+                                          Cliente recusou
+                                        </button>
+                                        <button onClick={() => markAppointmentNoShow(a.id)} className="px-3 py-1.5 bg-red-950/70 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-serif font-bold uppercase transition-all">
+                                          Faltou
+                                        </button>
+                                      </>
                                     )}
 
                                     <button onClick={() => openEditAppointment(a)} className="p-1.5 rounded-lg bg-[#25221B] hover:bg-[#C9A356] hover:text-black text-gray-400 transition-all" title="Editar">
@@ -5134,7 +5339,7 @@
                           {/* KPI 1: % OCUPAÇÃO DAS CADEIRAS */}
                           {(() => {
                             const totalWeeklySlots = 132;
-                            const activeApptsCount = appointments.filter(a => a.status !== 'cancelado').length;
+                            const activeApptsCount = appointments.filter(a => !isAppointmentReleased(a)).length;
                             const occupancyRate = totalWeeklySlots > 0 ? ((activeApptsCount / totalWeeklySlots) * 100).toFixed(1) : '0.0';
                             return (
                               <div className="bg-[#161410] p-5 rounded-3xl border border-[#2A2419] shadow-lg flex flex-col justify-between">
@@ -5158,7 +5363,7 @@
 
                           {/* KPI 2: HOLDMAP / DIAS DE MAIOR DEMANDA */}
                           {(() => {
-                            const activeAppts = appointments.filter(a => a.status !== 'cancelado');
+                            const activeAppts = appointments.filter(a => !isAppointmentReleased(a));
                             const dayCounts = {};
                             activeAppts.forEach(a => { dayCounts[a.day] = (dayCounts[a.day] || 0) + 1; });
                             const hasData = activeAppts.length > 0;
@@ -5256,7 +5461,7 @@
                                     <tr key={timeSlot} className="hover:bg-[#1C1A14]">
                                       <td className="py-2.5 px-3 text-left font-serif font-bold text-[#C9A356]">{timeSlot}</td>
                                       {days.map((dayName, idx) => {
-                                        const apptsInSlot = appointments.filter(a => a.day === dayName && a.time && a.time.startsWith(timeSlot.slice(0, 2)) && a.status !== 'cancelado');
+                                        const apptsInSlot = appointments.filter(a => a.day === dayName && a.time && a.time.startsWith(timeSlot.slice(0, 2)) && !isAppointmentReleased(a));
                                         const maxChairs = Math.max(1, barbers.length);
                                         const rate = Math.min(100, Math.round((apptsInSlot.length / maxChairs) * 100));
                                         const isPeak = rate >= 80;
@@ -6371,7 +6576,7 @@
                     ? appointments.filter(a => a.cpf === clientProfile.cpf)
                     : [];
                   
-                  const activeBooking = clientApptsList.find(a => a.status === 'confirmado' || a.status === 'agendado' || a.status === 'em_atendimento') || clientApptsList[0];
+                  const activeBooking = clientApptsList.find(a => isAppointmentActive(a)) || null;
 
                   return (
                   <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-2xl space-y-6">
@@ -6562,7 +6767,7 @@
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {currentWeek.days.map((d) => {
-                        const dayAppts = appointments.filter(a => a.day === d.name && a.status !== 'cancelado' && a.status !== 'recusado' && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                        const dayAppts = appointments.filter(a => a.day === d.name && !isAppointmentReleased(a) && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
                         return (
                           <div key={d.name} className="bg-[#12110E] p-5 rounded-2xl border border-[#262118] space-y-3">
                             <div className="flex justify-between items-center pb-2 border-b border-[#201C16]">
@@ -6972,11 +7177,14 @@
                         className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-xs font-semibold text-white"
                       >
                         <option value="confirmado">Confirmado</option>
+                        <option value="confirmou_presenca">Confirmou que vai</option>
+                        <option value="aguardando">Aguardando no salão</option>
                         <option value="agendado">Confirmado</option>
                         <option value="em_atendimento">Em Atendimento</option>
                         <option value="concluido">Concluído</option>
                         <option value="cancelado">Cancelado</option>
-                        <option value="recusado">Recusado / Faltou</option>
+                        <option value="recusado">Cliente recusou</option>
+                        <option value="faltou">Faltou / No-show</option>
                       </select>
                     </div>
                   </div>
