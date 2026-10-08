@@ -780,6 +780,13 @@
       return `${year}-${month}-${day}`;
     };
 
+    const getCurrentTimeHHMM = () => {
+      const d = new Date();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+
     const formatDateBR = (isoStr) => {
       if (!isoStr) return '';
       if (isoStr.includes('/')) return isoStr;
@@ -1212,20 +1219,20 @@
         } catch(e) {}
         return {
           luis: {
-            Seg: { available: true, start: '09:00', end: '19:00', note: '' },
-            Ter: { available: true, start: '09:00', end: '19:00', note: '' },
-            Qua: { available: true, start: '09:00', end: '19:00', note: '' },
-            Qui: { available: true, start: '09:00', end: '19:00', note: '' },
-            Sex: { available: true, start: '09:00', end: '19:00', note: '' },
-            Sáb: { available: true, start: '09:00', end: '19:00', note: '' },
+            Seg: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+            Ter: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+            Qua: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+            Qui: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+            Sex: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+            Sáb: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
           },
           yago: {
-            Seg: { available: false, start: '10:00', end: '19:00', note: 'Folga Semanal' },
-            Ter: { available: true, start: '10:00', end: '19:00', note: '' },
-            Qua: { available: true, start: '10:00', end: '19:00', note: '' },
-            Qui: { available: true, start: '10:00', end: '19:00', note: '' },
-            Sex: { available: true, start: '10:00', end: '19:00', note: '' },
-            Sáb: { available: true, start: '10:00', end: '19:00', note: '' },
+            Seg: { available: false, start: '10:00', end: '19:00', note: 'Folga Semanal', blockedSlots: [] },
+            Ter: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
+            Qua: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
+            Qui: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
+            Sex: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
+            Sáb: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
           }
         };
       });
@@ -1454,11 +1461,28 @@
 
       // Helper para obter horários livres de um barbeiro em um dia/data específica
       const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null) => {
-        const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00' };
+        const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
         if (!barberSetting.available) return [];
 
-        // Considera todos os 48 horários oficiais de 30 min (00:00 a 23:30)
-        const filteredTimeSlots = ALL_48_TIME_SLOTS.filter(t => t >= barberSetting.start && t < barberSetting.end);
+        const blockedSlots = Array.isArray(barberSetting.blockedSlots) ? barberSetting.blockedSlots : [];
+        const todayIso = getTodayDateISO();
+        const currentTime = getCurrentTimeHHMM();
+
+        // REGRA ANTI HORÁRIO PARA TRÁS:
+        // 1. Se a data for anterior a hoje (ontem ou antes), não há nenhum horário disponível
+        if (targetDate && targetDate < todayIso) return [];
+
+        // 2. Verifica se a data consultada é a data de hoje
+        const isToday = targetDate ? (targetDate === todayIso) : (dayName === getWeekdayFromISO(todayIso));
+
+        // Considera todos os 48 horários oficiais de 30 min (00:00 a 23:30) excluindo os slots bloqueados pelo barbeiro
+        // e excluindo horários que já passaram se for hoje (ex: agora é 16h, não permite agendar 15h)
+        const filteredTimeSlots = ALL_48_TIME_SLOTS.filter(t => {
+          if (t < barberSetting.start || t >= barberSetting.end) return false;
+          if (blockedSlots.includes(t)) return false;
+          if (isToday && t < currentTime) return false;
+          return true;
+        });
 
         const bookedTimes = appointments
           .filter(a => {
@@ -1480,7 +1504,15 @@
         const isAvail = Boolean(dayConfig.available);
         const startTime = dayConfig.start || '09:00';
         const endTime = dayConfig.end || '19:00';
-        const note = dayConfig.note || '';
+        const blockedSlots = Array.isArray(dayConfig.blockedSlots) ? dayConfig.blockedSlots : [];
+        
+        let noteToSave = dayConfig.note || '';
+        if (blockedSlots.length > 0 || (dayConfig.note && dayConfig.note.trim())) {
+          noteToSave = JSON.stringify({
+            note: dayConfig.note || '',
+            blockedSlots: blockedSlots
+          });
+        }
 
         try {
           // 1. Grava no banco SQL Server / Neon na tabela dedicada de escalas diárias
@@ -1493,7 +1525,7 @@
               end_time = EXCLUDED.end_time,
               note = EXCLUDED.note,
               updated_at = CURRENT_TIMESTAMP;
-          `, [id, barberKey, dayName, isAvail, startTime, endTime, note]);
+          `, [id, barberKey, dayName, isAvail, startTime, endTime, noteToSave]);
 
           // 2. Se for dia útil padrão, sincroniza também na tabela barbers
           await neonQuery(`
@@ -1514,7 +1546,7 @@
       const handleToggleBarberDayAvailability = async (barberKey, dayName) => {
         lastScheduleEditTimeRef.current = Date.now();
         const currentB = dailyBarberSettings[barberKey] || {};
-        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '' };
+        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
         const updatedDay = {
           ...currentDay,
           available: !currentDay.available,
@@ -1541,10 +1573,108 @@
       const handleUpdateBarberDayHours = async (barberKey, dayName, field, value) => {
         lastScheduleEditTimeRef.current = Date.now();
         const currentB = dailyBarberSettings[barberKey] || {};
-        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '' };
+        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
         const updatedDay = {
           ...currentDay,
           [field]: value
+        };
+        const updatedDaily = {
+          ...dailyBarberSettings,
+          [barberKey]: {
+            ...currentB,
+            [dayName]: updatedDay
+          }
+        };
+
+        setDailyBarberSettings(updatedDaily);
+        try { localStorage.setItem('valverds_daily_settings', JSON.stringify(updatedDaily)); } catch(e){}
+
+        setSqlScheduleSavedToast(true);
+        setTimeout(() => setSqlScheduleSavedToast(false), 3500);
+
+        await persistBarberScheduleToSQL(barberKey, dayName, updatedDay, updatedDaily);
+      };
+
+      // Handler para o barbeiro bloquear ou liberar um slot de horário específico dia a dia com 1 toque
+      const handleToggleBarberSlotBlock = async (barberKey, dayName, slotTime) => {
+        lastScheduleEditTimeRef.current = Date.now();
+        const currentB = dailyBarberSettings[barberKey] || {};
+        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
+        const currentBlocked = Array.isArray(currentDay.blockedSlots) ? [...currentDay.blockedSlots] : [];
+        
+        let updatedBlocked;
+        if (currentBlocked.includes(slotTime)) {
+          updatedBlocked = currentBlocked.filter(s => s !== slotTime);
+        } else {
+          updatedBlocked = [...currentBlocked, slotTime].sort();
+        }
+
+        const updatedDay = {
+          ...currentDay,
+          blockedSlots: updatedBlocked
+        };
+        const updatedDaily = {
+          ...dailyBarberSettings,
+          [barberKey]: {
+            ...currentB,
+            [dayName]: updatedDay
+          }
+        };
+
+        setDailyBarberSettings(updatedDaily);
+        try { localStorage.setItem('valverds_daily_settings', JSON.stringify(updatedDaily)); } catch(e){}
+
+        setSqlScheduleSavedToast(true);
+        setTimeout(() => setSqlScheduleSavedToast(false), 3500);
+
+        await persistBarberScheduleToSQL(barberKey, dayName, updatedDay, updatedDaily);
+      };
+
+      // Handler para bloqueio rápido em lote de horários (ex: almoço 12h-13h30 ou pausa 16h-16h30)
+      const handleQuickBlockSlots = async (barberKey, dayName, slotsToBlock) => {
+        lastScheduleEditTimeRef.current = Date.now();
+        const currentB = dailyBarberSettings[barberKey] || {};
+        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
+        const currentBlocked = Array.isArray(currentDay.blockedSlots) ? [...currentDay.blockedSlots] : [];
+        
+        // Se todos já estiverem bloqueados, remove; caso contrário, adiciona todos
+        const allPresent = slotsToBlock.every(s => currentBlocked.includes(s));
+        let updatedBlocked;
+        if (allPresent) {
+          updatedBlocked = currentBlocked.filter(s => !slotsToBlock.includes(s));
+        } else {
+          updatedBlocked = Array.from(new Set([...currentBlocked, ...slotsToBlock])).sort();
+        }
+
+        const updatedDay = {
+          ...currentDay,
+          blockedSlots: updatedBlocked
+        };
+        const updatedDaily = {
+          ...dailyBarberSettings,
+          [barberKey]: {
+            ...currentB,
+            [dayName]: updatedDay
+          }
+        };
+
+        setDailyBarberSettings(updatedDaily);
+        try { localStorage.setItem('valverds_daily_settings', JSON.stringify(updatedDaily)); } catch(e){}
+
+        setSqlScheduleSavedToast(true);
+        setTimeout(() => setSqlScheduleSavedToast(false), 3500);
+
+        await persistBarberScheduleToSQL(barberKey, dayName, updatedDay, updatedDaily);
+      };
+
+      // Handler para liberar todos os horários bloqueados de um dia específico
+      const handleClearBlockedSlots = async (barberKey, dayName) => {
+        lastScheduleEditTimeRef.current = Date.now();
+        const currentB = dailyBarberSettings[barberKey] || {};
+        const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
+        const updatedDay = {
+          ...currentDay,
+          blockedSlots: []
         };
         const updatedDaily = {
           ...dailyBarberSettings,
@@ -1610,14 +1740,38 @@
           return;
         }
 
+        // TRAVA 3.1: BLOQUEIO ESPECÍFICO DE HORÁRIO / INTERVALO PELO BARBEIRO
+        const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][clientBookingFlow.dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
+        if (!barberDaySchedule.available) {
+          alert(`O profissional selecionado não está atendendo em ${clientBookingFlow.dayFullName || clientBookingFlow.dayName} (Folga ou Ausência). Por favor, selecione outro dia.`);
+          return;
+        }
+        if (Array.isArray(barberDaySchedule.blockedSlots) && barberDaySchedule.blockedSlots.includes(clientBookingFlow.time)) {
+          alert(`O horário das ${clientBookingFlow.time} foi bloqueado pelo barbeiro para intervalo/pausa neste dia. Por favor, selecione outro horário disponível.`);
+          return;
+        }
+
+        const matchedDay = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
+        const finalIsoDate = clientBookingFlow.selectedDate || matchedDay.isoDate || getTodayDateISO();
+        const todayIsoNow = getTodayDateISO();
+        const currentTimeNow = getCurrentTimeHHMM();
+
+        // TRAVA 3.2: REGRA ANTI HORÁRIO PARA TRÁS (DATA E HORA)
+        if (finalIsoDate < todayIsoNow) {
+          alert('Data Inválida!\n\nNão é permitido agendar para datas passadas (ontem ou anterior). Por favor, selecione a data de hoje ou uma data futura.');
+          return;
+        }
+        if (finalIsoDate === todayIsoNow && clientBookingFlow.time < currentTimeNow) {
+          alert(`Horário Inválido!\n\nNão é permitido agendar para um horário que já passou hoje (${clientBookingFlow.time}).\nHorário atual de Brasília: ${currentTimeNow}.\n\nPor favor, selecione um horário futuro.`);
+          return;
+        }
+
         const selectedSrv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
         const selectedBarber = barbers.find(b => b.barberKey === clientBookingFlow.barberKey) || barbers[0];
         const extrasList = products.filter(p => clientBookingFlow.selectedExtras.includes(p.id));
         const extrasTotal = extrasList.reduce((acc, p) => acc + p.price, 0);
         const totalPrice = selectedSrv.price + extrasTotal;
 
-        const matchedDay = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
-        const finalIsoDate = clientBookingFlow.selectedDate || matchedDay.isoDate || getTodayDateISO();
         const finalDateBR = clientBookingFlow.dateFormatted || formatDateBR(finalIsoDate);
         const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -2413,11 +2567,23 @@
                     const bKey = row.barber_key;
                     const dName = row.day_name;
                     if (!builtDaily[bKey]) builtDaily[bKey] = {};
+                    let parsedNote = row.note || '';
+                    let parsedBlocked = [];
+                    if (row.note && typeof row.note === 'string' && row.note.trim().startsWith('{') && row.note.trim().endsWith('}')) {
+                      try {
+                        const parsedObj = JSON.parse(row.note.trim());
+                        parsedNote = parsedObj.note !== undefined ? parsedObj.note : '';
+                        if (Array.isArray(parsedObj.blockedSlots)) parsedBlocked = parsedObj.blockedSlots;
+                      } catch(e) {
+                        parsedNote = row.note;
+                      }
+                    }
                     builtDaily[bKey][dName] = {
                       available: Boolean(row.is_available),
                       start: row.start_time || '09:00',
                       end: row.end_time || '19:00',
-                      note: row.note || ''
+                      note: parsedNote,
+                      blockedSlots: parsedBlocked
                     };
                   });
                   setDailyBarberSettings(builtDaily);
@@ -3892,6 +4058,19 @@
 
         const matchedDay = currentWeek.days.find(d => d.name === bookingForm.day) || currentWeek.days[0];
         const manualIso = bookingForm.isoDate || matchedDay.isoDate || getTodayDateISO();
+        const todayIsoNow = getTodayDateISO();
+        const currentTimeNow = getCurrentTimeHHMM();
+
+        // REGRA ANTI HORÁRIO PARA TRÁS (DATA E HORA)
+        if (manualIso < todayIsoNow) {
+          alert('Data Inválida!\n\nNão é permitido agendar horários em datas passadas (ontem ou anterior). Por favor, selecione hoje ou uma data futura.');
+          return;
+        }
+        if (manualIso === todayIsoNow && bookingForm.time < currentTimeNow) {
+          alert(`Horário Inválido!\n\nNão é permitido agendar para um horário que já passou hoje (${bookingForm.time}).\nHorário atual de Brasília: ${currentTimeNow}.\n\nPor favor, selecione um horário futuro.`);
+          return;
+        }
+
         const manualDateBR = bookingForm.date || formatDateBR(manualIso);
         const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -5076,10 +5255,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v2.9.7-PROD</span>
+                          <span>v2.9.9-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">08/10/2026 - 11:20</span>
+                        <span className="text-emerald-400 font-bold">08/10/2026 - 16:50</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -5607,8 +5786,10 @@
                                   {TIME_SLOTS_COMPARE.map((slot) => {
                                     const luisAppt = appointments.find(a => a.barber === 'Luis Valverde' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
                                     const yagoAppt = appointments.find(a => a.barber === 'Yago Barber' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
-                                    const isLuisLunch = slot === '12:45' || slot === '13:30';
-                                    const isYagoLunch = slot === '13:30' || slot === '14:15';
+                                    const isLuisBlocked = Array.isArray(dailyBarberSettings.luis?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.luis[selectedWeekDay].blockedSlots.includes(slot);
+                                    const isYagoBlocked = Array.isArray(dailyBarberSettings.yago?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.yago[selectedWeekDay].blockedSlots.includes(slot);
+                                    const canEditLuis = currentUser.role === 'dono' || currentUser.role === 'superadmin' || currentUser.barberKey === 'luis';
+                                    const canEditYago = currentUser.role === 'dono' || currentUser.role === 'superadmin' || currentUser.barberKey === 'yago';
 
                                     return (
                                       <tr key={slot} className="hover:bg-[#1B1914] transition-colors">
@@ -5619,16 +5800,26 @@
                                               <span>●</span>
                                               <span>{currentUser.role === 'barbeiro' ? 'Cadeira 1 Ocupada' : (`Ocupado: ${luisAppt.client} (${luisAppt.service})`)}</span>
                                             </span>
-                                          ) : isLuisLunch ? (
-                                            <span className="inline-flex items-center gap-1.5 bg-[#252016] text-amber-400 px-3 py-1 rounded-full text-[11px]">
-                                              <span>☕</span>
-                                              <span>Intervalo de Almoço</span>
-                                            </span>
+                                          ) : isLuisBlocked ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => canEditLuis && handleToggleBarberSlotBlock('luis', selectedWeekDay, slot)}
+                                              className={`inline-flex items-center gap-1.5 bg-amber-950/70 border border-amber-800/60 text-amber-300 px-3 py-1 rounded-full text-[11px] ${canEditLuis ? 'hover:bg-amber-900 cursor-pointer' : ''}`}
+                                              title={canEditLuis ? 'Clique para desbloquear este horário' : 'Horário bloqueado / intervalo'}
+                                            >
+                                              <span>🔒</span>
+                                              <span>Bloqueado / Intervalo</span>
+                                            </button>
                                           ) : (
-                                            <span className="inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px]">
+                                            <button
+                                              type="button"
+                                              onClick={() => canEditLuis && handleToggleBarberSlotBlock('luis', selectedWeekDay, slot)}
+                                              className={`inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px] ${canEditLuis ? 'hover:bg-green-900/60 cursor-pointer' : ''}`}
+                                              title={canEditLuis ? 'Clique para bloquear este horário' : 'Horário livre'}
+                                            >
                                               <span>✓</span>
-                                              <span>Horário Livre (Cadeira 1)</span>
-                                            </span>
+                                              <span>Livre (Cadeira 1)</span>
+                                            </button>
                                           )}
                                         </td>
                                         <td className="py-3 px-3">
@@ -5641,16 +5832,26 @@
                                               <span>●</span>
                                               <span>Ocupado: <strong>{yagoAppt.client}</strong> ({yagoAppt.service})</span>
                                             </span>
-                                          ) : isYagoLunch ? (
-                                            <span className="inline-flex items-center gap-1.5 bg-[#252016] text-amber-400 px-3 py-1 rounded-full text-[11px]">
-                                              <span>☕</span>
-                                              <span>Intervalo de Almoço</span>
-                                            </span>
+                                          ) : isYagoBlocked ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => canEditYago && handleToggleBarberSlotBlock('yago', selectedWeekDay, slot)}
+                                              className={`inline-flex items-center gap-1.5 bg-amber-950/70 border border-amber-800/60 text-amber-300 px-3 py-1 rounded-full text-[11px] ${canEditYago ? 'hover:bg-amber-900 cursor-pointer' : ''}`}
+                                              title={canEditYago ? 'Clique para desbloquear este horário' : 'Horário bloqueado / intervalo'}
+                                            >
+                                              <span>🔒</span>
+                                              <span>Bloqueado / Intervalo</span>
+                                            </button>
                                           ) : (
-                                            <span className="inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px]">
+                                            <button
+                                              type="button"
+                                              onClick={() => canEditYago && handleToggleBarberSlotBlock('yago', selectedWeekDay, slot)}
+                                              className={`inline-flex items-center gap-1.5 bg-green-950/40 border border-green-800/40 text-green-300 px-3 py-1 rounded-full text-[11px] ${canEditYago ? 'hover:bg-green-900/60 cursor-pointer' : ''}`}
+                                              title={canEditYago ? 'Clique para bloquear este horário' : 'Horário livre'}
+                                            >
                                               <span>✓</span>
-                                              <span>Horário Livre (Cadeira 2)</span>
-                                            </span>
+                                              <span>Livre (Cadeira 2)</span>
+                                            </button>
                                           )}
                                         </td>
                                       </tr>
@@ -5686,6 +5887,64 @@
                                   onChange={(e) => { if (e.target.value) setSelectedAgendaDate(e.target.value); }}
                                   className="px-3 py-1.5 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-[#C9A356] font-serif font-bold focus:outline-none focus:border-[#C9A356]"
                                 />
+                              </div>
+                            </div>
+
+                            {/* BARRA DE SLOTS & BLOQUEIOS RÁPIDOS DO DIA */}
+                            <div className="p-4 bg-[#14120E] rounded-2xl border border-[#2B251A] space-y-2.5">
+                              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Icons.Clock className="w-4 h-4 text-[#C9A356]" />
+                                  <span className="text-xs font-serif font-bold text-white">Grade de Horários de Hoje:</span>
+                                  <span className="text-[10px] text-gray-400">Toque no horário para bloquear ou liberar</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickBlockSlots(currentUser.barberKey || (currentUser.role === 'barbeiro' ? 'yago' : 'luis'), selectedAgendaWeekday, ['12:00', '12:30', '13:00', '13:30'])}
+                                    className="px-2.5 py-1 bg-[#1E1B15] hover:bg-[#2A251D] text-gray-300 hover:text-white rounded-lg border border-[#3A3223] transition-all flex items-center gap-1"
+                                    title="Bloquear intervalo de almoço"
+                                  >
+                                    <span>🍽️</span> <span>Almoço (12h-13h30)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickBlockSlots(currentUser.barberKey || (currentUser.role === 'barbeiro' ? 'yago' : 'luis'), selectedAgendaWeekday, ['16:00', '16:30'])}
+                                    className="px-2.5 py-1 bg-[#1E1B15] hover:bg-[#2A251D] text-gray-300 hover:text-white rounded-lg border border-[#3A3223] transition-all flex items-center gap-1"
+                                    title="Bloquear pausa da tarde"
+                                  >
+                                    <span>☕</span> <span>Pausa (16h-16h30)</span>
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                                {ALL_48_TIME_SLOTS.filter(t => {
+                                  const bKey = currentUser.barberKey || (currentUser.role === 'barbeiro' ? 'yago' : 'luis');
+                                  const setting = dailyBarberSettings[bKey]?.[selectedAgendaWeekday] || { start: '09:00', end: '19:00' };
+                                  return t >= (setting.start || '09:00') && t < (setting.end || '19:00');
+                                }).map(t => {
+                                  const bKey = currentUser.barberKey || (currentUser.role === 'barbeiro' ? 'yago' : 'luis');
+                                  const setting = dailyBarberSettings[bKey]?.[selectedAgendaWeekday] || {};
+                                  const isBlocked = Array.isArray(setting.blockedSlots) && setting.blockedSlots.includes(t);
+                                  const appt = myTodaysAppointments.find(a => a.time === t);
+                                  return (
+                                    <button
+                                      key={`diaria-slot-${t}`}
+                                      type="button"
+                                      onClick={() => handleToggleBarberSlotBlock(bKey, selectedAgendaWeekday, t)}
+                                      title={isBlocked ? `Horário ${t} Bloqueado. Clique para liberar.` : appt ? `Agendado: ${appt.client} (${t})` : `Horário ${t} Livre. Clique para bloquear.`}
+                                      className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold transition-all border ${
+                                        isBlocked
+                                          ? 'bg-amber-950 text-amber-300 border-amber-600 shadow-sm ring-1 ring-amber-600/50'
+                                          : appt
+                                          ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                                          : 'bg-[#0E0D0A] text-gray-300 border-[#2D271E] hover:border-[#C9A356]/60 hover:text-white'
+                                      }`}
+                                    >
+                                      {isBlocked ? `🔒 ${t}` : appt ? `👤 ${t}` : t}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
 
@@ -5846,7 +6105,7 @@
                             { key: 'Sáb', label: 'Sábado' }
                           ].map(day => {
                             const bKey = currentUser.barberKey || 'yago';
-                            const setting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][day.key]) || { available: true, start: '09:00', end: '19:00' };
+                            const setting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][day.key]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
                             const freeSlots = getAvailableSlotsForBarberAndDay(bKey, day.key);
 
                             return (
@@ -5918,6 +6177,100 @@
                                       <div className="text-[11px] text-[#C9A356] bg-[#12110E] p-2 rounded-xl border border-[#262118] flex items-center justify-between">
                                         <span>Horários vagos hoje:</span>
                                         <strong>{freeSlots.length} livres</strong>
+                                      </div>
+
+                                      <div className="mt-3 pt-3 border-t border-[#262118] space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <Icons.Clock className="w-3.5 h-3.5 text-[#C9A356]" />
+                                            <span className="text-[11px] font-serif font-bold text-white">Bloquear Horários / Intervalos:</span>
+                                          </div>
+                                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${setting.blockedSlots?.length ? 'bg-amber-950/80 text-amber-300 border border-amber-700/50' : 'bg-[#12110E] text-gray-400'}`}>
+                                            {setting.blockedSlots?.length || 0} bloqueado(s)
+                                          </span>
+                                        </div>
+
+                                        {/* Atalhos Rápidos com 1 toque */}
+                                        <div className="flex flex-wrap gap-1.5 text-[10px]">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleQuickBlockSlots(bKey, day.key, ['12:00', '12:30', '13:00', '13:30']);
+                                              setScheduleSavedToast(true);
+                                              setTimeout(() => setScheduleSavedToast(false), 3000);
+                                            }}
+                                            className="px-2 py-1 bg-[#15130F] hover:bg-[#252016] border border-[#352D20] text-gray-300 hover:text-white rounded-lg transition-all flex items-center gap-1"
+                                            title="Bloquear intervalo de almoço (12:00 às 13:30)"
+                                          >
+                                            <span>🍽️</span> <span>Almoço (12h-13h30)</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleQuickBlockSlots(bKey, day.key, ['16:00', '16:30']);
+                                              setScheduleSavedToast(true);
+                                              setTimeout(() => setScheduleSavedToast(false), 3000);
+                                            }}
+                                            className="px-2 py-1 bg-[#15130F] hover:bg-[#252016] border border-[#352D20] text-gray-300 hover:text-white rounded-lg transition-all flex items-center gap-1"
+                                            title="Bloquear intervalo da tarde (16:00 às 16:30)"
+                                          >
+                                            <span>☕</span> <span>Pausa (16h-16h30)</span>
+                                          </button>
+                                          {setting.blockedSlots?.length > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                handleClearBlockedSlots(bKey, day.key);
+                                                setScheduleSavedToast(true);
+                                                setTimeout(() => setScheduleSavedToast(false), 3000);
+                                              }}
+                                              className="px-2 py-1 bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 rounded-lg transition-all flex items-center gap-1"
+                                              title="Desbloquear todos os horários deste dia"
+                                            >
+                                              <span>✕</span> <span>Liberar Todos</span>
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        {/* Grade de slots clicáveis */}
+                                        <div className="pt-1">
+                                          <div className="text-[10px] text-gray-400 mb-1.5 flex justify-between items-center">
+                                            <span>Toque no horário para alternar:</span>
+                                            <span className="text-[9px] text-[#C9A356]">🔒 Bloqueado | ✓ Livre</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                                            {ALL_48_TIME_SLOTS.filter(t => t >= (setting.start || '09:00') && t < (setting.end || '19:00')).map(t => {
+                                              const isBlocked = Array.isArray(setting.blockedSlots) && setting.blockedSlots.includes(t);
+                                              const hasAppt = appointments.some(a => 
+                                                (a.barberKey === bKey || (bKey === 'luis' && a.barber?.includes('Luis')) || (bKey === 'yago' && a.barber?.includes('Yago'))) &&
+                                                a.day === day.key &&
+                                                a.time === t &&
+                                                !isAppointmentReleased(a)
+                                              );
+                                              return (
+                                                <button
+                                                  key={`slot-block-${day.key}-${t}`}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    handleToggleBarberSlotBlock(bKey, day.key, t);
+                                                    setScheduleSavedToast(true);
+                                                    setTimeout(() => setScheduleSavedToast(false), 3000);
+                                                  }}
+                                                  title={isBlocked ? `Horário ${t} Bloqueado. Clique para liberar.` : hasAppt ? `Horário ${t} possui agendamento. Clique para bloquear futuros agendamentos neste horário.` : `Horário ${t} Livre. Clique para bloquear.`}
+                                                  className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold transition-all border ${
+                                                    isBlocked
+                                                      ? 'bg-amber-950 text-amber-300 border-amber-600 shadow-sm ring-1 ring-amber-600/50'
+                                                      : hasAppt
+                                                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                                                      : 'bg-[#0E0D0A] text-gray-300 border-[#2D271E] hover:border-[#C9A356]/60 hover:text-white'
+                                                  }`}
+                                                >
+                                                  {isBlocked ? `🔒 ${t}` : hasAppt ? `👤 ${t}` : t}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
                                       </div>
                                     </>
                                   ) : (
@@ -7224,7 +7577,7 @@
                                   {/* GRID INTERATIVA DE CHECKPOINTS POR DIA */}
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                                     {daysList.map((dName) => {
-                                      const daySetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][dName]) || { available: true, start: '09:00', end: '19:00', note: '' };
+                                      const daySetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][dName]) || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
                                       const isAvail = Boolean(daySetting.available);
 
                                       return (
@@ -7269,6 +7622,34 @@
                                                   ⚠️ Sai mais cedo às {daySetting.end}
                                                 </div>
                                               )}
+
+                                              {/* Bloqueios e Pausas do dia */}
+                                              <div className="pt-1.5 border-t border-[#231E16] space-y-1">
+                                                <div className="flex items-center justify-between text-[10px]">
+                                                  <span className="text-gray-400">Pausas / Bloqueios:</span>
+                                                  <span className="text-amber-400 font-mono font-bold">{daySetting.blockedSlots?.length || 0}</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto pr-0.5">
+                                                  {ALL_48_TIME_SLOTS.filter(t => t >= (daySetting.start || '09:00') && t < (daySetting.end || '19:00')).map(t => {
+                                                    const isBlocked = Array.isArray(daySetting.blockedSlots) && daySetting.blockedSlots.includes(t);
+                                                    return (
+                                                      <button
+                                                        key={`owner-slot-${bKey}-${dName}-${t}`}
+                                                        type="button"
+                                                        onClick={() => handleToggleBarberSlotBlock(bKey, dName, t)}
+                                                        title={isBlocked ? `Desbloquear ${t}` : `Bloquear ${t}`}
+                                                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all ${
+                                                          isBlocked
+                                                            ? 'bg-amber-950 text-amber-300 border-amber-600'
+                                                            : 'bg-[#0A0A0A] text-gray-400 border-[#221E17] hover:border-[#C9A356]'
+                                                        }`}
+                                                      >
+                                                        {isBlocked ? `🔒 ${t}` : t}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
                                             </div>
                                           ) : (
                                             <div className="text-[10px] text-red-400 text-center py-2 italic font-serif">
@@ -8716,9 +9097,10 @@
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                             {currentWeek.days.map((d) => {
                               const isSelected = clientBookingFlow.selectedDate === d.isoDate || (clientBookingFlow.dayName === d.name && (!clientBookingFlow.selectedDate || clientBookingFlow.selectedDate === d.isoDate));
-                              const slots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name, d.isoDate);
+                              const isPastDay = d.isoDate < getTodayDateISO();
+                              const slots = isPastDay ? [] : getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name, d.isoDate);
                               const barberDayConf = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][d.name]) || { available: true };
-                              const isAvailable = barberDayConf.available !== false;
+                              const isAvailable = barberDayConf.available !== false && !isPastDay;
                               return (
                                 <button
                                   key={d.name}
@@ -8737,7 +9119,9 @@
                                   <div className="text-[10px] font-serif uppercase font-bold">{d.name} ({d.date})</div>
                                   <div className="text-xl font-bold font-serif my-0.5">{d.num}</div>
                                   <div className="text-[10px] font-bold mt-1">
-                                    {isAvailable ? (
+                                    {isPastDay ? (
+                                      <span className="text-gray-500">Encerrado</span>
+                                    ) : isAvailable ? (
                                       <span className={isSelected ? 'text-black/80 font-bold' : 'text-[#C9A356]'}>
                                         {slots.length} {slots.length === 1 ? 'vaga' : 'vagas'}
                                       </span>
@@ -8801,9 +9185,23 @@
                                       onChange={e => setClientBookingFlow(prev => ({ ...prev, time: e.target.value }))}
                                       className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
                                     >
-                                      {ALL_48_TIME_SLOTS.map(t => (
-                                        <option key={`slot-48-${t}`} value={t}>{t}</option>
-                                      ))}
+                                      {ALL_48_TIME_SLOTS.map(t => {
+                                        const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || {};
+                                        const isBlocked = Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(t);
+                                        const isToday = (clientBookingFlow.selectedDate || getTodayDateISO()) === getTodayDateISO();
+                                        const isPastTime = isToday && t < getCurrentTimeHHMM();
+                                        const isBooked = appointments.some(a => 
+                                          (a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'))) &&
+                                          ((clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName) &&
+                                          a.time === t &&
+                                          !isAppointmentReleased(a)
+                                        );
+                                        return (
+                                          <option key={`slot-48-${t}`} value={t} disabled={isBlocked || isBooked || isPastTime}>
+                                            {t} {isPastTime ? '(⏰ Horário já passou)' : isBlocked ? '(🔒 Bloqueado / Intervalo)' : isBooked ? '(Ocupado)' : ''}
+                                          </option>
+                                        );
+                                      })}
                                     </select>
                                   </div>
                                   <div>
@@ -9524,6 +9922,7 @@
                       <label className="block text-gray-400 font-serif uppercase mb-1">Data:</label>
                       <input
                         type="date"
+                        min={getTodayDateISO()}
                         value={bookingForm.isoDate || getTodayDateISO()}
                         onChange={e => {
                           const val = e.target.value;
@@ -9553,9 +9952,15 @@
                         onChange={e => setBookingForm({ ...bookingForm, time: e.target.value })}
                         className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none"
                       >
-                        {TIME_SLOTS_COMPARE.map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
+                        {TIME_SLOTS_COMPARE.map(t => {
+                          const isToday = (bookingForm.isoDate || getTodayDateISO()) === getTodayDateISO();
+                          const isPastTime = isToday && t < getCurrentTimeHHMM();
+                          return (
+                            <option key={t} value={t} disabled={isPastTime}>
+                              {t} {isPastTime ? '(⏰ Horário já passou)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
