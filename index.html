@@ -664,18 +664,14 @@
     ];
 
     const INITIAL_PRODUCTS = [
-      { id: 'p1', name: 'Cerveja Heineken Long Neck (330ml)', category: 'Bar', price: 14, cost: 6, stock: 48, minStock: 15, type: 'Cerveja' },
-      { id: 'p2', name: 'Cerveja IPA Artesanal Valverd\'s (500ml)', category: 'Bar', price: 20, cost: 9, stock: 24, minStock: 10, type: 'Cerveja Especial' },
-      { id: 'p3', name: 'Cerveja Corona Extra com Limão', category: 'Bar', price: 15, cost: 7, stock: 32, minStock: 12, type: 'Cerveja' },
-      { id: 'p4', name: 'Dose Whisky Single Malt (12 Anos)', category: 'Bar', price: 25, cost: 10, stock: 12, minStock: 5, type: 'Destilado' },
-      { id: 'p5', name: 'Refrigerante Coca-Cola / Guaraná (Lata)', category: 'Bar', price: 7, cost: 3, stock: 36, minStock: 15, type: 'Refrigerante' },
-      { id: 'p6', name: 'Café Espresso Gourmet Especial', category: 'Bar', price: 0, cost: 2, stock: 999, minStock: 50, type: 'Cortesia' },
-      { id: 'p7', name: 'Água Mineral com ou sem Gás', category: 'Bar', price: 0, cost: 1.5, stock: 999, minStock: 50, type: 'Cortesia' },
-      { id: 'p8', name: 'Pomada Red Nek Efeito Seco (150g)', category: 'Produtos', price: 45, cost: 20, stock: 18, minStock: 8, type: 'Alta Fixação' },
-      { id: 'p9', name: 'Fox For Men Creme Modelador Teia (80g)', category: 'Produtos', price: 40, cost: 18, stock: 15, minStock: 6, type: 'Efeito Teia' },
-      { id: 'p10', name: 'Fox For Men Pasta Premium Fixação Extra (80g)', category: 'Produtos', price: 42, cost: 19, stock: 12, minStock: 6, type: 'Extra Forte' },
-      { id: 'p11', name: 'Tônico Dom Pelo - Minoxidil 5% (120ml)', category: 'Produtos', price: 65, cost: 30, stock: 10, minStock: 4, type: 'Crescimento' },
-      { id: 'p12', name: 'Tônico Capilar & Barba Fox For Men', category: 'Produtos', price: 38, cost: 16, stock: 14, minStock: 5, type: 'Tratamento' }
+      { id: 'p1', name: 'Heineken', category: 'Bar', price: 12, cost: 6, stock: 48, minStock: 12, type: 'Cerveja' },
+      { id: 'p2', name: 'Red bul', category: 'Bar', price: 13, cost: 7, stock: 24, minStock: 6, type: 'Energético' },
+      { id: 'p3', name: 'Coca', category: 'Bar', price: 5, cost: 2.5, stock: 36, minStock: 10, type: 'Refrigerante' },
+      { id: 'p4', name: 'Coca zero', category: 'Bar', price: 5, cost: 2.5, stock: 36, minStock: 10, type: 'Refrigerante' },
+      { id: 'p5', name: 'Guaraviton', category: 'Bar', price: 7, cost: 3.5, stock: 24, minStock: 6, type: 'Bebida' },
+      { id: 'p6', name: 'Guaravita', category: 'Bar', price: 3, cost: 1.5, stock: 48, minStock: 12, type: 'Bebida' },
+      { id: 'p7', name: 'Pomada', category: 'Produtos', price: 30, cost: 15, stock: 20, minStock: 5, type: 'Finalizador' },
+      { id: 'p8', name: 'Dom pelo', category: 'Produtos', price: 90, cost: 45, stock: 15, minStock: 3, type: 'Tratamento' }
     ];
 
     const BRAND_PILLARS = [
@@ -1040,10 +1036,19 @@
 
       const [receptionTab, setReceptionTab] = useState('macro'); // 'macro' | 'agenda' | 'equipe' | 'produtos' | 'servicos' | 'escalas'
       const [barberTab, setBarberTab] = useState('minha_agenda');
-      const [barberCalendarMode, setBarberCalendarMode] = useState('semanal');
-      const [selectedWeekIndex, setSelectedWeekIndex] = useState(8);
-      const [selectedWeekDay, setSelectedWeekDay] = useState('Seg');
-      const [selectedMonthDay, setSelectedMonthDay] = useState(8);
+      const liveTodayWeekIndex = useMemo(() => {
+        const today = getTodayDateISO();
+        const idx = WEEKS_DATA.findIndex(w => w.days.some(d => d.isoDate === today));
+        return idx !== -1 ? idx : 8;
+      }, []);
+
+      const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
+        const today = getTodayDateISO();
+        const idx = WEEKS_DATA.findIndex(w => w.days.some(d => d.isoDate === today));
+        return idx !== -1 ? idx : 8;
+      });
+      const [selectedWeekDay, setSelectedWeekDay] = useState(() => getWeekdayFromISO(getTodayDateISO()));
+      const [selectedMonthDay, setSelectedMonthDay] = useState(() => new Date().getDate());
 
       const [clientTab, setClientTab] = useState('agendar'); // 'agendar' | 'meu_corte' | 'calendario_geral' | 'produtos_bar' | 'fidelidade'
       const [activeActionMenuId, setActiveActionMenuId] = useState(null);
@@ -1133,7 +1138,17 @@
       // a gravação. Assim, uma sincronização posterior não restaura dados antigos.
       const pendingAppointmentPatchesRef = useRef(new Map());
       const [products, setProducts] = useState(() => {
-        try { const s = localStorage.getItem('valverds_products'); return s ? JSON.parse(s) : INITIAL_PRODUCTS; } catch(e) { return INITIAL_PRODUCTS; }
+        try {
+          const s = localStorage.getItem('valverds_products');
+          if (s) {
+            const parsed = JSON.parse(s);
+            const validIds = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
+            if (Array.isArray(parsed) && parsed.length === 8 && parsed.every(p => validIds.includes(p.id))) {
+              return parsed;
+            }
+          }
+        } catch(e) {}
+        return INITIAL_PRODUCTS;
       });
       const [services, setServices] = useState(() => {
         try { const s = localStorage.getItem('valverds_services'); return s ? JSON.parse(s) : INITIAL_SERVICES; } catch(e) { return INITIAL_SERVICES; }
@@ -2811,6 +2826,38 @@
       const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => getTodayDateISO());
       const [agendaViewMode, setAgendaViewMode] = useState('dia'); // 'dia' ou 'todos_online'
       const [agendaSearchQuery, setAgendaSearchQuery] = useState('');
+
+      // Sincronização contínua e dinâmica que mantém o calendário sempre "andando" no dia exato de hoje ao abrir
+      useEffect(() => {
+        const syncDynamicDateWithToday = () => {
+          const liveTodayIso = getTodayDateISO();
+          const liveWDay = getWeekdayFromISO(liveTodayIso);
+          const liveMDay = new Date().getDate();
+          const liveWeekIdx = WEEKS_DATA.findIndex(w => w.days.some(d => d.isoDate === liveTodayIso));
+
+          setSelectedAgendaDate(liveTodayIso);
+          setSelectedWeekDay(liveWDay);
+          setSelectedMonthDay(liveMDay);
+          if (liveWeekIdx !== -1) {
+            setSelectedWeekIndex(liveWeekIdx);
+          }
+        };
+
+        syncDynamicDateWithToday();
+
+        window.addEventListener('focus', syncDynamicDateWithToday);
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            syncDynamicDateWithToday();
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+          window.removeEventListener('focus', syncDynamicDateWithToday);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+      }, []);
 
       const [counterSales, setCounterSales] = useState(() => {
         try {
@@ -4761,10 +4808,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v2.9.0-PROD</span>
+                          <span>v2.9.2-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">07/10/2026 - 16:45</span>
+                        <span className="text-emerald-400 font-bold">08/10/2026 - 08:35</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -5667,9 +5714,9 @@
                               >
                                 <Icons.ChevronRight className="w-4 h-4" />
                               </button>
-                              {selectedWeekIndex !== 8 && (
+                              {selectedWeekIndex !== liveTodayWeekIndex && (
                                 <button
-                                  onClick={() => setSelectedWeekIndex(8)}
+                                  onClick={() => setSelectedWeekIndex(liveTodayWeekIndex)}
                                   className="ml-1 text-[10px] text-gray-400 hover:text-white uppercase font-bold underline"
                                   title="Voltar para a Semana Atual"
                                 >
@@ -6271,9 +6318,15 @@
                                       <span className="hidden sm:inline">Próxima</span>
                                       <Icons.ChevronRight className="w-3.5 h-3.5" />
                                     </button>
-                                    {selectedWeekIndex !== 1 && (
+                                    {selectedWeekIndex !== liveTodayWeekIndex && (
                                       <button
-                                        onClick={() => { setSelectedWeekIndex(1); setSelectedAgendaDate(getTodayDateISO()); }}
+                                        onClick={() => {
+                                          setSelectedWeekIndex(liveTodayWeekIndex);
+                                          const t = getTodayDateISO();
+                                          setSelectedAgendaDate(t);
+                                          setSelectedWeekDay(getWeekdayFromISO(t));
+                                          setSelectedMonthDay(new Date().getDate());
+                                        }}
                                         className="px-2.5 py-1 bg-[#C9A356]/15 hover:bg-[#C9A356] text-[#C9A356] hover:text-black text-xs font-serif font-bold rounded-lg border border-[#C9A356]/40 transition-all"
                                       >
                                         Semana Atual
@@ -6288,7 +6341,13 @@
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                     <button
-                                      onClick={() => setSelectedAgendaDate(getTodayDateISO())}
+                                      onClick={() => {
+                                        const t = getTodayDateISO();
+                                        setSelectedAgendaDate(t);
+                                        setSelectedWeekDay(getWeekdayFromISO(t));
+                                        setSelectedMonthDay(new Date().getDate());
+                                        if (liveTodayWeekIndex !== -1) setSelectedWeekIndex(liveTodayWeekIndex);
+                                      }}
                                       className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${selectedAgendaDate === getTodayDateISO() ? 'bg-[#C9A356] text-black shadow' : 'bg-[#1C1A14] text-[#C9A356] border border-[#C9A356]/30 hover:border-[#C9A356]'}`}
                                     >
                                       Hoje
@@ -6299,7 +6358,11 @@
                                       return (
                                         <button
                                           key={`agenda-day-pill-${d.name}`}
-                                          onClick={() => setSelectedAgendaDate(d.isoDate)}
+                                          onClick={() => {
+                                            setSelectedAgendaDate(d.isoDate);
+                                            setSelectedWeekDay(d.name);
+                                            setSelectedMonthDay(d.num);
+                                          }}
                                           className={`px-3 py-1.5 rounded-xl text-xs font-serif transition-all flex items-center gap-1.5 ${isSelected ? 'bg-[#C9A356] text-black font-bold shadow' : 'bg-[#1A1813] text-gray-300 border border-[#2B251B] hover:border-[#C9A356]/40'}`}
                                         >
                                           <span>{d.name} {d.date}</span>
@@ -6318,7 +6381,17 @@
                                     <input
                                       type="date"
                                       value={selectedAgendaDate}
-                                      onChange={(e) => { if (e.target.value) setSelectedAgendaDate(e.target.value); }}
+                                      onChange={(e) => {
+                                        if (e.target.value) {
+                                          const val = e.target.value;
+                                          setSelectedAgendaDate(val);
+                                          setSelectedWeekDay(getWeekdayFromISO(val));
+                                          const parts = val.split('-').map(Number);
+                                          setSelectedMonthDay(parts[2]);
+                                          const wIdx = WEEKS_DATA.findIndex(w => w.days.some(d => d.isoDate === val));
+                                          if (wIdx !== -1) setSelectedWeekIndex(wIdx);
+                                        }
+                                      }}
                                       className="px-3 py-1.5 bg-[#0C0B09] border border-[#C9A356]/50 rounded-xl text-xs text-[#C9A356] font-serif font-bold focus:outline-none focus:ring-1 focus:ring-[#C9A356]"
                                     />
                                   </div>
