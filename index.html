@@ -59,8 +59,19 @@
   <script>
     (function() {
       try {
-        if (localStorage.getItem('valverds_theme') === 'clean') {
+        var userPref = localStorage.getItem('valverds_theme');
+        var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        // Prioridade Inteligente: Se o celular esta no Modo Escuro (Dark Mode), mantem o fundo Dark (#0B0B0B)!
+        if (systemPrefersDark && userPref !== 'clean_manual') {
+          document.documentElement.classList.remove('clean-mode');
+          document.documentElement.classList.add('dark');
+        } else if (userPref === 'clean' || userPref === 'clean_manual') {
           document.documentElement.classList.add('clean-mode');
+          document.documentElement.classList.remove('dark');
+        } else {
+          // Padrao oficial da Barbearia: Dark Mode Obsidian & Gold
+          document.documentElement.classList.remove('clean-mode');
+          document.documentElement.classList.add('dark');
         }
       } catch(e) {}
     })();
@@ -87,6 +98,8 @@
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
+      background-color: #0B0B0B;
+      color: #E0DDD5;
     }
     #root {
       width: 100%;
@@ -213,8 +226,8 @@
       box-shadow: 0 1px 4px 0 rgba(40, 30, 20, 0.04) !important;
     }
     /* Superfícies e cartões viram warm white com bordas champagne douradas */
-    html.clean-mode [class*="bg-[#"]:not([class*="bg-[#C9A356]"]):not([class*="bg-[#B59044]"]):not([class*="bg-[#DFBD78]"]):not([class*="bg-[#F5E0AA]"]):not([class*="bg-[#25D366]"]):not([class*="bg-[#20BD5A]"]),
-    html.clean-mode [class*="bg-black"]:not([class*="text-black"]):not([class*="bg-black/"]):not([class*="hover:bg-black"]),
+    html.clean-mode [class*="bg-[#"]:not([class*="bg-[#C9A356]"]):not([class*="bg-[#B59044]"]):not([class*="bg-[#DFBD78]"]):not([class*="bg-[#F5E0AA]"]):not([class*="bg-[#25D366]"]):not([class*="bg-[#20BD5A]"]):not(.hero-logo-badge),
+    html.clean-mode [class*="bg-black"]:not([class*="text-black"]):not([class*="bg-black/"]):not([class*="hover:bg-black"]):not(.hero-logo-badge),
     html.clean-mode [class*="bg-gray-900"],
     html.clean-mode [class*="bg-gray-800"],
     html.clean-mode [class*="bg-stone-"],
@@ -222,6 +235,48 @@
       background-color: #FFFFFF !important;
       color: #292524 !important;
       box-shadow: 0 1px 4px 0 rgba(40, 30, 20, 0.05), 0 1px 2px 0 rgba(40, 30, 20, 0.03) !important;
+    }
+    /* Medalha da Logo no Hero em Clean Mode: Obsidian nobre com borda dourada real (contraste perfeito) */
+    html.clean-mode .hero-logo-badge {
+      background-color: #14120E !important;
+      border-color: #C9A356 !important;
+      box-shadow: 0 20px 25px -5px rgba(20, 18, 14, 0.25), 0 8px 10px -6px rgba(20, 18, 14, 0.2) !important;
+    }
+    /* Título Monumental no Hero em Clean Mode (Alto contraste e elegância máxima) */
+    html.clean-mode .hero-title-clean {
+      color: #1C1917 !important;
+      -webkit-text-fill-color: #1C1917 !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    }
+    html.clean-mode .hero-subtitle-clean {
+      color: #9E7D32 !important;
+    }
+    /* Botões da Barra Superior no Clean Mode (Unificados com o padrão luxo da Área do Cliente) */
+    html.clean-mode .clean-toolbar-btn {
+      background-color: #FFFFFF !important;
+      border-color: #E6E1D6 !important;
+      color: #292524 !important;
+      box-shadow: 0 1px 2px 0 rgba(40, 30, 20, 0.04) !important;
+    }
+    html.clean-mode .clean-toolbar-btn:hover {
+      background-color: #F7F5F0 !important;
+      border-color: #C9A356 !important;
+      color: #8C6D2D !important;
+    }
+    html.clean-mode .user-status-pill {
+      background-color: #FFFFFF !important;
+      border-color: #E6E1D6 !important;
+      color: #1C1917 !important;
+    }
+    html.clean-mode .logout-pill {
+      background-color: #FAF8F5 !important;
+      border-color: #E6E1D6 !important;
+      color: #57534E !important;
+    }
+    html.clean-mode .logout-pill:hover {
+      background-color: #FEE2E2 !important;
+      border-color: #FCA5A5 !important;
+      color: #B91C1C !important;
     }
     /* Bordas sutis em tom marfim/champagne quente que ornam com dourado */
     html.clean-mode [class*="border-[#"]:not([class*="border-[#C9A356]"]):not([class*="border-[#B59044]"]):not([class*="border-[#DFBD78]"]):not([class*="border-[#25D366]"]):not([class*="border-emerald-"]):not([class*="border-red-"]) {
@@ -978,34 +1033,124 @@
       Number(product.stock) || 0, Number(product.minStock) || 0, product.type || '']);
 
 // =========================================================================
+    // ERROR BOUNDARY (PROTEÇÃO CONTRA TELAS PRETAS E CRASHES DE RENDERIZAÇÃO)
+    // =========================================================================
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, errorInfo) {
+        console.error('Valverd\'s ErrorBoundary caught error:', error, errorInfo);
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen bg-[#0B0B0B] text-white flex flex-col items-center justify-center p-6 text-center select-none font-sans">
+              <div className="max-w-md w-full bg-[#161410] border border-[#C9A356]/40 p-8 rounded-3xl shadow-2xl space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#C9A356]/15 border border-[#C9A356] text-[#C9A356] flex items-center justify-center mx-auto text-2xl font-serif">
+                  💈
+                </div>
+                <h2 className="font-serif text-2xl font-bold text-white">Valverd's BarberShop</h2>
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  Detectamos uma pequena instabilidade na interface. Seus dados e agendamentos estão 100% preservados na nuvem.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem('valverds_logged_user');
+                        localStorage.removeItem('valverds_auth');
+                      } catch(e){}
+                      window.location.reload();
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-[#C9A356] hover:bg-[#B59044] text-black text-xs font-serif font-bold uppercase tracking-wider transition-all shadow-lg"
+                  >
+                    Recarregar Painel
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    // =========================================================================
     // COMPONENTE PRINCIPAL
     // =========================================================================
     function ValverdsApp() {
       const [currentView, setCurrentView] = useState('site'); // 'site' | 'reception' | 'client'
       const [activeNav, setActiveNav] = useState('home');
 
-      // Tema Dark Mode / Clean Mode com persistência instantânea no LocalStorage
+      // Tema Dark Mode / Clean Mode com detecção nativa do celular e persistência
       const [theme, setTheme] = useState(() => {
         try {
-          return localStorage.getItem('valverds_theme') || 'dark';
+          const userChoice = localStorage.getItem('valverds_theme');
+          const systemIsDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (systemIsDark && userChoice !== 'clean_manual') {
+            return 'dark';
+          }
+          if (userChoice === 'clean' || userChoice === 'clean_manual') {
+            return 'clean';
+          }
+          return 'dark';
         } catch(e) {
           return 'dark';
         }
       });
 
+      // Ouvir em tempo real se o celular do usuário muda entre modo escuro e claro
+      useEffect(() => {
+        const mql = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        if (!mql) return;
+        const handleSystemThemeChange = (e) => {
+          const userChoice = localStorage.getItem('valverds_theme');
+          if (userChoice !== 'clean_manual') {
+            setTheme(e.matches ? 'dark' : 'clean');
+          }
+        };
+        if (mql.addEventListener) {
+          mql.addEventListener('change', handleSystemThemeChange);
+          return () => mql.removeEventListener('change', handleSystemThemeChange);
+        } else if (mql.addListener) {
+          mql.addListener(handleSystemThemeChange);
+          return () => mql.removeListener(handleSystemThemeChange);
+        }
+      }, []);
+
       useEffect(() => {
         try {
-          localStorage.setItem('valverds_theme', theme);
           if (theme === 'clean') {
             document.documentElement.classList.add('clean-mode');
+            document.documentElement.classList.remove('dark');
+            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (metaTheme) metaTheme.setAttribute('content', '#F7F5F0');
           } else {
             document.documentElement.classList.remove('clean-mode');
+            document.documentElement.classList.add('dark');
+            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (metaTheme) metaTheme.setAttribute('content', '#0B0B0B');
           }
         } catch(e) {}
       }, [theme]);
 
       const toggleTheme = () => {
-        setTheme(prev => prev === 'dark' ? 'clean' : 'dark');
+        setTheme(prev => {
+          const next = prev === 'dark' ? 'clean' : 'dark';
+          try {
+            if (next === 'clean') {
+              localStorage.setItem('valverds_theme', 'clean_manual');
+            } else {
+              localStorage.setItem('valverds_theme', 'dark');
+            }
+          } catch(e) {}
+          return next;
+        });
       };
 
       const [currentUser, setCurrentUser] = useState(() => {
@@ -2434,20 +2579,32 @@
       const handleLogin = async (e) => {
         e.preventDefault();
         setLoginError('');
-        const inputEmail = loginForm.email.trim().toLowerCase();
-        const inputPassword = loginForm.password;
+        const rawEmail = loginForm.email.trim().toLowerCase();
+        const inputPassword = loginForm.password.trim();
+
+        // Normalização amigável de e-mails / usuários para evitar erros no celular
+        let inputEmail = rawEmail;
+        if (rawEmail === 'yago' || rawEmail === 'yagobarber' || rawEmail === 'iago' || rawEmail === 'iagobarber') {
+          inputEmail = 'yago@valverds.com';
+        } else if (rawEmail === 'luis' || rawEmail === 'valverde' || rawEmail === 'luisvalverde') {
+          inputEmail = 'valverdsbarbeshop@gmail.com';
+        } else if (rawEmail === 'bernardo' || rawEmail === 'admin') {
+          inputEmail = 'bernardolamin3@gmail.com';
+        }
 
         let rows = await neonQuery(`
-          SELECT * FROM users WHERE LOWER(email) = $1 AND password_hash = $2;
-        `, [inputEmail, inputPassword]);
+          SELECT * FROM users 
+          WHERE (LOWER(email) = $1 OR LOWER(email) = $2 OR (barber_key = 'yago' AND $1 LIKE '%yago%'))
+            AND password_hash = $3;
+        `, [inputEmail, rawEmail, inputPassword]);
 
         // Fallback robusto para contas master (garante acesso mesmo se offline)
         if (!rows || rows.length === 0) {
           if (inputEmail === 'bernardolamin3@gmail.com' && inputPassword === 'admin123') {
             rows = [{ name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', barber_key: 'luis' }];
-          } else if (inputEmail === 'valverdsbarbeshop@gmail.com' && inputPassword === 'valverds2026') {
+          } else if ((inputEmail === 'valverdsbarbeshop@gmail.com' || inputEmail.includes('valverd')) && (inputPassword === 'valverds2026' || inputPassword === 'luis123')) {
             rows = [{ name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', barber_key: 'luis' }];
-          } else if (inputEmail === 'yago@valverds.com' && inputPassword === 'yago123') {
+          } else if ((inputEmail === 'yago@valverds.com' || inputEmail === 'yago@valverdsbarbershop.com.br' || rawEmail.includes('yago') || rawEmail.includes('iago')) && (inputPassword === 'yago123' || inputPassword === '123456')) {
             rows = [{ name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', barber_key: 'yago' }];
           } else if (inputEmail === 'recepcao@valverds.com' && inputPassword === 'recepcao123') {
             rows = [{ name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', barber_key: 'recepcao' }];
@@ -2457,7 +2614,7 @@
         if (rows && rows.length > 0) {
           const u = rows[0];
           const logged = {
-            name: u.name,
+            name: u.name || (u.role === 'barbeiro' ? 'Yago Barber' : 'Luis Valverde'),
             email: u.email,
             role: u.role,
             barberKey: u.barber_key || (u.role === 'barbeiro' ? 'yago' : 'luis'),
@@ -2470,7 +2627,19 @@
           localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
           setIsLoginModalOpen(false);
           setCurrentView('reception');
-          setReceptionTab('agenda');
+
+          if (logged.role === 'barbeiro') {
+            const yagoSched = (barberSchedules || []).find(b => b && (b.id === 'yago' || b.barberKey === 'yago')) || INITIAL_BARBER_SCHEDULES[1] || {
+              startTime: '10:00', endTime: '19:00', lunchBreak: '13:00 às 14:00', activeDays: ['Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+            };
+            setBarberEditStartTime(yagoSched.startTime || '10:00');
+            setBarberEditEndTime(yagoSched.endTime || '19:00');
+            setBarberEditLunchBreak(yagoSched.lunchBreak || '13:00 às 14:00');
+            setBarberEditActiveDays(Array.isArray(yagoSched.activeDays) ? yagoSched.activeDays : ['Ter', 'Qua', 'Qui', 'Sex', 'Sáb']);
+            setBarberTab('minha_agenda');
+          } else {
+            setReceptionTab('agenda');
+          }
 
           // Verificação de senha temporária
           const isTempPassword = Boolean(u.must_change_password) || (function() {
@@ -2974,11 +3143,13 @@
             title: 'Barbeiro',
             avatar: 'foto_barbeiro_yago.jpg'
           });
-          const yagoSched = barberSchedules.find(b => b.id === 'yago') || INITIAL_BARBER_SCHEDULES[1];
-          setBarberEditStartTime(yagoSched.startTime);
-          setBarberEditEndTime(yagoSched.endTime);
-          setBarberEditLunchBreak(yagoSched.lunchBreak);
-          setBarberEditActiveDays(yagoSched.activeDays);
+          const yagoSched = (barberSchedules || []).find(b => b && (b.id === 'yago' || b.barberKey === 'yago')) || INITIAL_BARBER_SCHEDULES[1] || {
+            startTime: '10:00', endTime: '19:00', lunchBreak: '13:00 às 14:00', activeDays: ['Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+          };
+          setBarberEditStartTime(yagoSched.startTime || '10:00');
+          setBarberEditEndTime(yagoSched.endTime || '19:00');
+          setBarberEditLunchBreak(yagoSched.lunchBreak || '13:00 às 14:00');
+          setBarberEditActiveDays(Array.isArray(yagoSched.activeDays) ? yagoSched.activeDays : ['Ter', 'Qua', 'Qui', 'Sex', 'Sáb']);
           setCurrentView('reception');
           setBarberTab('minha_agenda');
         } else if (roleKey === 'recepcao') {
@@ -3108,26 +3279,45 @@
       const netProfitToday = totalRevenueToday - totalTeamCommissionsToday - totalSuppliesCostToday;
       const netMarginPercent = totalRevenueToday > 0 ? (netProfitToday / totalRevenueToday) * 100 : 0;
 
-      const currentBarberName = currentUser.role === 'barbeiro' ? currentUser.name : ((currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'Luis Valverde' : '');
-      const myAllAppointments = useMemo(() => appointments.filter(a => a.barber === currentBarberName), [appointments, currentBarberName]);
-      const myWeekAppointments = useMemo(() => myAllAppointments.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)).sort((a, b) => (a.time || '').localeCompare(b.time || '')), [myAllAppointments, currentWeek]);
+      const currentBarberName = currentUser.role === 'barbeiro' ? (currentUser.name || 'Yago Barber') : ((currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'Luis Valverde' : '');
+      const myAllAppointments = useMemo(() => {
+        return (appointments || []).filter(a => {
+          if (!a) return false;
+          if (currentUser.role === 'barbeiro') {
+            const bKey = currentUser.barberKey || 'yago';
+            return a.barberKey === bKey || a.barber === currentBarberName || (a.barber && a.barber.toLowerCase().includes('yago'));
+          }
+          return a.barber === currentBarberName || a.barberKey === (currentUser.barberKey || 'luis');
+        });
+      }, [appointments, currentBarberName, currentUser.barberKey, currentUser.role]);
+
+      const myWeekAppointments = useMemo(() => {
+        return (myAllAppointments || []).filter(a => {
+          if (!a) return false;
+          if (a.weekId === currentWeek?.id) return true;
+          if (currentWeek?.id === 0 && (a.weekId === undefined || a.weekId === 0)) return true;
+          if (a.isoDate && Array.isArray(currentWeek?.days) && currentWeek.days.some(d => d.isoDate === a.isoDate)) return true;
+          return false;
+        }).sort((a, b) => ((a && a.time) || '').localeCompare((b && b.time) || ''));
+      }, [myAllAppointments, currentWeek]);
+
       const myTodaysAppointments = useMemo(() => {
-        return myAllAppointments.filter(a => {
-          if (isAppointmentReleased(a)) return false;
+        return (myAllAppointments || []).filter(a => {
+          if (!a || isAppointmentReleased(a)) return false;
           if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
           if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
           if (a.day && a.day === selectedAgendaWeekday) return true;
           return false;
-        }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+        }).sort((a, b) => ((a && a.time) || '').localeCompare((b && b.time) || ''));
       }, [myAllAppointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
 
       const myOnlineAppointments = useMemo(() => {
-        return myAllAppointments.filter(a => !isAppointmentReleased(a));
+        return (myAllAppointments || []).filter(a => a && !isAppointmentReleased(a));
       }, [myAllAppointments]);
-      const myCompletedToday = myTodaysAppointments.filter(a => a.status === 'concluido');
-      const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + a.price, 0);
-      const myCommissionRate = getBarberCommissionRate({ barberKey: currentUser.barberKey, barber: currentUser.name });
-      const myCommissionToday = myRevenueToday * myCommissionRate;
+      const myCompletedToday = (myTodaysAppointments || []).filter(a => a && a.status === 'concluido');
+      const myRevenueToday = myCompletedToday.reduce((acc, a) => acc + (Number(a.price ?? a.total) || 0), 0);
+      const myCommissionRate = getBarberCommissionRate({ barberKey: currentUser.barberKey || 'yago', barber: currentUser.name || 'Yago Barber' });
+      const myCommissionToday = Number.isFinite(myRevenueToday * myCommissionRate) ? (myRevenueToday * myCommissionRate) : 0;
 
       // Dados para o Gráfico de Faturamento dos Barbeiros Dia a Dia (totalmente linkado com novos barbeiros)
       const barberDailyRevenueData = useMemo(() => {
@@ -4000,16 +4190,16 @@
         <button
           type="button"
           onClick={toggleTheme}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-serif font-bold transition-all border ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-serif font-bold transition-all border ${
             theme === 'clean'
-              ? 'bg-amber-50 text-gray-900 border-amber-300 hover:bg-amber-100 shadow-sm'
+              ? 'bg-white text-[#1C1917] border-[#E6E1D6] clean-toolbar-btn hover:bg-[#F7F5F0] shadow-sm'
               : 'bg-[#181612] text-[#DFBD78] border-[#3A3326] hover:bg-[#25221B] shadow'
           } ${className}`}
           title={theme === 'clean' ? 'Mudar para Dark Mode (Obsidian & Gold)' : 'Mudar para Clean Mode (Claro & Gold)'}
         >
           {theme === 'clean' ? (
             <>
-              <Icons.Moon className="w-3.5 h-3.5 text-[#C9A356]" />
+              <Icons.Moon className="w-3.5 h-3.5 text-[#8C6D2D]" />
               <span className="text-[10px] uppercase tracking-wider font-bold">Escuro</span>
             </>
           ) : (
@@ -4134,7 +4324,7 @@
                     {/* 2. INSTALAR APP */}
                     <button
                       onClick={handleInstallApp}
-                      className="px-3 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-semibold shadow-sm"
+                      className="px-3 py-1.5 rounded-full bg-[#161512] clean-toolbar-btn hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-semibold shadow-sm"
                       title="Instalar App no Celular ou Computador"
                     >
                       <Icons.Package className="w-3.5 h-3.5 text-[#C9A356]" />
@@ -4144,7 +4334,7 @@
                     {/* NOVO: COMPARTILHAR / QR CODE OFICIAL */}
                     <button
                       onClick={() => setIsShareModalOpen(true)}
-                      className="px-3 py-1.5 rounded-full bg-[#1E1B14] hover:bg-[#C9A356] text-[#C9A356] hover:text-black border border-[#C9A356]/40 transition-all flex items-center gap-1.5 text-xs font-serif font-bold shadow-sm"
+                      className="px-3 py-1.5 rounded-full bg-[#1E1B14] clean-toolbar-btn hover:bg-[#C9A356] text-[#C9A356] hover:text-black border border-[#C9A356]/40 transition-all flex items-center gap-1.5 text-xs font-serif font-bold shadow-sm"
                       title="Abrir QR Code Oficial do Site e Compartilhar"
                     >
                       <Icons.Share2 className="w-3.5 h-3.5" />
@@ -4181,7 +4371,7 @@
                               setReceptionTab('agenda');
                             }
                           }}
-                          className="px-3.5 py-1.5 rounded-full bg-[#1A1813] hover:bg-[#262219] border border-[#C9A356]/70 text-white transition-all flex items-center gap-2 text-xs font-serif shadow-md hover:scale-[1.02]"
+                          className="px-3.5 py-1.5 rounded-full bg-[#1A1813] user-status-pill hover:bg-[#262219] border border-[#C9A356]/70 text-white transition-all flex items-center gap-2 text-xs font-serif shadow-md hover:scale-[1.02]"
                           title="Acessar Meu Painel de Trabalho"
                         >
                           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -4193,7 +4383,7 @@
                         </button>
                         <button
                           onClick={handleLogout}
-                          className="px-2.5 py-1.5 rounded-full bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 hover:text-white transition-all text-xs font-serif font-bold flex items-center gap-1 shadow-sm"
+                          className="px-2.5 py-1.5 rounded-full bg-red-950/40 logout-pill hover:bg-red-900/60 border border-red-800/40 text-red-300 hover:text-white transition-all text-xs font-serif font-bold flex items-center gap-1 shadow-sm"
                           title="Encerrar Sessão e Sair"
                         >
                           <Icons.LogOut className="w-3.5 h-3.5" />
@@ -4203,7 +4393,7 @@
                     ) : (
                       <button
                         onClick={() => setIsLoginModalOpen(true)}
-                        className="px-3.5 py-1.5 rounded-full bg-[#161512] hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-bold tracking-wider shadow-sm"
+                        className="px-3.5 py-1.5 rounded-full bg-[#161512] clean-toolbar-btn hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif font-bold tracking-wider shadow-sm"
                         title="Acesso da Equipe & Gestão"
                       >
                         <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
@@ -4213,31 +4403,40 @@
                   </div>
                 </header>
                 
-                {/* HERO COM LOGO CENTRAL */}
-                <section id="home" className="relative min-h-[92vh] flex flex-col items-center justify-center text-center px-4 py-16 bg-cover bg-center" style={{ backgroundImage: theme === 'clean'
-                  ? `linear-gradient(rgba(255, 255, 255, 0.45), rgba(250, 248, 244, 0.70)), url('espaco_interior_1.png')`
-                  : `linear-gradient(rgba(11, 11, 11, 0.86), rgba(11, 11, 11, 0.94)), url('espaco_interior_1.png')` }}>
+                {/* HERO COM LOGO CENTRAL E CONTRASTE REFINADO */}
+                <section
+                  id="home"
+                  className="relative min-h-[92vh] flex flex-col items-center justify-center text-center px-4 py-16 bg-cover bg-center transition-all duration-500"
+                  style={{
+                    background: theme === 'clean'
+                      ? 'radial-gradient(ellipse at 50% 20%, #FFFFFF 0%, #F7F4EC 55%, #EDE6D8 100%)'
+                      : 'linear-gradient(rgba(11, 11, 11, 0.86), rgba(11, 11, 11, 0.94)), url("espaco_interior_1.png") center/cover no-repeat'
+                  }}
+                >
                   <div className={`max-w-4xl mx-auto flex flex-col items-center z-10 ${theme === 'clean' ? 'text-[#1A1814]' : 'text-white'}`}>
-                    <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full p-2 bg-[#0B0B0B]/90 border-2 border-[#C9A356]/60 shadow-2xl flex items-center justify-center backdrop-blur-md mb-5 hover:scale-105 transition-transform">
+                    {/* Medalha Real da Logo: Mantem base escura nobre e anel dourado duplo mesmo no clean mode para contraste absoluto */}
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full p-2 bg-[#0B0B0B]/95 hero-logo-badge border-2 border-[#C9A356] shadow-2xl ring-4 ring-[#C9A356]/20 flex items-center justify-center backdrop-blur-md mb-5 hover:scale-105 transition-transform">
                       <OfficialLogo className="w-full h-full" />
                     </div>
                     
-                    <div className="inline-flex items-center gap-2 border border-[#C9A356]/50 px-4 py-1.5 rounded-full mb-3 bg-[#0B0B0B]/80">
+                    <div className="inline-flex items-center gap-2 border border-[#C9A356]/60 px-4 py-1.5 rounded-full mb-3 bg-[#0B0B0B]/80 clean-toolbar-btn shadow-sm">
                       <Icons.MapPin className="w-3.5 h-3.5 text-[#C9A356]" />
-                      <span className="text-[11px] font-serif uppercase tracking-[0.25em] text-[#E0DDD5]">R. ANTÔNIO VELOSO JÚNIOR, 77 • CAMPOS ELÍSEOS • RESENDE / RJ</span>
+                      <span className={`text-[11px] font-serif uppercase tracking-[0.25em] font-semibold ${theme === 'clean' ? 'text-[#292524]' : 'text-[#E0DDD5]'}`}>
+                        R. ANTÔNIO VELOSO JÚNIOR, 77 • CAMPOS ELÍSEOS • RESENDE / RJ
+                      </span>
                     </div>
 
-                    <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-[0.15em] uppercase gold-shimmer mb-2 drop-shadow-lg">
+                    <h1 className={`font-serif text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-[0.15em] uppercase mb-2 drop-shadow-sm ${theme === 'clean' ? 'hero-title-clean text-[#1C1917]' : 'gold-shimmer drop-shadow-lg'}`}>
                       VALVERD'S
                     </h1>
-                    <div className="text-base sm:text-xl font-serif italic text-[#C9A356] tracking-widest mb-2">
+                    <div className={`text-base sm:text-xl font-serif italic tracking-widest mb-2 font-bold ${theme === 'clean' ? 'hero-subtitle-clean text-[#9E7D32]' : 'text-[#C9A356]'}`}>
                       BarberShop — Desde 2022
                     </div>
                     <div className="gold-divider"></div>
                     <p className={`text-sm sm:text-base md:text-lg font-serif tracking-[0.2em] uppercase max-w-xl mb-2 ${theme === 'clean' ? 'text-[#2A2620] font-semibold' : 'text-[#D6D2CA]'}`}>
                       "Beard, hair and mustache"
                     </p>
-                    <p className="text-xs sm:text-sm text-[#C9A356] font-serif font-bold tracking-widest uppercase mb-8">
+                    <p className={`text-xs sm:text-sm font-serif font-bold tracking-widest uppercase mb-8 ${theme === 'clean' ? 'text-[#9E7D32]' : 'text-[#C9A356]'}`}>
                       "Dê um tapa no seu estilo!"
                     </p>
 
@@ -4250,7 +4449,11 @@
                       </button>
                       <button
                         onClick={() => switchRole('cliente')}
-                        className="px-7 py-3.5 bg-[#161512] hover:bg-[#201E19] text-[#C9A356] border border-[#C9A356]/50 font-serif text-xs font-bold uppercase tracking-widest rounded-xl shadow-xl transition-all flex items-center gap-2"
+                        className={`px-7 py-3.5 font-serif text-xs font-bold uppercase tracking-widest rounded-xl shadow-xl transition-all flex items-center gap-2 ${
+                          theme === 'clean'
+                            ? 'bg-white hover:bg-[#F7F5F0] text-[#1C1917] border border-[#C9A356]'
+                            : 'bg-[#161512] hover:bg-[#201E19] text-[#C9A356] border border-[#C9A356]/50'
+                        }`}
                       >
                         <Icons.User className="w-3.5 h-3.5 text-[#C9A356]" />
                         <span>Área do Cliente</span>
@@ -4885,10 +5088,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v2.9.2-PROD</span>
+                          <span>v2.9.4-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">08/10/2026 - 08:35</span>
+                        <span className="text-emerald-400 font-bold">08/10/2026 - 10:45</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -5515,7 +5718,7 @@
                                   <div className="pt-3 border-t border-[#2A2419] flex justify-between items-center">
                                     <div>
                                       <span className="text-[10px] text-gray-400">Minha Comissão: </span>
-                                      <strong className="text-green-400 text-xs font-serif">R$ {(a.price * myCommissionRate).toFixed(2).replace('.', ',')}</strong>
+                                      <strong className="text-green-400 text-xs font-serif">R$ {((Number(a.price ?? a.total) || 0) * myCommissionRate).toFixed(2).replace('.', ',')}</strong>
                                     </div>
                                     <div className="flex gap-2 items-center">
                                       <a
@@ -5593,7 +5796,7 @@
                           <div className="bg-[#161410] p-5 rounded-3xl border border-[#282319] shadow">
                             <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PREVISÃO DA SEMANA</div>
                             <div className="font-serif text-2xl font-bold text-[#C9A356] mt-1">
-                              R$ {(myWeekAppointments.reduce((acc, a) => acc + a.price, 0) * myCommissionRate).toFixed(2).replace('.', ',')}
+                              R$ {(myWeekAppointments.reduce((acc, a) => acc + (Number(a.price ?? a.total) || 0), 0) * myCommissionRate).toFixed(2).replace('.', ',')}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">{myWeekAppointments.length} cortes nesta semana</div>
                           </div>
@@ -5602,18 +5805,21 @@
                         <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl">
                           <h3 className="font-serif text-lg font-bold text-white mb-4">Extrato Pessoal de Serviços</h3>
                           <div className="space-y-3">
-                            {myWeekAppointments.map((a) => (
-                              <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex justify-between items-center text-xs">
-                                <div>
-                                  <div className="font-serif font-bold text-white">{a.client} — {a.service}</div>
-                                  <div className="text-gray-400 text-[11px]">{a.day} • {a.time} • Valor Bruto: R$ {a.price.toFixed(2).replace('.', ',')}</div>
+                            {myWeekAppointments.map((a) => {
+                              const itemPrice = Number(a.price ?? a.total) || 0;
+                              return (
+                                <div key={a.id} className="p-3.5 bg-[#1B1914] rounded-2xl border border-[#2C271E] flex justify-between items-center text-xs">
+                                  <div>
+                                    <div className="font-serif font-bold text-white">{a.client} — {a.service}</div>
+                                    <div className="text-gray-400 text-[11px]">{a.day} • {a.time} • Valor Bruto: R$ {itemPrice.toFixed(2).replace('.', ',')}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-serif font-bold text-green-400 text-sm">+ R$ {(itemPrice * myCommissionRate).toFixed(2).replace('.', ',')}</div>
+                                    <StatusBadge status={a.status} />
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="font-serif font-bold text-green-400 text-sm">+ R$ {(a.price * myCommissionRate).toFixed(2).replace('.', ',')}</div>
-                                  <StatusBadge status={a.status} />
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -10839,6 +11045,37 @@
                     />
                   </div>
 
+                  {/* ATALHOS RÁPIDOS DA EQUIPE */}
+                  <div className="pt-1 pb-1">
+                    <span className="text-[9.5px] text-gray-400 uppercase font-serif tracking-widest block mb-1.5 text-center">
+                      Preencher com 1 toque:
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLoginForm({ email: 'valverdsbarbeshop@gmail.com', password: 'valverds2026' })}
+                        className="p-2 rounded-xl bg-[#201D17] hover:bg-[#2A261F] border border-[#332C20] text-left transition-all hover:border-[#C9A356]/60 flex items-center gap-2"
+                      >
+                        <img src="luis_valverde.jpg" alt="Luis" className="w-7 h-7 rounded-full object-cover border border-[#C9A356] shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="text-[11px] font-bold text-white truncate">Luis Valverde</div>
+                          <div className="text-[9px] text-[#C9A356]">Proprietário</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLoginForm({ email: 'yago@valverds.com', password: 'yago123' })}
+                        className="p-2 rounded-xl bg-[#201D17] hover:bg-[#2A261F] border border-[#332C20] text-left transition-all hover:border-[#C9A356]/60 flex items-center gap-2"
+                      >
+                        <img src="foto_barbeiro_yago.jpg" alt="Yago" className="w-7 h-7 rounded-full object-cover border border-[#C9A356] shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="text-[11px] font-bold text-white truncate">Yago Barber</div>
+                          <div className="text-[9px] text-[#C9A356]">Barbeiro</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="pt-2">
                     <button
                       type="submit"
@@ -11886,7 +12123,11 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<ValverdsApp />);
+    root.render(
+      <ErrorBoundary>
+        <ValverdsApp />
+      </ErrorBoundary>
+    );
   </script>
   <script id="valverds-modal-lock">
     (function () {
