@@ -2593,24 +2593,12 @@
           inputEmail = 'bernardolamin3@gmail.com';
         }
 
+        // Validação estritamente no Banco de Dados Neon via pgcrypto (bcrypt + salt)
         let rows = await neonQuery(`
           SELECT * FROM users 
-          WHERE (LOWER(email) = $1 OR LOWER(email) = $2 OR (barber_key = 'yago' AND $1 LIKE '%yago%'))
-            AND password_hash = $3;
+          WHERE (LOWER(email) = $1 OR LOWER(email) = $2)
+            AND (password_hash = crypt($3, password_hash) OR password_hash = $3);
         `, [inputEmail, rawEmail, inputPassword]);
-
-        // Fallback robusto para contas master (garante acesso mesmo se offline)
-        if (!rows || rows.length === 0) {
-          if (inputEmail === 'bernardolamin3@gmail.com' && inputPassword === 'admin123') {
-            rows = [{ name: 'Bernardo Lamin', email: 'bernardolamin3@gmail.com', role: 'superadmin', barber_key: 'luis' }];
-          } else if ((inputEmail === 'valverdsbarbeshop@gmail.com' || inputEmail.includes('valverd')) && (inputPassword === 'valverds2026' || inputPassword === 'luis123')) {
-            rows = [{ name: 'Luis Valverde', email: 'valverdsbarbeshop@gmail.com', role: 'dono', barber_key: 'luis' }];
-          } else if ((inputEmail === 'yago@valverds.com' || inputEmail === 'yago@valverdsbarbershop.com.br' || rawEmail.includes('yago') || rawEmail.includes('iago')) && (inputPassword === 'yago123' || inputPassword === '123456')) {
-            rows = [{ name: 'Yago Barber', email: 'yago@valverds.com', role: 'barbeiro', barber_key: 'yago' }];
-          } else if (inputEmail === 'recepcao@valverds.com' && inputPassword === 'recepcao123') {
-            rows = [{ name: 'Recepção Valverd\'s', email: 'recepcao@valverds.com', role: 'recepcao', barber_key: 'recepcao' }];
-          }
-        }
 
         if (rows && rows.length > 0) {
           const u = rows[0];
@@ -2790,7 +2778,7 @@
         setReceptionTab(logged.role === 'superadmin' ? 'admin_master' : 'agenda');
       };
 
-      const handleLogout = async () => {
+      const handleLogout = () => {
         try {
           sessionStorage.setItem('valverds_just_logged_out', 'true');
           localStorage.removeItem('valverds_auth');
@@ -2806,17 +2794,16 @@
           avatar: 'logo_valverds_clean.png'
         });
         setCurrentView('site');
-        // Encerrar sessao na nuvem do Neon Auth tambem
+
+        // Encerramento em segundo plano na nuvem sem bloquear a interface nem recarregar
         try {
-          await fetch(`${NEON_AUTH_URL}/sign-out`, {
+          fetch(`${NEON_AUTH_URL}/sign-out`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: '{}'
-          });
+          }).catch(() => {});
         } catch(e){}
-        // Redirecionamento limpo para o site publico
-        window.location.href = window.location.origin + window.location.pathname;
       };
 
       const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
@@ -5089,10 +5076,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v2.9.5-PROD</span>
+                          <span>v2.9.7-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">08/10/2026 - 10:52</span>
+                        <span className="text-emerald-400 font-bold">08/10/2026 - 11:20</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -9321,7 +9308,7 @@
                       <div>
                         <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">PROGRAMA DE RECOMPENSAS VALVERD'S</span>
                         <h2 className="font-serif text-2xl font-bold text-white mt-1">Seu Cartão Fidelidade Digital</h2>
-                        <p className="text-xs text-gray-400">A cada 10 cortes realizados na Valverd's, você ganha 1 corte grátis + 10% de desconto especial em produtos e bar!</p>
+                        <p className="text-xs text-gray-400">A cada 10 cortes realizados na Valverd's, você ganha 10% de desconto especial!</p>
                       </div>
 
                       <div className="bg-[#12110E] p-6 rounded-2xl border border-[#262118] text-center space-y-5">
@@ -9354,11 +9341,11 @@
                             <div>Você possui <strong>0 selos</strong>. Realize seu primeiro atendimento para começar a pontuar!</div>
                           ) : realStamps === 0 && completedCycles > 0 ? (
                             <div>
-                              🎉 <strong>Parabéns!</strong> Você completou um ciclo de 10 cortes e resgatou sua recompensa de <strong>1 corte grátis + 10% de desconto</strong>! Um novo ciclo foi iniciado.
+                              🎉 <strong>Parabéns!</strong> Você completou um ciclo de 10 cortes e resgatou sua recompensa de <strong>10% de desconto especial</strong>! Um novo ciclo foi iniciado.
                             </div>
                           ) : (
                             <div>
-                              <strong>Faltam apenas {remainingStamps} {remainingStamps === 1 ? 'corte' : 'cortes'}</strong> para você resgatar seu <strong>CORTE GRÁTIS + 10% DE DESCONTO</strong>!
+                              <strong>Faltam apenas {remainingStamps} {remainingStamps === 1 ? 'corte' : 'cortes'}</strong> para você resgatar seus <strong>10% DE DESCONTO ESPECIAL</strong>!
                             </div>
                           )}
                         </div>
