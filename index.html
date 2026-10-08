@@ -1181,6 +1181,7 @@
 
       const [receptionTab, setReceptionTab] = useState('macro'); // 'macro' | 'agenda' | 'equipe' | 'produtos' | 'servicos' | 'escalas'
       const [barberTab, setBarberTab] = useState('minha_agenda');
+      const [barberCalendarMode, setBarberCalendarMode] = useState('semanal'); // 'semanal' | 'mensal' | 'comparativo' | 'diaria'
       const liveTodayWeekIndex = useMemo(() => {
         const today = getTodayDateISO();
         const idx = WEEKS_DATA.findIndex(w => w.days.some(d => d.isoDate === today));
@@ -5088,10 +5089,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v2.9.4-PROD</span>
+                          <span>v2.9.5-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">08/10/2026 - 10:45</span>
+                        <span className="text-emerald-400 font-bold">08/10/2026 - 10:52</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -11045,36 +11046,6 @@
                     />
                   </div>
 
-                  {/* ATALHOS RÁPIDOS DA EQUIPE */}
-                  <div className="pt-1 pb-1">
-                    <span className="text-[9.5px] text-gray-400 uppercase font-serif tracking-widest block mb-1.5 text-center">
-                      Preencher com 1 toque:
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setLoginForm({ email: 'valverdsbarbeshop@gmail.com', password: 'valverds2026' })}
-                        className="p-2 rounded-xl bg-[#201D17] hover:bg-[#2A261F] border border-[#332C20] text-left transition-all hover:border-[#C9A356]/60 flex items-center gap-2"
-                      >
-                        <img src="luis_valverde.jpg" alt="Luis" className="w-7 h-7 rounded-full object-cover border border-[#C9A356] shrink-0" />
-                        <div className="overflow-hidden">
-                          <div className="text-[11px] font-bold text-white truncate">Luis Valverde</div>
-                          <div className="text-[9px] text-[#C9A356]">Proprietário</div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLoginForm({ email: 'yago@valverds.com', password: 'yago123' })}
-                        className="p-2 rounded-xl bg-[#201D17] hover:bg-[#2A261F] border border-[#332C20] text-left transition-all hover:border-[#C9A356]/60 flex items-center gap-2"
-                      >
-                        <img src="foto_barbeiro_yago.jpg" alt="Yago" className="w-7 h-7 rounded-full object-cover border border-[#C9A356] shrink-0" />
-                        <div className="overflow-hidden">
-                          <div className="text-[11px] font-bold text-white truncate">Yago Barber</div>
-                          <div className="text-[9px] text-[#C9A356]">Barbeiro</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
 
                   <div className="pt-2">
                     <button
