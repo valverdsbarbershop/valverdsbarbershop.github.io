@@ -5268,10 +5268,10 @@
                       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-gray-500">
                         <span className="inline-flex items-center gap-1.5 text-gray-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>v3.0.1-PROD</span>
+                          <span>v3.0.2-PROD</span>
                         </span>
                         <span className="text-gray-700">•</span>
-                        <span className="text-emerald-400 font-bold">09/10/2026 - 10:45</span>
+                        <span className="text-emerald-400 font-bold">09/10/2026 - 14:20</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">created by</span>
                         <a
@@ -7589,21 +7589,39 @@
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {/* HORARIOS DA BARBEARIA */}
-                          <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2F291E] space-y-3">
-                            <div className="flex justify-between items-center pb-2 border-b border-[#2A2419]">
-                              <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356]">Funcionamento Geral</h4>
-                              <span className="text-[10px] text-gray-400 font-serif">Segunda a Domingo</span>
+                        <div className="space-y-6">
+                          {/* 1. HORÁRIOS DA BARBEARIA (HORIZONTAL EM CIMA) */}
+                          <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2F291E] space-y-3.5 shadow-lg">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-[#2A2419]">
+                              <div>
+                                <h4 className="font-serif font-bold text-sm uppercase text-[#C9A356]">Funcionamento Geral da Loja</h4>
+                                <p className="text-[11px] text-gray-400">Horários padrão de atendimento ao público na barbearia.</p>
+                              </div>
+                              <span className="text-[10px] text-gray-400 font-serif px-2.5 py-0.5 rounded-full bg-[#12110E] border border-[#2A2419]">
+                                Segunda a Domingo
+                              </span>
                             </div>
-                            <div className="space-y-2">
+
+                            {/* GRID HORIZONTAL DOS 7 DIAS DA LOJA */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
                               {shopHours.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center text-xs py-2 border-b border-[#242018] last:border-none">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${item.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                                    <span className="font-semibold text-white">{item.day}</span>
+                                <div
+                                  key={idx}
+                                  className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1.5 transition-all ${
+                                    item.isOpen
+                                      ? 'bg-[#14120E] border-[#2A2419]'
+                                      : 'bg-red-950/20 border-red-900/40 text-gray-400'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-serif font-bold text-xs text-white truncate">{item.day}</span>
+                                    <div className={`w-2 h-2 rounded-full shrink-0 ${item.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`}></div>
                                   </div>
-                                  <span className={`font-serif px-2.5 py-0.5 rounded text-[11px] font-bold ${item.isOpen ? 'bg-[#252119] text-[#C9A356] border border-[#3A3326]' : 'bg-red-950/40 text-red-400 border border-red-900/40'}`}>
+                                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded text-center truncate ${
+                                    item.isOpen
+                                      ? 'bg-[#221E17] text-[#C9A356] border border-[#3A3326]'
+                                      : 'bg-red-950/40 text-red-400 border border-red-900/40'
+                                  }`}>
                                     {item.isOpen ? `${item.open} às ${item.close}` : 'Fechado'}
                                   </span>
                                 </div>
@@ -7640,8 +7658,8 @@
                                     </span>
                                   </div>
 
-                                  {/* GRID INTERATIVA DE CHECKPOINTS POR DIA */}
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                                  {/* GRID INTERATIVA DE CHECKPOINTS POR DIA COM 100% DA LARGURA */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                                     {daysList.map((dName) => {
                                       const dayLabelsMap = {
                                         'Seg': 'Segunda',
@@ -7667,21 +7685,18 @@
                                       return (
                                         <div
                                           key={dName}
-                                          className={`p-3.5 rounded-2xl border transition-all space-y-3 ${isAvail ? 'bg-[#14120E] border-[#2A2419] shadow-md' : 'bg-red-950/20 border-red-900/40 text-gray-400'}`}
+                                          className={`p-3 rounded-2xl border transition-all space-y-2.5 flex flex-col justify-between ${isAvail ? 'bg-[#14120E] border-[#2A2419] shadow-md' : 'bg-red-950/20 border-red-900/40 text-gray-400'}`}
                                         >
                                           {/* CABEÇALHO DO DIA SEM SOBREPOSIÇÃO */}
-                                          <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#241F17]">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                              <div className="w-8 h-8 rounded-xl bg-[#0D0C09] border border-[#2D271E] flex flex-col items-center justify-center shrink-0">
+                                          <div className="flex items-center justify-between gap-1 pb-2 border-b border-[#241F17]">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <div className="w-7 h-7 rounded-lg bg-[#0D0C09] border border-[#2D271E] flex flex-col items-center justify-center shrink-0">
                                                 <span className="text-[9px] font-mono font-bold uppercase text-[#C9A356] leading-none">{dName}</span>
                                               </div>
                                               <div className="min-w-0">
                                                 <h6 className="font-serif font-bold text-xs text-white truncate">
                                                   {dayLabelsMap[dName] || dName}
                                                 </h6>
-                                                <span className="text-[10px] text-gray-400">
-                                                  {isAvail ? `${daySetting.start || '09:00'} às ${daySetting.end || '19:00'}` : 'Folga'}
-                                                </span>
                                               </div>
                                             </div>
 
@@ -7689,10 +7704,10 @@
                                             <button
                                               type="button"
                                               onClick={() => handleToggleBarberDayAvailability(bKey, dName)}
-                                              className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1 shadow-sm ${
+                                              className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-0.5 shadow-sm ${
                                                 isAvail
-                                                  ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-600/60 hover:bg-emerald-900/60'
-                                                  : 'bg-red-950/70 text-red-300 border border-red-700/60 hover:bg-red-900/60'
+                                                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 hover:bg-emerald-900/60'
+                                                  : 'bg-red-950/80 text-red-300 border border-red-700/60 hover:bg-red-900/60'
                                               }`}
                                               title="Clique para alternar presença (Trabalha / Folga)"
                                             >
@@ -7701,37 +7716,37 @@
                                           </div>
 
                                           {/* SEÇÃO DE HORÁRIOS MARCADOS / CLIENTES */}
-                                          <div className="p-2.5 bg-[#0C0B08] rounded-xl border border-[#262118] space-y-1.5">
-                                            <div className="flex items-center justify-between text-[11px]">
-                                              <div className="flex items-center gap-1.5">
-                                                <span className={`w-2 h-2 rounded-full ${dayAppointments.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}></span>
-                                                <span className="font-serif font-bold text-white text-[11px]">Horários Marcados:</span>
+                                          <div className="p-2 bg-[#0C0B08] rounded-xl border border-[#262118] space-y-1.5">
+                                            <div className="flex items-center justify-between gap-1 text-[11px]">
+                                              <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className={`w-2 h-2 rounded-full shrink-0 ${dayAppointments.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`}></span>
+                                                <span className="font-sans font-bold text-white text-[11px] truncate">Marcados:</span>
                                               </div>
-                                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                                              <span className={`shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
                                                 dayAppointments.length > 0
                                                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
                                                   : 'bg-[#14120E] text-gray-500 border-[#221D15]'
                                               }`}>
-                                                {dayAppointments.length} {dayAppointments.length === 1 ? 'marcado' : 'marcados'}
+                                                {dayAppointments.length}
                                               </span>
                                             </div>
 
                                             {dayAppointments.length > 0 ? (
-                                              <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                                              <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
                                                 {dayAppointments.map(appt => (
                                                   <div
                                                     key={`appt-badge-${appt.id || appt.voucherCode || Math.random()}`}
-                                                    className="flex items-center justify-between p-1.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-[10px]"
+                                                    className="flex items-center justify-between gap-1 p-1 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-[10px]"
                                                   >
-                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                    <div className="flex items-center gap-1 min-w-0">
                                                       <span className="font-mono font-bold text-emerald-400 shrink-0">
                                                         {appt.time}
                                                       </span>
                                                       <span className="text-white font-medium truncate" title={appt.client}>
-                                                        {appt.client}
+                                                        {appt.client.split(' ')[0]}
                                                       </span>
                                                     </div>
-                                                    <span className="text-gray-400 text-[9px] shrink-0 truncate max-w-[85px]" title={appt.service}>
+                                                    <span className="text-gray-400 text-[9px] shrink-0 truncate max-w-[65px]" title={appt.service}>
                                                       {appt.service}
                                                     </span>
                                                   </div>
@@ -7739,7 +7754,7 @@
                                               </div>
                                             ) : (
                                               <div className="text-[10px] text-gray-500 italic text-center py-1 font-serif">
-                                                Nenhum horário marcado ainda
+                                                Nenhum marcado
                                               </div>
                                             )}
                                           </div>
@@ -7747,25 +7762,25 @@
                                           {isAvail ? (
                                             <div className="space-y-2 text-xs">
                                               {/* SELETORES DE ENTRADA E SAÍDA */}
-                                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                                <div className="bg-[#0B0B08] p-2 rounded-xl border border-[#231E16]">
-                                                  <label className="block text-[9px] uppercase font-serif text-gray-400 mb-1">Entrada</label>
+                                              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                                                <div className="bg-[#0B0B08] p-1.5 rounded-lg border border-[#231E16]">
+                                                  <label className="block text-[8px] uppercase font-serif text-gray-400 mb-0.5">Entrada</label>
                                                   <select
                                                     value={daySetting.start || '09:00'}
                                                     onChange={(e) => handleUpdateBarberDayHours(bKey, dName, 'start', e.target.value)}
-                                                    className="w-full bg-[#13110D] border border-[#2B251B] rounded-lg px-2 py-1 text-[#C9A356] font-mono text-xs focus:outline-none focus:border-[#C9A356]"
+                                                    className="w-full bg-[#13110D] border border-[#2B251B] rounded px-1.5 py-0.5 text-[#C9A356] font-mono text-[11px] focus:outline-none focus:border-[#C9A356]"
                                                   >
                                                     {ALL_48_TIME_SLOTS.map(t => (
                                                       <option key={`sched-start-${bKey}-${dName}-${t}`} value={t}>{t}</option>
                                                     ))}
                                                   </select>
                                                 </div>
-                                                <div className="bg-[#0B0B08] p-2 rounded-xl border border-[#231E16]">
-                                                  <label className="block text-[9px] uppercase font-serif text-gray-400 mb-1">Saída</label>
+                                                <div className="bg-[#0B0B08] p-1.5 rounded-lg border border-[#231E16]">
+                                                  <label className="block text-[8px] uppercase font-serif text-gray-400 mb-0.5">Saída</label>
                                                   <select
                                                     value={daySetting.end || '19:00'}
                                                     onChange={(e) => handleUpdateBarberDayHours(bKey, dName, 'end', e.target.value)}
-                                                    className="w-full bg-[#13110D] border border-[#2B251B] rounded-lg px-2 py-1 text-[#C9A356] font-mono text-xs focus:outline-none focus:border-[#C9A356]"
+                                                    className="w-full bg-[#13110D] border border-[#2B251B] rounded px-1.5 py-0.5 text-[#C9A356] font-mono text-[11px] focus:outline-none focus:border-[#C9A356]"
                                                   >
                                                     {ALL_48_TIME_SLOTS.map(t => (
                                                       <option key={`sched-end-${bKey}-${dName}-${t}`} value={t}>{t}</option>
@@ -7775,25 +7790,24 @@
                                               </div>
 
                                               {daySetting.end && daySetting.end < '19:00' && (
-                                                <div className="text-[10px] text-amber-300 font-bold bg-amber-950/40 border border-amber-800/40 p-1.5 rounded-lg text-center">
-                                                  ⚠️ Sai mais cedo às {daySetting.end}
+                                                <div className="text-[9px] text-amber-300 font-bold bg-amber-950/40 border border-amber-800/40 p-1 rounded text-center">
+                                                  ⚠️ Sai às {daySetting.end}
                                                 </div>
                                               )}
 
                                               {/* BLOQUEIOS, PAUSAS E STATUS DOS SLOTS */}
-                                              <div className="pt-2 border-t border-[#231E16] space-y-1.5">
+                                              <div className="pt-1.5 border-t border-[#231E16] space-y-1">
                                                 <div className="flex items-center justify-between text-[10px]">
-                                                  <span className="text-gray-400 font-serif">Slots & Pausas:</span>
-                                                  <span className="text-amber-400 font-mono font-bold">
-                                                    {daySetting.blockedSlots?.length || 0} bloqueio(s)
+                                                  <span className="text-gray-400 font-serif text-[10px]">Pausas:</span>
+                                                  <span className="text-amber-400 font-mono font-bold text-[9px]">
+                                                    {daySetting.blockedSlots?.length || 0}
                                                   </span>
                                                 </div>
-                                                <div className="flex items-center gap-2 text-[9px] text-gray-400 pb-0.5">
+                                                <div className="flex items-center gap-1.5 text-[8px] text-gray-400 pb-0.5">
                                                   <span className="text-emerald-400 flex items-center gap-0.5">👤 Marcado</span>
                                                   <span className="text-amber-400 flex items-center gap-0.5">🔒 Pausa</span>
-                                                  <span className="text-gray-400 flex items-center gap-0.5">○ Livre</span>
                                                 </div>
-                                                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+                                                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
                                                   {ALL_48_TIME_SLOTS.filter(t => t >= (daySetting.start || '09:00') && t < (daySetting.end || '19:00')).map(t => {
                                                     const isBlocked = Array.isArray(daySetting.blockedSlots) && daySetting.blockedSlots.includes(t);
                                                     const apptAtSlot = dayAppointments.find(a => a.time === t);
@@ -7803,7 +7817,7 @@
                                                         <span
                                                           key={`owner-slot-${bKey}-${dName}-${t}`}
                                                           title={`Marcado: ${apptAtSlot.client} (${apptAtSlot.service})`}
-                                                          className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600/70 shadow-sm flex items-center gap-0.5 cursor-default"
+                                                          className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600/70 shadow-sm flex items-center gap-0.5 cursor-default"
                                                         >
                                                           👤 {t}
                                                         </span>
@@ -7816,7 +7830,7 @@
                                                         type="button"
                                                         onClick={() => handleToggleBarberSlotBlock(bKey, dName, t)}
                                                         title={isBlocked ? `Desbloquear ${t}` : `Bloquear pausa em ${t}`}
-                                                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all ${
+                                                        className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold border transition-all ${
                                                           isBlocked
                                                             ? 'bg-amber-950 text-amber-300 border-amber-600 shadow-sm ring-1 ring-amber-600/40'
                                                             : 'bg-[#0A0A0A] text-gray-400 border-[#221E17] hover:border-[#C9A356] hover:text-white'
@@ -7830,21 +7844,21 @@
                                               </div>
                                             </div>
                                           ) : (
-                                            <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-xl text-center space-y-1">
-                                              <div className="text-[11px] text-red-300 font-serif font-bold">
-                                                Ausente / Folga Bloqueada
+                                            <div className="p-2.5 bg-red-950/20 border border-red-900/30 rounded-xl text-center space-y-1">
+                                              <div className="text-[10px] text-red-300 font-serif font-bold">
+                                                Folga / Indisponível
                                               </div>
                                               <div className="text-[9px] text-gray-400">
-                                                Nenhum cliente consegue agendar neste dia.
+                                                Bloqueado para clientes.
                                               </div>
                                               {dayAppointments.length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-red-900/30 text-left">
-                                                  <span className="text-[10px] text-amber-400 font-bold block mb-1">
-                                                    ⚠️ Atenção: Há {dayAppointments.length} agendamento(s) existente(s):
+                                                <div className="mt-1.5 pt-1.5 border-t border-red-900/30 text-left">
+                                                  <span className="text-[9px] text-amber-400 font-bold block mb-0.5">
+                                                    ⚠️ {dayAppointments.length} agendado(s):
                                                   </span>
                                                   {dayAppointments.map(a => (
-                                                    <div key={`warn-${a.id}`} className="text-[9px] text-gray-300">
-                                                      • {a.time} - {a.client}
+                                                    <div key={`warn-${a.id}`} className="text-[8px] text-gray-300 truncate">
+                                                      • {a.time} - {a.client.split(' ')[0]}
                                                     </div>
                                                   ))}
                                                 </div>
