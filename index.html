@@ -1468,8 +1468,55 @@
         return result;
       };
 
-      // Helper para obter horários livres de um barbeiro em um dia/data específica
-      const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null) => {
+      // === GESTÃO INTELIGENTE DE DURAÇÃO & BLOQUEIO CONSECUTIVO DE SLOTS ===
+      const getServiceDuration = (serviceOrIdOrName, servicesList = services) => {
+        if (!serviceOrIdOrName) return 30;
+        if (typeof serviceOrIdOrName === 'number') return serviceOrIdOrName;
+        if (typeof serviceOrIdOrName === 'object' && serviceOrIdOrName.duration) {
+          return Number(serviceOrIdOrName.duration) || 30;
+        }
+        const match = (servicesList || []).find(s => s.id === serviceOrIdOrName || s.name === serviceOrIdOrName);
+        return match?.duration ? Number(match.duration) : 30;
+      };
+
+      const getSlotsCountForDuration = (durationMinutes) => {
+        const dur = Math.max(1, Number(durationMinutes) || 30);
+        return Math.max(1, Math.ceil(dur / 30));
+      };
+
+      const getSlotsForStartTimeAndDuration = (startTime, durationMinutes) => {
+        const count = getSlotsCountForDuration(durationMinutes);
+        const startIdx = ALL_48_TIME_SLOTS.indexOf(startTime);
+        if (startIdx === -1) return [startTime];
+        const slots = [];
+        for (let i = 0; i < count && (startIdx + i) < ALL_48_TIME_SLOTS.length; i++) {
+          slots.push(ALL_48_TIME_SLOTS[startIdx + i]);
+        }
+        return slots;
+      };
+
+      const getEndTimeForStartTimeAndDuration = (startTime, durationMinutes) => {
+        if (!startTime || typeof startTime !== 'string' || !startTime.includes(':')) return startTime;
+        const [h, m] = startTime.split(':').map(Number);
+        const totalMin = (h || 0) * 60 + (m || 0) + (Number(durationMinutes) || 30);
+        const endH = Math.floor(totalMin / 60) % 24;
+        const endM = totalMin % 60;
+        return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+      };
+
+      const getAppointmentOccupiedSlots = (appt, servicesList = services) => {
+        if (!appt || !appt.time) return [];
+        let dur = Number(appt.duration);
+        if (!dur || isNaN(dur)) {
+          const srvItem = Array.isArray(appt.items) ? appt.items.find(it => it.type === 'service') : null;
+          const match = (servicesList || []).find(s => s.id === (srvItem?.id || appt.serviceId) || s.name === (srvItem?.name || appt.service));
+          dur = match?.duration ? Number(match.duration) : 30;
+        }
+        return getSlotsForStartTimeAndDuration(appt.time, dur);
+      };
+
+      // Helper para obter horários livres de um barbeiro em um dia/data específica considerando a duração do serviço
+      const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null, serviceDurationOrId = null) => {
         const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
         if (!barberSetting.available) return [];
 
@@ -1484,26 +1531,54 @@
         // 2. Verifica se a data consultada é a data de hoje
         const isToday = targetDate ? (targetDate === todayIso) : (dayName === getWeekdayFromISO(todayIso));
 
-        // Considera todos os 48 horários oficiais de 30 min (00:00 a 23:30) excluindo os slots bloqueados pelo barbeiro
-        // e excluindo horários que já passaram se for hoje (ex: agora é 16h, não permite agendar 15h)
-        const filteredTimeSlots = ALL_48_TIME_SLOTS.filter(t => {
-          if (t < barberSetting.start || t >= barberSetting.end) return false;
-          if (blockedSlots.includes(t)) return false;
-          if (isToday && t < currentTime) return false;
-          return true;
+        // Determina a duração exigida (em minutos)
+        let targetDuration = 30;
+        if (serviceDurationOrId !== null && serviceDurationOrId !== undefined) {
+          targetDuration = getServiceDuration(serviceDurationOrId, services);
+        } else if (typeof clientBookingFlow !== 'undefined' && clientBookingFlow?.serviceId) {
+          targetDuration = getServiceDuration(clientBookingFlow.serviceId, services);
+        }
+        const slotsNeeded = getSlotsCountForDuration(targetDuration);
+
+        // Conjunto de todos os slots ocupados por agendamentos existentes
+        const bookedSlotsSet = new Set();
+        appointments.forEach(a => {
+          const matchBarber = a.barberKey === barberKey || (barberKey === 'luis' && a.barber && a.barber.includes('Luis')) || (barberKey === 'yago' && a.barber && a.barber.includes('Yago'));
+          const notCancelled = !isAppointmentReleased(a);
+          if (!matchBarber || !notCancelled) return;
+          if (targetDate && (a.isoDate === targetDate || a.date === targetDate)) {
+            getAppointmentOccupiedSlots(a, services).forEach(s => bookedSlotsSet.add(s));
+          } else if (!targetDate && a.day === dayName) {
+            getAppointmentOccupiedSlots(a, services).forEach(s => bookedSlotsSet.add(s));
+          }
         });
 
-        const bookedTimes = appointments
-          .filter(a => {
-            const matchBarber = a.barberKey === barberKey || (barberKey === 'luis' && a.barber && a.barber.includes('Luis')) || (barberKey === 'yago' && a.barber && a.barber.includes('Yago'));
-            const notCancelled = !isAppointmentReleased(a);
-            if (!matchBarber || !notCancelled) return false;
-            if (targetDate && (a.isoDate === targetDate || a.date === targetDate)) return true;
-            return a.day === dayName;
-          })
-          .map(a => a.time);
+        // Avalia cada slot de início t
+        return ALL_48_TIME_SLOTS.filter(t => {
+          if (t < barberSetting.start) return false;
+          if (isToday && t < currentTime) return false;
 
-        return filteredTimeSlots.filter(t => !bookedTimes.includes(t));
+          const startIdx = ALL_48_TIME_SLOTS.indexOf(t);
+          if (startIdx === -1) return false;
+
+          // Valida se TODOS os slots consecutivos necessários para cobrir a duração estão livres
+          for (let i = 0; i < slotsNeeded; i++) {
+            const nextIdx = startIdx + i;
+            if (nextIdx >= ALL_48_TIME_SLOTS.length) return false;
+            const slotToCheck = ALL_48_TIME_SLOTS[nextIdx];
+
+            // Ultrapassa encerramento do expediente do barbeiro
+            if (slotToCheck >= barberSetting.end) return false;
+
+            // Bloqueado pelo barbeiro (pausa/intervalo)
+            if (blockedSlots.includes(slotToCheck)) return false;
+
+            // Ocupado por outro agendamento já marcado
+            if (bookedSlotsSet.has(slotToCheck)) return false;
+          }
+
+          return true;
+        });
       };
 
       // Persistência Imediata, Atômica e Definitiva no SQL Server / Neon
@@ -1737,26 +1812,41 @@
           return;
         }
 
-        // TRAVA 3: BLOQUEIO DE HORÁRIO DUPLICADO (ANTI-COLISÃO)
-        const isSlotTaken = appointments.some(a => 
-          a.barberKey === clientBookingFlow.barberKey &&
-          ((clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName) &&
-          a.time === clientBookingFlow.time &&
-          !isAppointmentReleased(a)
-        );
-        if (isSlotTaken) {
-          alert('Este horário acabou de ser reservado por outro cliente nesta mesma cadeira. Por favor, escolha outro horário livre.');
+        const selectedSrv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
+        const selectedBarber = barbers.find(b => b.barberKey === clientBookingFlow.barberKey) || barbers[0];
+        const srvDuration = Number(selectedSrv.duration) || 30;
+        const requiredSlots = getSlotsForStartTimeAndDuration(clientBookingFlow.time, srvDuration);
+
+        // TRAVA 3: BLOQUEIO DE HORÁRIO E DURAÇÃO CONSECUTIVA (ANTI-COLISÃO)
+        const collidingAppt = appointments.find(a => {
+          if (isAppointmentReleased(a)) return false;
+          const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
+          if (!matchBarber) return false;
+          const matchDate = (clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName;
+          if (!matchDate) return false;
+
+          const occupied = getAppointmentOccupiedSlots(a, services);
+          return requiredSlots.some(s => occupied.includes(s));
+        });
+        if (collidingAppt) {
+          alert(`Conflito de Horário!\n\nO serviço '${selectedSrv.name}' dura ${srvDuration} min e ocupa os horários [${requiredSlots.join(', ')}].\nPorém, há outro atendimento marcado nesta cadeira com ${collidingAppt.client} (${collidingAppt.time}).\n\nPor favor, escolha outro horário livre.`);
           return;
         }
 
-        // TRAVA 3.1: BLOQUEIO ESPECÍFICO DE HORÁRIO / INTERVALO PELO BARBEIRO
+        // TRAVA 3.1: BLOQUEIO ESPECÍFICO DE HORÁRIO / INTERVALO PELO BARBEIRO E EXPEDIENTE
         const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][clientBookingFlow.dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
         if (!barberDaySchedule.available) {
           alert(`O profissional selecionado não está atendendo em ${clientBookingFlow.dayFullName || clientBookingFlow.dayName} (Folga ou Ausência). Por favor, selecione outro dia.`);
           return;
         }
-        if (Array.isArray(barberDaySchedule.blockedSlots) && barberDaySchedule.blockedSlots.includes(clientBookingFlow.time)) {
-          alert(`O horário das ${clientBookingFlow.time} foi bloqueado pelo barbeiro para intervalo/pausa neste dia. Por favor, selecione outro horário disponível.`);
+        const hasBlockedConsecutive = requiredSlots.some(s => Array.isArray(barberDaySchedule.blockedSlots) && barberDaySchedule.blockedSlots.includes(s));
+        if (hasBlockedConsecutive) {
+          alert(`O atendimento de ${srvDuration} min a partir de ${clientBookingFlow.time} coincide com um intervalo/pausa do barbeiro. Por favor, escolha outro horário disponível.`);
+          return;
+        }
+        const exceedsClosing = requiredSlots.some(s => s >= (barberDaySchedule.end || '19:00'));
+        if (exceedsClosing) {
+          alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de término do expediente do barbeiro (${barberDaySchedule.end || '19:00'}). Por favor, escolha um horário mais cedo.`);
           return;
         }
 
@@ -1775,8 +1865,6 @@
           return;
         }
 
-        const selectedSrv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
-        const selectedBarber = barbers.find(b => b.barberKey === clientBookingFlow.barberKey) || barbers[0];
         const extrasList = products.filter(p => clientBookingFlow.selectedExtras.includes(p.id));
         const extrasTotal = extrasList.reduce((acc, p) => acc + p.price, 0);
         const totalPrice = selectedSrv.price + extrasTotal;
@@ -1797,6 +1885,8 @@
           isCpfVerified: true,
           voucherCode: voucherCode,
           service: selectedSrv.name + (extrasList.length > 0 ? ` + ${extrasList.map(x => x.name).join(', ')}` : ''),
+          serviceId: selectedSrv.id,
+          duration: srvDuration,
           barber: selectedBarber.name,
           barberKey: selectedBarber.barberKey,
           time: clientBookingFlow.time,
@@ -1804,12 +1894,12 @@
           source: 'online',
           price: totalPrice,
           items: [
-            { id: selectedSrv.id, type: 'service', name: selectedSrv.name, price: selectedSrv.price },
+            { id: selectedSrv.id, type: 'service', name: selectedSrv.name, price: selectedSrv.price, duration: srvDuration },
             ...extrasList.map(x => ({ id: x.id, type: 'product', name: x.name, price: x.price }))
           ],
           total: totalPrice,
           paymentMethod: 'Presencial / PIX',
-          notes: `Voucher #${voucherCode} • Agendado online via site • CPF: ${maskCPF(clientBookingFlow.clientCpf)}`
+          notes: `Voucher #${voucherCode} • Agendado online via site • CPF: ${maskCPF(clientBookingFlow.clientCpf)} • Duração: ${srvDuration} min`
         };
 
         setAppointments(prev => [newAppt, ...prev]);
@@ -4055,20 +4145,39 @@
           return;
         }
 
-        // TRAVA 2: ANTI-COLISÃO
-        const isManualSlotTaken = appointments.some(a => 
-          a.barberKey === bookingForm.barberKey &&
-          ((bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day) &&
-          a.time === bookingForm.time &&
-          !isAppointmentReleased(a)
-        );
-        if (isManualSlotTaken) {
-          alert('Este horário já está ocupado por outro cliente nesta cadeira.');
+        const srv = services.find(s => s.id === bookingForm.serviceId) || services[0];
+        const brb = barbers.find(b => b.barberKey === bookingForm.barberKey) || barbers[0];
+        const srvDuration = Number(srv.duration) || 30;
+        const requiredSlots = getSlotsForStartTimeAndDuration(bookingForm.time, srvDuration);
+
+        // TRAVA 2: ANTI-COLISÃO COM BASE NA DURAÇÃO DO SERVIÇO
+        const collidingManualAppt = appointments.find(a => {
+          if (isAppointmentReleased(a)) return false;
+          const matchBarber = a.barberKey === bookingForm.barberKey || (bookingForm.barberKey === 'luis' && a.barber?.includes('Luis')) || (bookingForm.barberKey === 'yago' && a.barber?.includes('Yago'));
+          if (!matchBarber) return false;
+          const matchDate = (bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day;
+          if (!matchDate) return false;
+
+          const occupied = getAppointmentOccupiedSlots(a, services);
+          return requiredSlots.some(s => occupied.includes(s));
+        });
+        if (collidingManualAppt) {
+          alert(`Conflito de Horário!\n\nO serviço '${srv.name}' (${srvDuration} min) ocupa os horários [${requiredSlots.join(', ')}].\nPorém, já existe atendimento marcado para ${collidingManualAppt.client} (${collidingManualAppt.time}).\n\nPor favor, selecione outro horário livre.`);
           return;
         }
 
-        const srv = services.find(s => s.id === bookingForm.serviceId) || services[0];
-        const brb = barbers.find(b => b.barberKey === bookingForm.barberKey) || barbers[0];
+        // TRAVA 2.1: INTERVALO DO BARBEIRO E EXPEDIENTE
+        const barberScheduleDay = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
+        const hasBlockedConsecutive = requiredSlots.some(s => Array.isArray(barberScheduleDay.blockedSlots) && barberScheduleDay.blockedSlots.includes(s));
+        if (hasBlockedConsecutive) {
+          alert(`O atendimento de ${srvDuration} min a partir de ${bookingForm.time} coincide com um intervalo/pausa do barbeiro. Por favor, selecione outro horário.`);
+          return;
+        }
+        const exceedsClosing = requiredSlots.some(s => s >= (barberScheduleDay.end || '19:00'));
+        if (exceedsClosing) {
+          alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de encerramento do expediente (${barberScheduleDay.end || '19:00'}). Por favor, selecione um horário mais cedo.`);
+          return;
+        }
 
         const matchedDay = currentWeek.days.find(d => d.name === bookingForm.day) || currentWeek.days[0];
         const manualIso = bookingForm.isoDate || matchedDay.isoDate || getTodayDateISO();
@@ -4101,16 +4210,18 @@
           isCpfVerified: true,
           voucherCode: voucherCode,
           service: srv.name,
+          serviceId: srv.id,
+          duration: srvDuration,
           barber: brb.name,
           barberKey: brb.barberKey,
           time: bookingForm.time,
           status: 'confirmado',
           source: 'recepcao',
           price: srv.price,
-          items: [{ id: srv.id, type: 'service', name: srv.name, price: srv.price }],
+          items: [{ id: srv.id, type: 'service', name: srv.name, price: srv.price, duration: srvDuration }],
           total: srv.price,
           paymentMethod: 'Presencial / PIX',
-          notes: bookingForm.notes ? `${bookingForm.notes} • Voucher #${voucherCode}` : `Voucher #${voucherCode} • Encaixe Recepção • CPF ${maskCPF(bookingForm.cpf)}`
+          notes: bookingForm.notes ? `${bookingForm.notes} • Voucher #${voucherCode} • Duração: ${srvDuration} min` : `Voucher #${voucherCode} • Encaixe Recepção • CPF ${maskCPF(bookingForm.cpf)} • Duração: ${srvDuration} min`
         };
 
         setAppointments(prev => [newAppt, ...prev]);
@@ -5797,8 +5908,8 @@
                                 </thead>
                                 <tbody className="divide-y divide-[#221E17]">
                                   {TIME_SLOTS_COMPARE.map((slot) => {
-                                    const luisAppt = appointments.find(a => a.barber === 'Luis Valverde' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
-                                    const yagoAppt = appointments.find(a => a.barber === 'Yago Barber' && a.day === selectedWeekDay && a.time === slot && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                                    const luisAppt = appointments.find(a => (a.barberKey === 'luis' || a.barber === 'Luis Valverde' || a.barber?.includes('Luis')) && a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
+                                    const yagoAppt = appointments.find(a => (a.barberKey === 'yago' || a.barber === 'Yago Barber' || a.barber?.includes('Yago')) && a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
                                     const isLuisBlocked = Array.isArray(dailyBarberSettings.luis?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.luis[selectedWeekDay].blockedSlots.includes(slot);
                                     const isYagoBlocked = Array.isArray(dailyBarberSettings.yago?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.yago[selectedWeekDay].blockedSlots.includes(slot);
                                     const canEditLuis = currentUser.role === 'dono' || currentUser.role === 'superadmin' || currentUser.barberKey === 'luis';
@@ -5939,7 +6050,7 @@
                                   const bKey = currentUser.barberKey || (currentUser.role === 'barbeiro' ? 'yago' : 'luis');
                                   const setting = dailyBarberSettings[bKey]?.[selectedAgendaWeekday] || {};
                                   const isBlocked = Array.isArray(setting.blockedSlots) && setting.blockedSlots.includes(t);
-                                  const appt = myTodaysAppointments.find(a => a.time === t);
+                                  const appt = myTodaysAppointments.find(a => !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(t));
                                   return (
                                     <button
                                       key={`diaria-slot-${t}`}
@@ -6310,8 +6421,8 @@
                                               const hasAppt = appointments.some(a => 
                                                 (a.barberKey === bKey || (bKey === 'luis' && a.barber?.includes('Luis')) || (bKey === 'yago' && a.barber?.includes('Yago'))) &&
                                                 a.day === day.key &&
-                                                a.time === t &&
-                                                !isAppointmentReleased(a)
+                                                !isAppointmentReleased(a) &&
+                                                getAppointmentOccupiedSlots(a, services).includes(t)
                                               );
                                               return (
                                                 <button
@@ -7810,7 +7921,7 @@
                                                 <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
                                                   {ALL_48_TIME_SLOTS.filter(t => t >= (daySetting.start || '09:00') && t < (daySetting.end || '19:00')).map(t => {
                                                     const isBlocked = Array.isArray(daySetting.blockedSlots) && daySetting.blockedSlots.includes(t);
-                                                    const apptAtSlot = dayAppointments.find(a => a.time === t);
+                                                    const apptAtSlot = dayAppointments.find(a => !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(t));
 
                                                     if (apptAtSlot) {
                                                       return (
@@ -9307,7 +9418,7 @@
                             {currentWeek.days.map((d) => {
                               const isSelected = clientBookingFlow.selectedDate === d.isoDate || (clientBookingFlow.dayName === d.name && (!clientBookingFlow.selectedDate || clientBookingFlow.selectedDate === d.isoDate));
                               const isPastDay = d.isoDate < getTodayDateISO();
-                              const slots = isPastDay ? [] : getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name, d.isoDate);
+                              const slots = isPastDay ? [] : getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, d.name, d.isoDate, clientBookingFlow.serviceId);
                               const barberDayConf = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][d.name]) || { available: true };
                               const isAvailable = barberDayConf.available !== false && !isPastDay;
                               return (
@@ -9357,23 +9468,37 @@
                         </div>
 
                         {(() => {
-                          const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, clientBookingFlow.dayName, clientBookingFlow.selectedDate);
+                          const currentSrv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
+                          const currentDuration = Number(currentSrv?.duration) || 30;
+                          const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, clientBookingFlow.dayName, clientBookingFlow.selectedDate, currentDuration);
+                          const endTime = getEndTimeForStartTimeAndDuration(clientBookingFlow.time, currentDuration);
                           return (
                             <div className="space-y-3">
+                              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 bg-[#1A1813] px-4 py-2.5 rounded-2xl border border-[#C9A356]/30">
+                                <span className="text-xs text-gray-300">
+                                  Serviço: <strong className="text-white font-medium">{currentSrv.name}</strong> • Duração: <strong className="text-[#C9A356] font-mono">{currentDuration} min</strong>
+                                </span>
+                                <span className="text-xs font-serif text-gray-300">
+                                  Término previsto: <strong className="text-[#C9A356] font-mono text-sm">{clientBookingFlow.time} às {endTime}</strong>
+                                </span>
+                              </div>
+
                               {availableSlots.length > 0 && (
                                 <div>
-                                  <span className="text-[11px] font-serif text-gray-400 mb-1.5 block">Horários recomendados pelo expediente do barbeiro:</span>
+                                  <span className="text-[11px] font-serif text-gray-400 mb-1.5 block">Horários recomendados (comportam {currentDuration} min completos):</span>
                                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                                     {availableSlots.slice(0, 16).map((timeStr) => {
                                       const isSelected = clientBookingFlow.time === timeStr;
+                                      const slotEnd = getEndTimeForStartTimeAndDuration(timeStr, currentDuration);
                                       return (
                                         <button
                                           key={timeStr}
                                           type="button"
                                           onClick={() => setClientBookingFlow(prev => ({ ...prev, time: timeStr }))}
-                                          className={`py-2 rounded-xl text-xs font-serif font-bold transition-all ${isSelected ? 'bg-[#C9A356] text-black shadow-lg ring-2 ring-[#C9A356]' : 'bg-[#181612] text-gray-300 hover:bg-[#262118] border border-[#282319]'}`}
+                                          className={`py-2 px-1 rounded-xl text-center transition-all ${isSelected ? 'bg-[#C9A356] text-black shadow-lg ring-2 ring-[#C9A356]' : 'bg-[#181612] text-gray-300 hover:bg-[#262118] border border-[#282319]'}`}
                                         >
-                                          {timeStr}
+                                          <div className="text-xs font-serif font-bold">{timeStr}</div>
+                                          <div className={`text-[9px] font-mono ${isSelected ? 'text-black/80 font-semibold' : 'text-gray-400'}`}>até {slotEnd}</div>
                                         </button>
                                       );
                                     })}
@@ -9384,7 +9509,7 @@
                               <div className="p-4 bg-[#14120E] rounded-2xl border border-[#2A241A] space-y-3">
                                 <div className="text-xs font-serif text-[#DFBD78] font-semibold flex items-center gap-2">
                                   <Icons.Clock className="w-4 h-4 text-[#C9A356]" />
-                                  <span>Todos os 48 horários do dia (00:00 às 23:30) ou horário customizado livre:</span>
+                                  <span>Todos os 48 horários do dia (00:00 às 23:30) com validação de duração ({currentDuration} min):</span>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
@@ -9395,19 +9520,30 @@
                                       className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
                                     >
                                       {ALL_48_TIME_SLOTS.map(t => {
-                                        const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || {};
-                                        const isBlocked = Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(t);
+                                        const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || { start: '09:00', end: '19:00', blockedSlots: [] };
                                         const isToday = (clientBookingFlow.selectedDate || getTodayDateISO()) === getTodayDateISO();
                                         const isPastTime = isToday && t < getCurrentTimeHHMM();
-                                        const isBooked = appointments.some(a => 
-                                          (a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'))) &&
-                                          ((clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName) &&
-                                          a.time === t &&
-                                          !isAppointmentReleased(a)
-                                        );
+                                        const reqSlots = getSlotsForStartTimeAndDuration(t, currentDuration);
+                                        const isStartBlocked = Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(t);
+                                        
+                                        const bookedAppt = appointments.find(a => {
+                                          if (isAppointmentReleased(a)) return false;
+                                          const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
+                                          if (!matchBarber) return false;
+                                          const matchDate = (clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName;
+                                          if (!matchDate) return false;
+                                          const occ = getAppointmentOccupiedSlots(a, services);
+                                          return reqSlots.some(s => occ.includes(s));
+                                        });
+
+                                        const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
+                                        const exceedsClosing = reqSlots.some(s => s >= (currentDayConf.end || '19:00'));
+                                        const isDisabled = isPastTime || isStartBlocked || Boolean(bookedAppt) || hasBlockedConsecutive || exceedsClosing;
+                                        const endT = getEndTimeForStartTimeAndDuration(t, currentDuration);
+
                                         return (
-                                          <option key={`slot-48-${t}`} value={t} disabled={isBlocked || isBooked || isPastTime}>
-                                            {t} {isPastTime ? '(⏰ Horário já passou)' : isBlocked ? '(🔒 Bloqueado / Intervalo)' : isBooked ? '(Ocupado)' : ''}
+                                          <option key={`slot-48-${t}`} value={t} disabled={isDisabled}>
+                                            {t} às {endT} {isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : bookedAppt ? '(👤 Ocupado)' : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
                                           </option>
                                         );
                                       })}
@@ -10170,21 +10306,51 @@
                     </div>
 
                     <div>
-                      <label className="block text-gray-400 font-serif uppercase mb-1">Horário:</label>
+                      <label className="block text-gray-400 font-serif uppercase mb-1">
+                        Horário: {(() => {
+                          const modalSrv = services.find(s => s.id === bookingForm.serviceId) || services[0];
+                          const modalDur = Number(modalSrv?.duration) || 30;
+                          return <span className="text-[#C9A356] font-normal lowercase">({modalDur} min • até {getEndTimeForStartTimeAndDuration(bookingForm.time, modalDur)})</span>;
+                        })()}
+                      </label>
                       <select
                         value={bookingForm.time}
                         onChange={e => setBookingForm({ ...bookingForm, time: e.target.value })}
-                        className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none"
+                        className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none focus:border-[#C9A356]"
                       >
-                        {TIME_SLOTS_COMPARE.map(t => {
-                          const isToday = (bookingForm.isoDate || getTodayDateISO()) === getTodayDateISO();
-                          const isPastTime = isToday && t < getCurrentTimeHHMM();
-                          return (
-                            <option key={t} value={t} disabled={isPastTime}>
-                              {t} {isPastTime ? '(⏰ Horário já passou)' : ''}
-                            </option>
-                          );
-                        })}
+                        {(() => {
+                          const modalSrv = services.find(s => s.id === bookingForm.serviceId) || services[0];
+                          const modalDur = Number(modalSrv?.duration) || 30;
+                          const bSetting = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { start: '09:00', end: '19:00', blockedSlots: [] };
+
+                          return TIME_SLOTS_COMPARE.map(t => {
+                            const isToday = (bookingForm.isoDate || getTodayDateISO()) === getTodayDateISO();
+                            const isPastTime = isToday && t < getCurrentTimeHHMM();
+                            const slotsToCheck = getSlotsForStartTimeAndDuration(t, modalDur);
+                            
+                            const bookedAppt = appointments.find(a => {
+                              if (isAppointmentReleased(a)) return false;
+                              const matchBarber = a.barberKey === bookingForm.barberKey || (bookingForm.barberKey === 'luis' && a.barber?.includes('Luis')) || (bookingForm.barberKey === 'yago' && a.barber?.includes('Yago'));
+                              if (!matchBarber) return false;
+                              const matchDate = (bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day;
+                              if (!matchDate) return false;
+                              const occ = getAppointmentOccupiedSlots(a, services);
+                              return slotsToCheck.some(s => occ.includes(s));
+                            });
+
+                            const hasBlocked = slotsToCheck.some(s => Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(s));
+                            const exceedsClose = slotsToCheck.some(s => s >= (bSetting.end || '19:00'));
+                            const isStartBlocked = Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(t);
+                            const isDisabled = isPastTime || Boolean(bookedAppt) || hasBlocked || exceedsClose;
+                            const endT = getEndTimeForStartTimeAndDuration(t, modalDur);
+
+                            return (
+                              <option key={t} value={t} disabled={isDisabled}>
+                                {t} às {endT} {isPastTime ? '(⏰ Passou)' : bookedAppt ? `(👤 Ocupado: ${bookedAppt.client})` : isStartBlocked ? '(🔒 Pausa)' : hasBlocked ? '(🔒 Conflito com Pausa)' : exceedsClose ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
+                              </option>
+                            );
+                          });
+                        })()}
                       </select>
                     </div>
                   </div>
