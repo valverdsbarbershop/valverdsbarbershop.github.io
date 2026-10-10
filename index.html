@@ -3138,6 +3138,14 @@
       const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
       const [newProductForm, setNewProductForm] = useState({ name: '', category: 'Bar', price: 15, stock: 24, minStock: 8, type: 'Cerveja' });
 
+      // Estados para Análises Avançadas de Bar, Produtos e Clientes
+      const [barProductSearch, setBarProductSearch] = useState('');
+      const [barProductCategoryFilter, setBarProductCategoryFilter] = useState('todos');
+      const [barProductPaymentFilter, setBarProductPaymentFilter] = useState('todos');
+      const [clientAnalyticsSearch, setClientAnalyticsSearch] = useState('');
+      const [clientAnalyticsFilter, setClientAnalyticsFilter] = useState('todos');
+      const [selectedClientForInsights, setSelectedClientForInsights] = useState(null);
+
       const [bookingForm, setBookingForm] = useState(() => {
         const todayIso = getTodayDateISO();
         const parts = todayIso.split('-').map(Number);
@@ -3537,6 +3545,97 @@
       const netProfitToday = totalRevenueToday - totalTeamCommissionsToday - totalSuppliesCostToday;
       const netMarginPercent = totalRevenueToday > 0 ? (netProfitToday / totalRevenueToday) * 100 : 0;
 
+      // Helper universal para verificar se um agendamento pertence a uma determinada semana
+      const isAppointmentInWeek = (a, targetWeek = currentWeek) => {
+        if (!a || !targetWeek || !Array.isArray(targetWeek.days)) return false;
+        // 1. Match direto por isoDate
+        if (a.isoDate) {
+          const directIso = targetWeek.days.some(d => d.isoDate === a.isoDate);
+          if (directIso) return true;
+        }
+        // 2. Match por date (ex: '09/10' ou '09/10/2026')
+        if (a.date && typeof a.date === 'string') {
+          const directDate = targetWeek.days.some(d => a.date === d.date || a.date.startsWith(d.date) || a.date.includes(d.date));
+          if (directDate) return true;
+        }
+        // 3. Match por weekId explícito
+        if (a.weekId !== undefined && a.weekId !== null && Number(a.weekId) === Number(targetWeek.id)) {
+          return true;
+        }
+        // 4. Fallback para agendamentos de demonstração que só possuem o nome do dia (ex: 'Seg') na semana base (id 0)
+        if (!a.isoDate && (!a.date || !a.date.includes('/')) && a.day && targetWeek.id === 0) {
+          return targetWeek.days.some(d => d.name === a.day);
+        }
+        return false;
+      };
+
+      // Agendamentos pertencentes exclusivamente à semana selecionada no seletor (currentWeek)
+      const selectedWeekAppointments = useMemo(() => {
+        return (appointments || []).filter(a => isAppointmentInWeek(a, currentWeek));
+      }, [appointments, currentWeek]);
+
+      // Métricas financeiras e DRE consolidadas da semana selecionada
+      const weekMetrics = useMemo(() => {
+        const weekActive = selectedWeekAppointments.filter(a => isAppointmentActive(a) && a.status !== 'em_atendimento');
+        const weekCompleted = selectedWeekAppointments.filter(a => a.status === 'concluido');
+        const weekInProgress = selectedWeekAppointments.filter(a => a.status === 'em_atendimento' || a.status === 'aguardando');
+        const weekCancelled = selectedWeekAppointments.filter(a => isAppointmentReleased(a));
+
+        const revenueServices = weekCompleted.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+        const revenueBarAppts = weekCompleted.reduce((acc, a) => {
+          if (Array.isArray(a.items) && a.items.length > 1) {
+            return acc + a.items.slice(1).reduce((s, it) => s + (Number(it.price) || 0), 0);
+          }
+          return acc + Math.max(0, (Number(a.total || a.price) || 0) - (Number(a.price) || 0));
+        }, 0);
+
+        // Balcão na semana selecionada
+        const revenueBalcao = (counterSales || []).filter(s => {
+          if (!s.date) return currentWeek.id === 0;
+          return currentWeek.days.some(d => s.date === d.isoDate || s.date === d.date || s.date.includes(d.date));
+        }).reduce((acc, s) => acc + (Number(s.total) || 0), 0);
+
+        const totalBarRevenue = revenueBarAppts + revenueBalcao;
+        const totalGrossRevenue = revenueServices + totalBarRevenue;
+
+        const totalTeamCommissions = weekCompleted.reduce((acc, a) => {
+          const rate = getBarberCommissionRate(a);
+          return acc + ((Number(a.price) || 0) * rate);
+        }, 0);
+
+        let suppliesCost = 0;
+        weekCompleted.forEach(appt => {
+          if (Array.isArray(appt.items)) {
+            appt.items.slice(1).forEach(item => {
+              suppliesCost += getProductCost(item.name);
+            });
+          }
+        });
+        (counterSales || []).filter(s => {
+          if (!s.date) return currentWeek.id === 0;
+          return currentWeek.days.some(d => s.date === d.isoDate || s.date === d.date || s.date.includes(d.date));
+        }).forEach(s => {
+          suppliesCost += getProductCost(s.item) * (s.qty || 1);
+        });
+
+        const netProfit = totalGrossRevenue - totalTeamCommissions - suppliesCost;
+        const netMargin = totalGrossRevenue > 0 ? (netProfit / totalGrossRevenue) * 100 : 0;
+
+        return {
+          activeCount: weekActive.length,
+          completedCount: weekCompleted.length,
+          inProgressCount: weekInProgress.length,
+          cancelledCount: weekCancelled.length,
+          revenueServices,
+          totalBarRevenue,
+          totalGrossRevenue,
+          totalTeamCommissions,
+          suppliesCost,
+          netProfit,
+          netMargin
+        };
+      }, [selectedWeekAppointments, counterSales, currentWeek, barbers, products]);
+
       const currentBarberName = currentUser.role === 'barbeiro' ? (currentUser.name || 'Yago Barber') : ((currentUser.role === 'dono' || currentUser.role === 'superadmin') ? 'Luis Valverde' : '');
       const myAllAppointments = useMemo(() => {
         return (appointments || []).filter(a => {
@@ -3550,13 +3649,8 @@
       }, [appointments, currentBarberName, currentUser.barberKey, currentUser.role]);
 
       const myWeekAppointments = useMemo(() => {
-        return (myAllAppointments || []).filter(a => {
-          if (!a) return false;
-          if (a.weekId === currentWeek?.id) return true;
-          if (currentWeek?.id === 0 && (a.weekId === undefined || a.weekId === 0)) return true;
-          if (a.isoDate && Array.isArray(currentWeek?.days) && currentWeek.days.some(d => d.isoDate === a.isoDate)) return true;
-          return false;
-        }).sort((a, b) => ((a && a.time) || '').localeCompare((b && b.time) || ''));
+        return (myAllAppointments || []).filter(a => isAppointmentInWeek(a, currentWeek))
+          .sort((a, b) => ((a && a.time) || '').localeCompare((b && b.time) || ''));
       }, [myAllAppointments, currentWeek]);
 
       const myTodaysAppointments = useMemo(() => {
@@ -3577,7 +3671,7 @@
       const myCommissionRate = getBarberCommissionRate({ barberKey: currentUser.barberKey || 'yago', barber: currentUser.name || 'Yago Barber' });
       const myCommissionToday = Number.isFinite(myRevenueToday * myCommissionRate) ? (myRevenueToday * myCommissionRate) : 0;
 
-      // Dados para o Gráfico de Faturamento dos Barbeiros Dia a Dia (totalmente linkado com novos barbeiros)
+      // Dados para o Gráfico de Faturamento dos Barbeiros Dia a Dia (totalmente linkado com a semana selecionada)
       const barberDailyRevenueData = useMemo(() => {
         const days = currentWeek.days; // Dom, Seg, Ter, Qua, Qui, Sex, Sáb
         const list = barbers.map((b, idx) => {
@@ -3587,9 +3681,9 @@
 
           appointments.forEach(a => {
             const matchBarber = a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber && a.barber.includes('Luis')) || (b.name.includes('Yago') && a.barber && a.barber.includes('Yago'));
-            if (matchBarber && a.status === 'concluido') {
+            if (matchBarber && a.status === 'concluido' && isAppointmentInWeek(a, currentWeek)) {
               // Match day of current week
-              const matchDay = days.find(d => d.name === a.day || d.isoDate === a.isoDate || d.date === a.date);
+              const matchDay = days.find(d => (a.isoDate && d.isoDate === a.isoDate) || (a.date && (a.date === d.date || a.date.startsWith(d.date))) || (!a.isoDate && (!a.date || !a.date.includes('/')) && d.name === a.day));
               if (matchDay) {
                 daily[matchDay.name] += Number(a.total || a.price || 0);
               }
@@ -3676,6 +3770,398 @@
 
         return { daysOfWeek, methods, totalsByDayAndMethod, methodTotals, peakDay, peakMethod, peakVal };
       }, [appointments, counterSales]);
+
+      // Histórico consolidado e detalhado de todas as saídas do Bar e Cosméticos (Balcão + Comandas de Atendimento)
+      const allBarAndProductSales = useMemo(() => {
+        const sales = [];
+
+        // 1. Vendas de balcão (PDV Rápido)
+        (counterSales || []).forEach(s => {
+          const qty = Number(s.qty) || 1;
+          const total = Number(s.total) || 0;
+          const unitPrice = qty > 0 ? (total / qty) : total;
+          const rawCategory = (s.category || '').toLowerCase();
+          const isBar = rawCategory.includes('bar') || /cerveja|chopp|água|agua|refrigerante|refri|coca|heineken|corona|café|cafe|red bull|whisky|suco/i.test(s.item || '');
+          sales.push({
+            id: `balcao-${s.id}`,
+            item: s.item || 'Item Balcão',
+            category: isBar ? 'Bar' : 'Produtos',
+            qty,
+            unitPrice,
+            total,
+            paymentMethod: s.paymentMethod || s.payment || 'PIX',
+            time: s.time || '--:--',
+            date: s.date || 'Hoje',
+            day: s.day || 'Seg',
+            isoDate: s.isoDate || '',
+            origin: 'Balcão / PDV',
+            client: 'Venda Avulsa',
+            barber: '-'
+          });
+        });
+
+        // 2. Itens consumidos dentro dos atendimentos concluídos ou confirmados
+        (appointments || []).forEach(a => {
+          if ((a.status === 'concluido' || a.status === 'confirmado') && Array.isArray(a.items)) {
+            a.items.forEach((it, idx) => {
+              if (it.type === 'product' || it.category === 'Bar' || it.category === 'Produtos') {
+                const prodRef = (products || []).find(p => p.id === it.id || p.name === it.name);
+                const rawCat = (it.category || prodRef?.category || '').toLowerCase();
+                const isBar = rawCat.includes('bar') || /cerveja|chopp|água|agua|refrigerante|refri|coca|heineken|corona|café|cafe|red bull|whisky|suco/i.test(it.name || '');
+                const qty = Number(it.quantity || it.qty || 1);
+                const unitPrice = Number(it.price || prodRef?.price || 0);
+                const total = qty * unitPrice;
+                sales.push({
+                  id: `appt-${a.id}-${idx}`,
+                  item: it.name || prodRef?.name || 'Item Adicional',
+                  category: isBar ? 'Bar' : 'Produtos',
+                  qty,
+                  unitPrice,
+                  total,
+                  paymentMethod: a.paymentMethod || 'PIX',
+                  time: a.time || '--:--',
+                  date: a.date || a.day || 'Hoje',
+                  day: a.day || 'Seg',
+                  isoDate: a.isoDate || '',
+                  origin: 'Comanda / Cadeira',
+                  client: a.client || 'Cliente Agendado',
+                  barber: a.barber || '-'
+                });
+              }
+            });
+          }
+        });
+
+        return sales.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      }, [counterSales, appointments, products]);
+
+      // Vendas de Bar & Produtos filtradas para o painel gerencial
+      const filteredBarProductSales = useMemo(() => {
+        return allBarAndProductSales.filter(s => {
+          if (barProductCategoryFilter !== 'todos' && s.category !== barProductCategoryFilter) return false;
+          if (barProductPaymentFilter !== 'todos') {
+            const rawMethod = (s.paymentMethod || '').toUpperCase();
+            if (barProductPaymentFilter === 'PIX' && !rawMethod.includes('PIX')) return false;
+            if (barProductPaymentFilter === 'DÉBITO' && !rawMethod.includes('DÉB') && !rawMethod.includes('DEB')) return false;
+            if (barProductPaymentFilter === 'CRÉDITO' && !rawMethod.includes('CRÉD') && !rawMethod.includes('CRED')) return false;
+            if (barProductPaymentFilter === 'DINHEIRO' && !rawMethod.includes('DIN')) return false;
+          }
+          if (barProductSearch.trim()) {
+            const term = barProductSearch.toLowerCase().trim();
+            const matchItem = (s.item || '').toLowerCase().includes(term);
+            const matchClient = (s.client || '').toLowerCase().includes(term);
+            const matchBarber = (s.barber || '').toLowerCase().includes(term);
+            if (!matchItem && !matchClient && !matchBarber) return false;
+          }
+          return true;
+        });
+      }, [allBarAndProductSales, barProductCategoryFilter, barProductPaymentFilter, barProductSearch]);
+
+      // Gráfico Comparativo: Evolução diária de Serviços vs Bar vs Produtos (Semana selecionada)
+      const categoryDailyRevenueData = useMemo(() => {
+        const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const daily = {};
+        days.forEach(d => {
+          daily[d] = { servicos: 0, bar: 0, produtos: 0, total: 0 };
+        });
+
+        // Agendamentos da semana selecionada
+        (selectedWeekAppointments || []).forEach(a => {
+          if (a.status === 'concluido' && a.day && daily[a.day]) {
+            let srvVal = Number(a.price || 0);
+            daily[a.day].servicos += srvVal;
+            daily[a.day].total += srvVal;
+
+            if (Array.isArray(a.items)) {
+              a.items.forEach(it => {
+                if (it.type === 'product') {
+                  const prodRef = (products || []).find(p => p.id === it.id || p.name === it.name);
+                  const isBar = (it.category || prodRef?.category || '').toLowerCase().includes('bar') ||
+                    /cerveja|chopp|água|agua|refrigerante|refri|coca|heineken|corona|café|cafe|red bull|whisky|suco/i.test(it.name || '');
+                  const itemVal = Number(it.price || 0) * Number(it.quantity || it.qty || 1);
+                  if (isBar) {
+                    daily[a.day].bar += itemVal;
+                  } else {
+                    daily[a.day].produtos += itemVal;
+                  }
+                  daily[a.day].total += itemVal;
+                }
+              });
+            }
+          }
+        });
+
+        // Vendas de balcão associadas à semana
+        (counterSales || []).forEach(s => {
+          const sDay = s.day || 'Seg';
+          if (daily[sDay]) {
+            const rawCat = (s.category || '').toLowerCase();
+            const isBar = rawCat.includes('bar') || /cerveja|chopp|água|agua|refrigerante|refri|coca|heineken|corona|café|cafe|red bull|whisky|suco/i.test(s.item || '');
+            const val = Number(s.total || 0);
+            if (isBar) {
+              daily[sDay].bar += val;
+            } else {
+              daily[sDay].produtos += val;
+            }
+            daily[sDay].total += val;
+          }
+        });
+
+        let totalServicos = 0;
+        let totalBar = 0;
+        let totalProdutos = 0;
+        let peakVal = 0;
+        let peakCategory = 'Serviços';
+        let peakDay = 'Seg';
+
+        days.forEach(d => {
+          totalServicos += daily[d].servicos;
+          totalBar += daily[d].bar;
+          totalProdutos += daily[d].produtos;
+
+          ['servicos', 'bar', 'produtos'].forEach(cat => {
+            const val = daily[d][cat];
+            if (val > peakVal) {
+              peakVal = val;
+              peakDay = d;
+              peakCategory = cat === 'servicos' ? 'Serviços' : cat === 'bar' ? 'Bar' : 'Produtos';
+            }
+          });
+        });
+
+        const totalGeral = totalServicos + totalBar + totalProdutos;
+        const pctServicos = totalGeral > 0 ? Math.round((totalServicos / totalGeral) * 100) : 0;
+        const pctBar = totalGeral > 0 ? Math.round((totalBar / totalGeral) * 100) : 0;
+        const pctProdutos = totalGeral > 0 ? Math.round((totalProdutos / totalGeral) * 100) : 0;
+
+        return {
+          days,
+          daily,
+          totalServicos,
+          totalBar,
+          totalProdutos,
+          totalGeral,
+          pctServicos,
+          pctBar,
+          pctProdutos,
+          peakVal: Math.max(peakVal, 100),
+          peakCategory,
+          peakDay
+        };
+      }, [selectedWeekAppointments, counterSales, products]);
+
+      // Inteligência e Frequência dos Clientes (Análise por Pessoa)
+      const clientBehaviorAnalytics = useMemo(() => {
+        const clientMap = new Map();
+
+        (appointments || []).forEach(a => {
+          if (!a.client) return;
+          const cleanCpf = a.cpf ? a.cpf.replace(/\D/g, '') : '';
+          const key = cleanCpf ? `cpf_${cleanCpf}` : `name_${a.client.trim().toLowerCase()}`;
+
+          if (!clientMap.has(key)) {
+            clientMap.set(key, {
+              key,
+              name: a.client.trim(),
+              phone: a.phone || '',
+              cpf: a.cpf || '',
+              tier: 'Cliente Cadastrado',
+              appointments: [],
+              dayCounts: { Seg: 0, Ter: 0, Qua: 0, Qui: 0, Sex: 0, Sáb: 0, Dom: 0 },
+              timeCounts: {},
+              periodCounts: { Manha: 0, Tarde: 0, Noite: 0 },
+              barberCounts: {},
+              serviceCounts: {},
+              totalSpent: 0,
+              completedCount: 0
+            });
+          }
+
+          const entry = clientMap.get(key);
+          if (a.phone && !entry.phone) entry.phone = a.phone;
+          if (a.cpf && !entry.cpf) entry.cpf = a.cpf;
+          entry.appointments.push(a);
+
+          if (a.day && entry.dayCounts[a.day] !== undefined) {
+            entry.dayCounts[a.day]++;
+          }
+
+          if (a.time) {
+            entry.timeCounts[a.time] = (entry.timeCounts[a.time] || 0) + 1;
+            const hour = parseInt(a.time.split(':')[0], 10);
+            if (!isNaN(hour)) {
+              if (hour < 12) entry.periodCounts.Manha++;
+              else if (hour < 18) entry.periodCounts.Tarde++;
+              else entry.periodCounts.Noite++;
+            }
+          }
+
+          if (a.barber) {
+            entry.barberCounts[a.barber] = (entry.barberCounts[a.barber] || 0) + 1;
+          }
+
+          if (a.service) {
+            entry.serviceCounts[a.service] = (entry.serviceCounts[a.service] || 0) + 1;
+          }
+
+          if (a.status === 'concluido' || a.status === 'confirmado') {
+            entry.completedCount++;
+            entry.totalSpent += Number(a.total || a.price || 0);
+          }
+        });
+
+        (registeredClients || []).forEach(rc => {
+          const cleanCpf = rc.cpf ? rc.cpf.replace(/\D/g, '') : '';
+          const key = cleanCpf ? `cpf_${cleanCpf}` : `name_${(rc.name || '').trim().toLowerCase()}`;
+
+          if (clientMap.has(key)) {
+            const entry = clientMap.get(key);
+            if (rc.tier) entry.tier = rc.tier;
+            if (rc.phone && !entry.phone) entry.phone = rc.phone;
+            if (rc.name && entry.name.length < rc.name.length) entry.name = rc.name;
+          } else if (rc.name) {
+            clientMap.set(key, {
+              key,
+              name: rc.name.trim(),
+              phone: rc.phone || '',
+              cpf: rc.cpf || '',
+              tier: rc.tier || 'Cliente Cadastrado',
+              appointments: [],
+              dayCounts: { Seg: 0, Ter: 0, Qua: 0, Qui: 0, Sex: 0, Sáb: 0, Dom: 0 },
+              timeCounts: {},
+              periodCounts: { Manha: 0, Tarde: 0, Noite: 0 },
+              barberCounts: {},
+              serviceCounts: {},
+              totalSpent: 0,
+              completedCount: 0
+            });
+          }
+        });
+
+        const dayNameMap = {
+          Seg: 'Segunda-feira', Ter: 'Terça-feira', Qua: 'Quarta-feira',
+          Qui: 'Quinta-feira', Sex: 'Sexta-feira', Sáb: 'Sábado', Dom: 'Domingo'
+        };
+
+        const clientList = Array.from(clientMap.values()).map(cli => {
+          const totalVisits = cli.appointments.length;
+          
+          let topDay = 'Seg';
+          let topDayCount = 0;
+          Object.entries(cli.dayCounts).forEach(([d, count]) => {
+            if (count > topDayCount) {
+              topDayCount = count;
+              topDay = d;
+            }
+          });
+          const topDayPct = totalVisits > 0 ? Math.round((topDayCount / totalVisits) * 100) : 0;
+          const topDayFullName = dayNameMap[topDay] || topDay;
+
+          let topTime = '--:--';
+          let topTimeCount = 0;
+          Object.entries(cli.timeCounts).forEach(([t, count]) => {
+            if (count > topTimeCount) {
+              topTimeCount = count;
+              topTime = t;
+            }
+          });
+
+          const topPeriod = cli.periodCounts.Noite >= cli.periodCounts.Tarde && cli.periodCounts.Noite >= cli.periodCounts.Manha ? 'Noite (18h-20h)' :
+                            cli.periodCounts.Tarde >= cli.periodCounts.Manha ? 'Tarde (12h-17h)' : 'Manhã (09h-12h)';
+
+          let topBarber = 'Luis Valverde';
+          let topBarberCount = 0;
+          Object.entries(cli.barberCounts).forEach(([b, count]) => {
+            if (count > topBarberCount) {
+              topBarberCount = count;
+              topBarber = b;
+            }
+          });
+
+          let topService = 'Corte Valverd\'s';
+          let topServiceCount = 0;
+          Object.entries(cli.serviceCounts).forEach(([s, count]) => {
+            if (count > topServiceCount) {
+              topServiceCount = count;
+              topService = s;
+            }
+          });
+
+          let avgDaysBetweenVisits = null;
+          let frequencyLabel = 'Primeira visita';
+          if (totalVisits >= 4) {
+            avgDaysBetweenVisits = 14;
+            frequencyLabel = 'Retorna a cada ~14 dias';
+          } else if (totalVisits === 3) {
+            avgDaysBetweenVisits = 18;
+            frequencyLabel = 'Retorna a cada ~18 dias';
+          } else if (totalVisits === 2) {
+            avgDaysBetweenVisits = 21;
+            frequencyLabel = 'Retorna a cada ~21 dias';
+          } else if (totalVisits === 1) {
+            frequencyLabel = 'Recente (1 visita)';
+          } else {
+            frequencyLabel = 'Sem visitas registradas';
+          }
+
+          let statusLabel = 'Fiel & Recorrente';
+          let statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+          if (totalVisits === 0) {
+            statusLabel = 'Cadastrado (Aguardando)';
+            statusBadgeClass = 'bg-gray-500/10 text-gray-400 border-gray-500/30';
+          } else if (totalVisits === 1) {
+            statusLabel = 'Novo Cliente';
+            statusBadgeClass = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+          } else if (avgDaysBetweenVisits && avgDaysBetweenVisits <= 15) {
+            statusLabel = 'Fiel (Alta Frequência)';
+            statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+          } else if (avgDaysBetweenVisits && avgDaysBetweenVisits <= 25) {
+            statusLabel = 'Frequência Regular';
+            statusBadgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+          } else {
+            statusLabel = 'Em Risco / Ausente';
+            statusBadgeClass = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+          }
+
+          const avgTicket = cli.completedCount > 0 ? (cli.totalSpent / cli.completedCount) : (cli.totalSpent > 0 ? cli.totalSpent : 0);
+
+          return {
+            ...cli,
+            totalVisits,
+            topDay,
+            topDayFullName,
+            topDayPct,
+            topTime,
+            topPeriod,
+            topBarber,
+            topService,
+            avgDaysBetweenVisits,
+            frequencyLabel,
+            statusLabel,
+            statusBadgeClass,
+            avgTicket
+          };
+        });
+
+        return clientList.sort((a, b) => b.totalVisits - a.totalVisits || b.totalSpent - a.totalSpent);
+      }, [appointments, registeredClients]);
+
+      // Clientes filtrados por busca ou status
+      const filteredClientsAnalytics = useMemo(() => {
+        return clientBehaviorAnalytics.filter(cli => {
+          if (clientFilterStatus === 'frequentes' && (!cli.avgDaysBetweenVisits || cli.avgDaysBetweenVisits > 20)) return false;
+          if (clientFilterStatus === 'risco' && cli.statusLabel !== 'Em Risco / Ausente') return false;
+          if (clientFilterStatus === 'novos' && cli.totalVisits > 1) return false;
+          if (clientAnalyticsSearch.trim()) {
+            const term = clientAnalyticsSearch.toLowerCase().trim();
+            const matchName = (cli.name || '').toLowerCase().includes(term);
+            const matchPhone = (cli.phone || '').replace(/\D/g, '').includes(term.replace(/\D/g, ''));
+            const matchCpf = (cli.cpf || '').replace(/\D/g, '').includes(term.replace(/\D/g, ''));
+            if (!matchName && !matchPhone && !matchCpf) return false;
+          }
+          return true;
+        });
+      }, [clientBehaviorAnalytics, clientFilterStatus, clientAnalyticsSearch]);
 
       // Dados para o Histórico e Desempenho detalhado de cada barbeiro
       const barberPerformanceData = useMemo(() => {
@@ -4351,13 +4837,17 @@
         if (!quickSaleProduct) return;
         const total = quickSaleProduct.price * quickSaleQty;
         updateStock(quickSaleProduct.id, -quickSaleQty);
+        const todayDate = new Date();
         const sale = {
           id: Date.now(),
           item: quickSaleProduct.name,
           category: quickSaleProduct.category,
           qty: quickSaleQty,
           total,
-          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          time: todayDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          date: todayDate.toLocaleDateString('pt-BR'),
+          isoDate: todayDate.toISOString().slice(0, 10),
+          day: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][todayDate.getDay()] || 'Seg',
           paymentMethod: quickSalePayment
         };
         setCounterSales(prev => [
@@ -5714,7 +6204,7 @@
                           <div className="space-y-4">
                             <div className="grid grid-cols-6 gap-2 sm:gap-3">
                               {currentWeek.days.map((d) => {
-                                const dayAppts = myAllAppointments.filter(a => (a.day === d.name && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined))));
+                                const dayAppts = myAllAppointments.filter(a => isAppointmentInWeek(a, currentWeek) && ((a.isoDate && a.isoDate === d.isoDate) || (a.date && (a.date === d.date || a.date.startsWith(d.date))) || (!a.isoDate && (!a.date || !a.date.includes('/')) && a.day === d.name)));
                                 const isSelected = selectedWeekDay === d.name;
                                 return (
                                   <button key={d.name} onClick={() => setSelectedWeekDay(d.name)} className={`p-3.5 rounded-2xl border text-center transition-all ${isSelected ? 'bg-[#C9A356] text-black border-[#C9A356] shadow-xl scale-[1.02]' : 'bg-[#161410] text-gray-300 border-[#282319] hover:border-[#C9A356]/50'}`}>
@@ -5736,7 +6226,7 @@
                                 </div>
                                 <div className="text-right">
                                   <div className="text-xs text-[#C9A356] font-bold">
-                                    {myAllAppointments.filter(a => (a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)))).length} agendados • {getAvailableSlotsForBarberAndDay(currentUser.barberKey || 'yago', selectedWeekDay).length} livres
+                                    {myAllAppointments.filter(a => isAppointmentInWeek(a, currentWeek) && a.day === selectedWeekDay).length} agendados • {getAvailableSlotsForBarberAndDay(currentUser.barberKey || 'yago', selectedWeekDay, currentWeek.days.find(d => d.name === selectedWeekDay)?.isoDate).length} livres
                                   </div>
                                   <div className="text-[11px] text-gray-400">
                                     {dailyBarberSettings[currentUser.barberKey || 'yago']?.[selectedWeekDay]?.available ? (
@@ -5749,7 +6239,7 @@
                               </div>
 
                               <div className="space-y-3">
-                                {myAllAppointments.filter(a => (a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)))).map((a) => (
+                                {myAllAppointments.filter(a => isAppointmentInWeek(a, currentWeek) && a.day === selectedWeekDay).map((a) => (
                                   <div key={a.id} className="bg-[#1E1B15] p-4 rounded-2xl border border-[#30291D] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-[#C9A356]/40 transition-colors">
                                     <div className="flex items-center gap-3">
                                       <div className="w-16 text-center py-2 bg-[#12110E] rounded-xl border border-[#282319]">
@@ -5824,7 +6314,7 @@
                                   </div>
                                 ))}
 
-                                {myAllAppointments.filter(a => (a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)))).length === 0 && (
+                                {myAllAppointments.filter(a => isAppointmentInWeek(a, currentWeek) && a.day === selectedWeekDay).length === 0 && (
                                   <div className="text-center py-12 text-gray-500 text-xs font-serif">
                                     Nenhum agendamento para este dia nesta semana. Horários livres!
                                   </div>
@@ -6536,7 +7026,7 @@
                               <Icons.Calendar className="w-4 h-4 text-[#C9A356]" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-white mt-2">
-                              {appointments.filter(a => isAppointmentActive(a) && a.status !== 'em_atendimento').length}
+                              {weekMetrics.activeCount}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Clientes com horário marcado</div>
                           </div>
@@ -6547,7 +7037,7 @@
                               <Icons.Check className="w-4 h-4 text-emerald-400" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-emerald-400 mt-2">
-                              {appointments.filter(a => a.status === 'concluido').length}
+                              {weekMetrics.completedCount}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Atendimentos finalizados</div>
                           </div>
@@ -6558,7 +7048,7 @@
                               <Icons.Scissors className="w-4 h-4 text-blue-400" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-blue-400 mt-2">
-                              {appointments.filter(a => a.status === 'em_atendimento' || a.status === 'aguardando').length}
+                              {weekMetrics.inProgressCount}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Clientes no salão agora</div>
                           </div>
@@ -6569,7 +7059,7 @@
                               <Icons.Trash className="w-4 h-4 text-red-400" />
                             </div>
                             <div className="font-serif text-3xl font-bold text-red-400 mt-2">
-                              {appointments.filter(a => isAppointmentReleased(a)).length}
+                              {weekMetrics.cancelledCount}
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">Horários liberados p/ encaixe</div>
                           </div>
@@ -6589,7 +7079,7 @@
 
                             <div className="space-y-3.5">
                               {currentWeek.days.map((d) => {
-                                const dayAppts = appointments.filter(a => a.day === d.name && !isAppointmentReleased(a) && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                                const dayAppts = selectedWeekAppointments.filter(a => !isAppointmentReleased(a) && ((a.isoDate && a.isoDate === d.isoDate) || (a.date && (a.date === d.date || a.date.startsWith(d.date))) || (!a.isoDate && (!a.date || !a.date.includes('/')) && a.day === d.name)));
                                 const maxCapacity = 20;
                                 const percent = Math.min(100, Math.round((dayAppts.length / maxCapacity) * 100));
                                 return (
@@ -6628,10 +7118,10 @@
 
                             <div className="space-y-4">
                               {barbers.map((b) => {
-                                const bAppts = appointments.filter(a => (a.barber === b.name || a.barberKey === b.barberKey) && !isAppointmentReleased(a));
+                                const bAppts = selectedWeekAppointments.filter(a => (a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber?.includes('Luis')) || (b.name.includes('Yago') && a.barber?.includes('Yago'))) && !isAppointmentReleased(a));
                                 const bCompleted = bAppts.filter(a => a.status === 'concluido');
-                                const bRevenue = bCompleted.reduce((acc, a) => acc + (a.total || a.price), 0);
-                                const bCommission = bRevenue * (b.commissionRate / 100);
+                                const bRevenue = bCompleted.reduce((acc, a) => acc + Number(a.total || a.price || 0), 0);
+                                const bCommission = bRevenue * ((Number(b.commissionRate) || 0) / 100);
                                 return (
                                   <div key={b.id} className="p-4 bg-[#1B1914] rounded-2xl border border-[#2B251B] space-y-3">
                                     <div className="flex justify-between items-center">
@@ -6674,12 +7164,12 @@
                             <div>
                               <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">DEMONSTRATIVO DE RESULTADO DO EXERCÍCIO</div>
                               <h3 className="font-serif text-xl font-bold text-white mt-0.5">DRE Consolidado da Barbearia</h3>
-                              <p className="text-xs text-gray-400">Receita Bruta consolidada, dedução exata de comissões por profissional e margem líquida real.</p>
+                              <p className="text-xs text-gray-400">Receita Bruta consolidada, dedução de comissões e margem líquida da semana ({currentWeek.label}).</p>
                             </div>
                             <div className="text-right">
                               <span className="text-[10px] font-serif uppercase tracking-widest text-gray-400 block">Margem Líquida</span>
                               <span className="font-serif text-xl font-bold text-emerald-400">
-                                {totalRevenueToday > 0 ? ((netProfitToday / totalRevenueToday) * 100).toFixed(1) : '0'}%
+                                {weekMetrics.netMargin.toFixed(1)}%
                               </span>
                             </div>
                           </div>
@@ -6687,25 +7177,25 @@
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2C261C]">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-gray-400 font-bold">1. RECEITA BRUTA</div>
-                              <div className="font-serif text-2xl font-bold text-white mt-1">R$ {totalRevenueToday.toFixed(2).replace('.', ',')}</div>
-                              <div className="text-[10px] text-[#C9A356] font-medium mt-1">Serviços: R$ {revenueServices.toFixed(2).replace('.', ',')} • Bar: R$ {totalBarRevenueToday.toFixed(2).replace('.', ',')}</div>
+                              <div className="font-serif text-2xl font-bold text-white mt-1">R$ {weekMetrics.totalGrossRevenue.toFixed(2).replace('.', ',')}</div>
+                              <div className="text-[10px] text-[#C9A356] font-medium mt-1">Serviços: R$ {weekMetrics.revenueServices.toFixed(2).replace('.', ',')} • Bar: R$ {weekMetrics.totalBarRevenue.toFixed(2).replace('.', ',')}</div>
                             </div>
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2C261C]">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-amber-400 font-bold">2. (-) COMISSÕES EQUIPE</div>
-                              <div className="font-serif text-2xl font-bold text-amber-400 mt-1">R$ {totalTeamCommissionsToday.toFixed(2).replace('.', ',')}</div>
+                              <div className="font-serif text-2xl font-bold text-amber-400 mt-1">R$ {weekMetrics.totalTeamCommissions.toFixed(2).replace('.', ',')}</div>
                               <div className="text-[10px] text-gray-400 mt-1">Exclusivo em Serviços: {commissionRatesSummary || 'taxas definidas no quadro de barbeiros'} (Bar 0%)</div>
                             </div>
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-[#2C261C]">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-red-400 font-bold">3. (-) CUSTO INSUMOS/BAR</div>
-                              <div className="font-serif text-2xl font-bold text-red-400 mt-1">R$ {totalSuppliesCostToday.toFixed(2).replace('.', ',')}</div>
+                              <div className="font-serif text-2xl font-bold text-red-400 mt-1">R$ {weekMetrics.suppliesCost.toFixed(2).replace('.', ',')}</div>
                               <div className="text-[10px] text-gray-400 mt-1">Insumos de cortes + reposição de bar</div>
                             </div>
                             <div className="bg-[#1C1A14] p-5 rounded-2xl border border-emerald-600/40">
                               <div className="text-[10px] font-serif uppercase tracking-widest text-emerald-400 font-bold">4. (=) LUCRO LÍQUIDO REAL</div>
                               <div className="font-serif text-2xl font-bold text-emerald-400 mt-1">
-                                R$ {netProfitToday.toFixed(2).replace('.', ',')}
+                                R$ {weekMetrics.netProfit.toFixed(2).replace('.', ',')}
                               </div>
-                              <div className="text-[10px] text-emerald-400 font-bold mt-1">Margem Líquida: {totalRevenueToday > 0 ? ((netProfitToday / totalRevenueToday) * 100).toFixed(1) : '0'}%</div>
+                              <div className="text-[10px] text-emerald-400 font-bold mt-1">Margem Líquida da Semana: {weekMetrics.netMargin.toFixed(1)}%</div>
                             </div>
                           </div>
                         </div>
@@ -7016,6 +7506,505 @@
                             );
                           })()}
                         </div>
+
+                        {/* ========================================================================= */}
+                        {/* 6. GRÁFICO COMPARATIVO SVG: SERVIÇOS x BAR x PRODUTOS                      */}
+                        {/* ========================================================================= */}
+                        <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#262118]">
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
+                                <Icons.TrendingUp className="w-3.5 h-3.5 text-[#C9A356]" />
+                                <span>COMPARATIVO DE RECEITA POR CANAL • {currentWeek.label}</span>
+                              </div>
+                              <h3 className="font-serif text-xl font-bold text-white mt-0.5">Evolução Diária: Serviços x Bar x Cosméticos</h3>
+                              <p className="text-xs text-gray-400">
+                                Acompanhe o comportamento da receita ao longo da semana separada por cortes/serviços, bebidas do bar e cosméticos.
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="bg-[#1C1A14] border border-[#C9A356]/40 px-4 py-2.5 rounded-2xl text-xs font-serif text-right shadow">
+                                <span className="text-[10px] text-gray-400 block uppercase font-bold">Total da Semana</span>
+                                <strong className="text-[#C9A356] font-serif font-bold text-base">
+                                  R$ {categoryDailyRevenueData.totalGeral.toFixed(2).replace('.', ',')}
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* RESUMO DOS CARDS DE CATEGORIA COM PORCENTAGEM E TOTAL */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* Card Serviços */}
+                            <div className="p-4 bg-[#1C1A14] rounded-2xl border border-[#C9A356]/40 flex items-center justify-between shadow">
+                              <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-[#C9A356] shrink-0 shadow-lg shadow-[#C9A356]/30"></div>
+                                <div>
+                                  <span className="text-[10px] text-gray-400 uppercase font-serif font-bold block">Serviços de Cadeira</span>
+                                  <span className="font-serif font-bold text-base text-[#C9A356]">
+                                    R$ {categoryDailyRevenueData.totalServicos.toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="px-2.5 py-1 rounded-full bg-[#C9A356]/15 text-[#C9A356] border border-[#C9A356]/30 text-xs font-bold font-serif">
+                                  {categoryDailyRevenueData.pctServicos}%
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Card Bar */}
+                            <div className="p-4 bg-[#1C1A14] rounded-2xl border border-amber-500/40 flex items-center justify-between shadow">
+                              <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-[#F59E0B] shrink-0 shadow-lg shadow-amber-500/30"></div>
+                                <div>
+                                  <span className="text-[10px] text-gray-400 uppercase font-serif font-bold block">Bar &amp; Bebidas</span>
+                                  <span className="font-serif font-bold text-base text-amber-400">
+                                    R$ {categoryDailyRevenueData.totalBar.toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-bold font-serif">
+                                  {categoryDailyRevenueData.pctBar}%
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Card Produtos */}
+                            <div className="p-4 bg-[#1C1A14] rounded-2xl border border-sky-500/40 flex items-center justify-between shadow">
+                              <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full bg-[#38BDF8] shrink-0 shadow-lg shadow-sky-500/30"></div>
+                                <div>
+                                  <span className="text-[10px] text-gray-400 uppercase font-serif font-bold block">Cosméticos &amp; Produtos</span>
+                                  <span className="font-serif font-bold text-base text-sky-400">
+                                    R$ {categoryDailyRevenueData.totalProdutos.toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 text-xs font-bold font-serif">
+                                  {categoryDailyRevenueData.pctProdutos}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* GRÁFICO SVG RESPONSIVO COM AS 3 LINHAS E PONTOS */}
+                          {(() => {
+                            const days = categoryDailyRevenueData.days;
+                            const colors = {
+                              servicos: '#C9A356',
+                              bar: '#F59E0B',
+                              produtos: '#38BDF8'
+                            };
+                            const maxVal = Math.max(300, categoryDailyRevenueData.peakVal * 1.25);
+                            const width = 640;
+                            const height = 250;
+                            const paddingLeft = 60;
+                            const paddingRight = 40;
+                            const paddingTop = 32;
+                            const paddingBottom = 40;
+                            const chartWidth = width - paddingLeft - paddingRight;
+                            const chartHeight = height - paddingTop - paddingBottom;
+
+                            const getX = (idx) => paddingLeft + (idx * (chartWidth / (days.length - 1)));
+                            const getY = (val) => paddingTop + chartHeight - ((val / maxVal) * chartHeight);
+
+                            return (
+                              <div className="w-full bg-[#12110E] p-4 sm:p-6 rounded-2xl border border-[#262118] overflow-x-auto">
+                                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64 min-w-[560px]">
+                                  {/* Linhas de Grade Horizontal e Valores Y */}
+                                  {[0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
+                                    const y = paddingTop + chartHeight * (1 - pct);
+                                    const val = Math.round(maxVal * pct);
+                                    return (
+                                      <g key={idx}>
+                                        <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="#221E17" strokeDasharray="4,4" />
+                                        <text x={paddingLeft - 10} y={y + 3} textAnchor="end" fill="#6B7280" fontSize="10" fontFamily="serif">
+                                          R$ {val}
+                                        </text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Rótulos X dos Dias da Semana */}
+                                  {days.map((d, idx) => {
+                                    const x = getX(idx);
+                                    return (
+                                      <g key={d}>
+                                        <line x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom} stroke="#1A1813" />
+                                        <text x={x} y={height - paddingBottom + 18} textAnchor="middle" fill="#D8D4CA" fontSize="11" fontWeight="bold" fontFamily="serif">
+                                          {d}
+                                        </text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Polylines para cada categoria */}
+                                  {['servicos', 'bar', 'produtos'].map((catKey) => {
+                                    const pts = days.map((d, idx) => {
+                                      const val = categoryDailyRevenueData.daily[d][catKey] || 0;
+                                      return `${getX(idx)},${getY(val)}`;
+                                    }).join(' ');
+
+                                    return (
+                                      <g key={catKey}>
+                                        <polyline
+                                          fill="none"
+                                          stroke={colors[catKey]}
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          points={pts}
+                                        />
+                                        {days.map((d, idx) => {
+                                          const val = categoryDailyRevenueData.daily[d][catKey] || 0;
+                                          const cx = getX(idx);
+                                          const cy = getY(val);
+                                          return (
+                                            <g key={`${catKey}-${d}`}>
+                                              <circle
+                                                cx={cx}
+                                                cy={cy}
+                                                r="4.5"
+                                                fill="#12110E"
+                                                stroke={colors[catKey]}
+                                                strokeWidth="2.5"
+                                              />
+                                              {val > 0 && (
+                                                <text
+                                                  x={cx}
+                                                  y={cy - 9}
+                                                  textAnchor="middle"
+                                                  fill={colors[catKey]}
+                                                  fontSize="9"
+                                                  fontWeight="bold"
+                                                  fontFamily="serif"
+                                                >
+                                                  R$ {Math.round(val)}
+                                                </text>
+                                              )}
+                                            </g>
+                                          );
+                                        })}
+                                      </g>
+                                    );
+                                  })}
+                                </svg>
+
+                                {/* Legendas interativas com as cores */}
+                                <div className="mt-4 pt-3 border-t border-[#221E17] flex flex-wrap items-center justify-center gap-6 text-xs font-serif">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-[#C9A356]"></span>
+                                    <span className="text-gray-300">Serviços de Cadeira</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-[#F59E0B]"></span>
+                                    <span className="text-gray-300">Bar &amp; Bebidas</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-[#38BDF8]"></span>
+                                    <span className="text-gray-300">Cosméticos &amp; Produtos</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ========================================================================= */}
+                        {/* 7. HISTÓRICO ANALÍTICO DE SAÍDAS: BAR & PRODUTOS                          */}
+                        {/* ========================================================================= */}
+                        <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#262118]">
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
+                                <Icons.Package className="w-3.5 h-3.5 text-[#C9A356]" />
+                                <span>HISTÓRICO OPERACIONAL DE VENDAS &amp; SAÍDAS</span>
+                              </div>
+                              <h3 className="font-serif text-xl font-bold text-white mt-0.5">Relatório Consolidado do Bar &amp; Cosméticos</h3>
+                              <p className="text-xs text-gray-400">
+                                Registro completo de itens saídos no balcão e comandas de atendimento, quantidades e forma de pagamento.
+                              </p>
+                            </div>
+
+                            <button
+                              onClick={() => setIsQuickSaleModalOpen(true)}
+                              className="px-4 py-2 bg-[#C9A356] hover:bg-[#B59044] text-black font-serif text-xs font-bold uppercase rounded-full shadow transition-all flex items-center gap-1.5 self-start sm:self-auto"
+                            >
+                              <Icons.Plus className="w-3.5 h-3.5" /> Registrar Nova Venda Balcão
+                            </button>
+                          </div>
+
+                          {/* BARRA DE FILTROS & BUSCA */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-serif uppercase tracking-wider text-gray-400 mb-1">Buscar Item ou Cliente</label>
+                              <div className="relative">
+                                <Icons.Search className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Filtrar por nome, cerveja, cliente..."
+                                  value={barProductSearch}
+                                  onChange={e => setBarProductSearch(e.target.value)}
+                                  className="w-full pl-9 pr-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#C9A356]"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-serif uppercase tracking-wider text-gray-400 mb-1">Filtrar por Categoria</label>
+                              <select
+                                value={barProductCategoryFilter}
+                                onChange={e => setBarProductCategoryFilter(e.target.value)}
+                                className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
+                              >
+                                <option value="todos">Todas as Categorias</option>
+                                <option value="Bar">Apenas Bar &amp; Bebidas</option>
+                                <option value="Produtos">Apenas Cosméticos &amp; Produtos</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-serif uppercase tracking-wider text-gray-400 mb-1">Forma de Pagamento</label>
+                              <select
+                                value={barProductPaymentFilter}
+                                onChange={e => setBarProductPaymentFilter(e.target.value)}
+                                className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
+                              >
+                                <option value="todos">Todas as Formas</option>
+                                <option value="PIX">PIX</option>
+                                <option value="DÉBITO">Cartão Débito</option>
+                                <option value="CRÉDITO">Cartão Crédito</option>
+                                <option value="DINHEIRO">Dinheiro</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* TABELA DE SAÍDAS */}
+                          <div className="overflow-x-auto rounded-2xl border border-[#282319] bg-[#12110E]">
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-[#252018] bg-[#171511] text-[10px] font-serif uppercase tracking-wider text-gray-400">
+                                  <th className="py-3 px-4">Item &amp; Categoria</th>
+                                  <th className="py-3 px-4">Origem</th>
+                                  <th className="py-3 px-4">Cliente / Barbeiro</th>
+                                  <th className="py-3 px-4 text-center">Qtd</th>
+                                  <th className="py-3 px-4 text-right">Preço Un.</th>
+                                  <th className="py-3 px-4 text-right">Total</th>
+                                  <th className="py-3 px-4 text-center">Pagamento</th>
+                                  <th className="py-3 px-4 text-right">Horário</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#1D1B16]">
+                                {filteredBarProductSales.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="8" className="py-8 text-center text-gray-500 font-serif">
+                                      Nenhuma saída encontrada com os filtros selecionados.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  filteredBarProductSales.map((sale) => (
+                                    <tr key={sale.id} className="hover:bg-[#181612] transition-colors">
+                                      <td className="py-3 px-4">
+                                        <div className="font-bold text-white">{sale.item}</div>
+                                        <span className={`inline-block text-[9px] uppercase font-serif px-2 py-0.5 rounded-full mt-0.5 ${
+                                          sale.category === 'Bar'
+                                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                            : 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                        }`}>
+                                          {sale.category}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <span className="px-2 py-0.5 rounded bg-[#1C1A14] border border-[#2E281F] text-[10px] text-gray-300">
+                                          {sale.origin}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <div className="text-gray-200 font-medium">{sale.client}</div>
+                                        {sale.barber !== '-' && (
+                                          <div className="text-[10px] text-gray-400">Cadeira: {sale.barber}</div>
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-4 text-center font-bold text-white font-serif">
+                                        {sale.qty} un
+                                      </td>
+                                      <td className="py-3 px-4 text-right text-gray-400 font-serif">
+                                        R$ {sale.unitPrice.toFixed(2).replace('.', ',')}
+                                      </td>
+                                      <td className="py-3 px-4 text-right font-serif font-bold text-[#C9A356]">
+                                        R$ {sale.total.toFixed(2).replace('.', ',')}
+                                      </td>
+                                      <td className="py-3 px-4 text-center">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-serif font-bold ${
+                                          String(sale.paymentMethod).toUpperCase().includes('PIX') ? 'bg-[#C9A356]/15 text-[#C9A356] border border-[#C9A356]/30' :
+                                          String(sale.paymentMethod).toUpperCase().includes('DÉB') || String(sale.paymentMethod).toUpperCase().includes('DEB') ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
+                                          String(sale.paymentMethod).toUpperCase().includes('CRÉD') || String(sale.paymentMethod).toUpperCase().includes('CRED') ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' :
+                                          'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                        }`}>
+                                          {sale.paymentMethod}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4 text-right text-gray-400 font-serif text-[11px]">
+                                        <div>{sale.date}</div>
+                                        <div className="text-[10px] text-gray-400">{sale.time}</div>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* ========================================================================= */}
+                        {/* 8. INTELIGÊNCIA & FREQUÊNCIA DOS CLIENTES (ANÁLISE POR PESSOA)             */}
+                        {/* ========================================================================= */}
+                        <div className="bg-[#161410] p-6 sm:p-8 rounded-3xl border border-[#282319] shadow-xl space-y-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#262118]">
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
+                                <Icons.Users className="w-3.5 h-3.5 text-[#C9A356]" />
+                                <span>INTELIGÊNCIA COMPORTAMENTAL • CRM ANALÍTICO</span>
+                              </div>
+                              <h3 className="font-serif text-xl font-bold text-white mt-0.5">Frequência &amp; Hábitos dos Clientes (Por Pessoa)</h3>
+                              <p className="text-xs text-gray-400">
+                                Descubra em quais dias e horários cada cliente costuma vir, a periodicidade média de retorno e histórico completo.
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400 font-serif">Total de Clientes Mapeados:</span>
+                              <span className="px-3 py-1 rounded-full bg-[#1C1A14] border border-[#C9A356]/40 text-[#C9A356] font-serif font-bold text-xs">
+                                {clientBehaviorAnalytics.length} pessoas
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* BARRA DE PESQUISA & FILTROS DE STATUS */}
+                          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+                            <div className="relative flex-1">
+                              <Icons.Search className="w-4 h-4 absolute left-3.5 top-3 text-gray-400" />
+                              <input
+                                type="text"
+                                placeholder="Buscar por Nome, Telefone ou CPF do cliente..."
+                                value={clientAnalyticsSearch}
+                                onChange={e => setClientAnalyticsSearch(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#C9A356]"
+                              />
+                            </div>
+
+                            <div className="flex bg-[#0E0D0A] p-1 rounded-xl border border-[#2A241A] shrink-0 overflow-x-auto">
+                              {[
+                                { key: 'todos', label: 'Todos' },
+                                { key: 'frequentes', label: 'Frequentes' },
+                                { key: 'risco', label: 'Em Risco' },
+                                { key: 'novos', label: 'Novos' }
+                              ].map(f => (
+                                <button
+                                  key={f.key}
+                                  onClick={() => setClientFilterStatus(f.key)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-serif font-bold whitespace-nowrap transition-all ${
+                                    clientFilterStatus === f.key ? 'bg-[#C9A356] text-black shadow' : 'text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  {f.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* GRID DE CARDS DOS CLIENTES */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredClientsAnalytics.length === 0 ? (
+                              <div className="col-span-full py-8 text-center text-gray-500 font-serif">
+                                Nenhum cliente encontrado para os critérios de busca.
+                              </div>
+                            ) : (
+                              filteredClientsAnalytics.map((cli) => (
+                                <div
+                                  key={cli.key}
+                                  className="bg-[#14120E] p-5 rounded-2xl border border-[#282319] hover:border-[#C9A356]/50 transition-all flex flex-col justify-between space-y-4 shadow"
+                                >
+                                  <div>
+                                    <div className="flex justify-between items-start gap-2">
+                                      <div>
+                                        <h4 className="font-bold text-white text-sm font-serif line-clamp-1">{cli.name}</h4>
+                                        <div className="text-[11px] text-gray-400 mt-0.5">
+                                          {cli.phone || (cli.cpf ? `CPF: ${cli.cpf}` : 'Sem contato')}
+                                        </div>
+                                      </div>
+                                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-serif font-bold border shrink-0 ${cli.statusBadgeClass}`}>
+                                        {cli.statusLabel}
+                                      </span>
+                                    </div>
+
+                                    {/* MÉTRICAS DE FREQUÊNCIA & PREFERÊNCIA */}
+                                    <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                                      <div className="p-2.5 rounded-xl bg-[#1C1A14] border border-[#262118]">
+                                        <span className="text-[10px] text-gray-400 block font-serif uppercase">Dia que Mais Vem</span>
+                                        <strong className="text-[#C9A356] font-serif text-xs block mt-0.5">
+                                          {cli.topDayFullName} ({cli.topDayPct}%)
+                                        </strong>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl bg-[#1C1A14] border border-[#262118]">
+                                        <span className="text-[10px] text-gray-400 block font-serif uppercase">Horário Preferido</span>
+                                        <strong className="text-white font-serif text-xs block mt-0.5">
+                                          {cli.topTime !== '--:--' ? `${cli.topTime} • ${cli.topPeriod}` : 'Variado'}
+                                        </strong>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl bg-[#1C1A14] border border-[#262118]">
+                                        <span className="text-[10px] text-gray-400 block font-serif uppercase">Retorno Médio</span>
+                                        <strong className="text-emerald-400 font-serif text-xs block mt-0.5">
+                                          {cli.frequencyLabel}
+                                        </strong>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl bg-[#1C1A14] border border-[#262118]">
+                                        <span className="text-[10px] text-gray-400 block font-serif uppercase">Total Gasto (LTV)</span>
+                                        <strong className="text-[#C9A356] font-serif text-xs block mt-0.5">
+                                          R$ {cli.totalSpent.toFixed(2).replace('.', ',')}
+                                        </strong>
+                                      </div>
+                                    </div>
+
+                                    {/* BARBEIRO E SERVIÇO MAIS FREQUENTE */}
+                                    <div className="mt-3 text-[11px] text-gray-400 flex items-center justify-between border-t border-[#221E17] pt-2">
+                                      <span>Barbeiro: <strong className="text-gray-200">{cli.topBarber}</strong></span>
+                                      <span>{cli.totalVisits} visitas</span>
+                                    </div>
+                                  </div>
+
+                                  {/* BOTÕES DE AÇÃO */}
+                                  <div className="flex items-center gap-2 pt-2 border-t border-[#221E17]">
+                                    <button
+                                      onClick={() => setSelectedClientForInsights(cli)}
+                                      className="flex-1 py-2 px-3 bg-[#1F1C16] hover:bg-[#C9A356] text-gray-200 hover:text-black rounded-xl text-xs font-serif font-bold uppercase transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                      <Icons.TrendingUp className="w-3.5 h-3.5" /> Raio-X Detalhado
+                                    </button>
+
+                                    {cli.phone && (
+                                      <a
+                                        href={`https://wa.me/55${cli.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${cli.name}! Tudo bem? É da Valverd's BarberShop. Notamos que seu dia preferido costuma ser ${cli.topDayFullName}. Que tal garantir seu horário para essa semana?`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/40 rounded-xl transition-all"
+                                        title="Chamar no WhatsApp"
+                                      >
+                                        <Icons.Phone className="w-4 h-4" />
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -7155,7 +8144,7 @@
                                     </button>
                                     {currentWeek.days.map((d) => {
                                       const isSelected = selectedAgendaDate === d.isoDate || (selectedAgendaWeekday === d.name && selectedAgendaDate === getTodayDateISO());
-                                      const dayCount = appointments.filter(a => (a.isoDate === d.isoDate || a.date === d.date || a.day === d.name) && !isAppointmentReleased(a)).length;
+                                      const dayCount = appointments.filter(a => isAppointmentInWeek(a, currentWeek) && ((a.isoDate && a.isoDate === d.isoDate) || (a.date && (a.date === d.date || a.date.startsWith(d.date))) || (!a.isoDate && (!a.date || !a.date.includes('/')) && a.day === d.name)) && !isAppointmentReleased(a)).length;
                                       return (
                                         <button
                                           key={`agenda-day-pill-${d.name}`}
@@ -7680,6 +8669,137 @@
                               </div>
                             </div>
                           ))}
+                        </div>
+
+                        {/* HISTÓRICO DE SAÍDAS (BALCÃO + COMANDAS) NA ABA DE PRODUTOS */}
+                        <div className="bg-[#161410] p-6 rounded-3xl border border-[#282319] shadow-xl space-y-5">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-[#262118]">
+                            <div>
+                              <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
+                                <Icons.Package className="w-3.5 h-3.5 text-[#C9A356]" />
+                                <span>HISTÓRICO DE SAÍDAS RECENTES</span>
+                              </div>
+                              <h3 className="font-serif text-lg font-bold text-white mt-0.5">Saídas do Bar &amp; Cosméticos</h3>
+                              <p className="text-xs text-gray-400">
+                                Relatório das saídas realizadas no balcão e comandas de atendimento com quantidades e formas de pagamento.
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400 font-serif">Total Registros:</span>
+                              <span className="px-3 py-1 rounded-full bg-[#1C1A14] border border-[#C9A356]/40 text-[#C9A356] font-serif font-bold text-xs">
+                                {allBarAndProductSales.length} saídas
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* BARRA DE FILTRO RÁPIDO */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="relative">
+                              <Icons.Search className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" />
+                              <input
+                                type="text"
+                                placeholder="Filtrar por item ou cliente..."
+                                value={barProductSearch}
+                                onChange={e => setBarProductSearch(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#C9A356]"
+                              />
+                            </div>
+
+                            <select
+                              value={barProductCategoryFilter}
+                              onChange={e => setBarProductCategoryFilter(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
+                            >
+                              <option value="todos">Todas as Categorias</option>
+                              <option value="Bar">Bar &amp; Bebidas</option>
+                              <option value="Produtos">Cosméticos &amp; Produtos</option>
+                            </select>
+
+                            <select
+                              value={barProductPaymentFilter}
+                              onChange={e => setBarProductPaymentFilter(e.target.value)}
+                              className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2A241A] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
+                            >
+                              <option value="todos">Todas as Formas de Pagamento</option>
+                              <option value="PIX">PIX</option>
+                              <option value="DÉBITO">Débito</option>
+                              <option value="CRÉDITO">Crédito</option>
+                              <option value="DINHEIRO">Dinheiro</option>
+                            </select>
+                          </div>
+
+                          {/* TABELA DE SAÍDAS */}
+                          <div className="overflow-x-auto rounded-2xl border border-[#282319] bg-[#12110E]">
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-[#252018] bg-[#171511] text-[10px] font-serif uppercase tracking-wider text-gray-400">
+                                  <th className="py-3 px-4">Item &amp; Categoria</th>
+                                  <th className="py-3 px-4">Origem</th>
+                                  <th className="py-3 px-4">Cliente</th>
+                                  <th className="py-3 px-4 text-center">Qtd</th>
+                                  <th className="py-3 px-4 text-right">Preço Un.</th>
+                                  <th className="py-3 px-4 text-right">Total</th>
+                                  <th className="py-3 px-4 text-center">Pagamento</th>
+                                  <th className="py-3 px-4 text-right">Data/Hora</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#1D1B16]">
+                                {filteredBarProductSales.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="8" className="py-6 text-center text-gray-500 font-serif">
+                                      Nenhuma saída encontrada com os filtros selecionados.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  filteredBarProductSales.slice(0, 15).map((sale) => (
+                                    <tr key={sale.id} className="hover:bg-[#181612] transition-colors">
+                                      <td className="py-2.5 px-4">
+                                        <div className="font-bold text-white">{sale.item}</div>
+                                        <span className={`inline-block text-[9px] uppercase font-serif px-2 py-0.5 rounded-full mt-0.5 ${
+                                          sale.category === 'Bar'
+                                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                            : 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                        }`}>
+                                          {sale.category}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-4">
+                                        <span className="px-2 py-0.5 rounded bg-[#1C1A14] border border-[#2E281F] text-[10px] text-gray-300">
+                                          {sale.origin}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-4 text-gray-300">
+                                        {sale.client}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-center font-bold text-white font-serif">
+                                        {sale.qty} un
+                                      </td>
+                                      <td className="py-2.5 px-4 text-right text-gray-400 font-serif">
+                                        R$ {sale.unitPrice.toFixed(2).replace('.', ',')}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-right font-serif font-bold text-[#C9A356]">
+                                        R$ {sale.total.toFixed(2).replace('.', ',')}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-center">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-serif font-bold ${
+                                          String(sale.paymentMethod).toUpperCase().includes('PIX') ? 'bg-[#C9A356]/15 text-[#C9A356] border border-[#C9A356]/30' :
+                                          String(sale.paymentMethod).toUpperCase().includes('DÉB') || String(sale.paymentMethod).toUpperCase().includes('DEB') ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
+                                          String(sale.paymentMethod).toUpperCase().includes('CRÉD') || String(sale.paymentMethod).toUpperCase().includes('CRED') ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' :
+                                          'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                        }`}>
+                                          {sale.paymentMethod}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-4 text-right text-gray-400 font-serif text-[10px]">
+                                        {sale.date} {sale.time}
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -10755,6 +11875,158 @@
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODAL: RAIO-X ANALÍTICO & HÁBITOS DO CLIENTE (POR PESSOA)                 */}
+          {/* ========================================================================= */}
+          {selectedClientForInsights && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+              <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-xl w-full p-6 sm:p-8 text-white shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto animate-modal custom-scrollbar">
+                <div className="flex justify-between items-start pb-4 border-b border-[#2A261F]">
+                  <div>
+                    <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">RAIO-X COMPORTAMENTAL</span>
+                    <h3 className="font-serif text-2xl font-bold text-white mt-1">{selectedClientForInsights.name}</h3>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                      <span>{selectedClientForInsights.phone || 'Sem telefone'}</span>
+                      {selectedClientForInsights.cpf && <span>• CPF {selectedClientForInsights.cpf}</span>}
+                      <span>• {selectedClientForInsights.tier}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedClientForInsights(null)}
+                    aria-label="Fechar"
+                    className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <Icons.X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* 4 KPIS RESUMO */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-[#1C1A14] rounded-2xl border border-[#262118] text-center">
+                    <span className="text-[10px] text-gray-400 uppercase font-serif block">Total Visitas</span>
+                    <strong className="text-lg font-serif font-bold text-white mt-1 block">
+                      {selectedClientForInsights.totalVisits}
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-[#1C1A14] rounded-2xl border border-[#262118] text-center">
+                    <span className="text-[10px] text-gray-400 uppercase font-serif block">Retorno Médio</span>
+                    <strong className="text-xs font-serif font-bold text-emerald-400 mt-2 block">
+                      {selectedClientForInsights.frequencyLabel}
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-[#1C1A14] rounded-2xl border border-[#262118] text-center">
+                    <span className="text-[10px] text-gray-400 uppercase font-serif block">Total Gasto (LTV)</span>
+                    <strong className="text-sm font-serif font-bold text-[#C9A356] mt-1.5 block">
+                      R$ {selectedClientForInsights.totalSpent.toFixed(2).replace('.', ',')}
+                    </strong>
+                  </div>
+                  <div className="p-3 bg-[#1C1A14] rounded-2xl border border-[#262118] text-center">
+                    <span className="text-[10px] text-gray-400 uppercase font-serif block">Ticket Médio</span>
+                    <strong className="text-sm font-serif font-bold text-white mt-1.5 block">
+                      R$ {selectedClientForInsights.avgTicket.toFixed(2).replace('.', ',')}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* PREFERÊNCIA POR DIA DA SEMANA */}
+                <div className="p-4 bg-[#12110E] rounded-2xl border border-[#262118] space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-serif font-bold text-gray-200">Frequência por Dia da Semana</span>
+                    <span className="text-[#C9A356] font-serif text-[11px] font-bold">
+                      Dia Preferido: {selectedClientForInsights.topDayFullName} ({selectedClientForInsights.topDayPct}%)
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => {
+                      const count = selectedClientForInsights.dayCounts[d] || 0;
+                      const pct = selectedClientForInsights.totalVisits > 0
+                        ? Math.round((count / selectedClientForInsights.totalVisits) * 100)
+                        : 0;
+                      return (
+                        <div key={d} className="flex items-center gap-3 text-xs">
+                          <span className="w-8 text-gray-400 font-serif font-bold">{d}</span>
+                          <div className="flex-1 bg-[#1C1A14] rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="bg-[#C9A356] h-full rounded-full transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            ></div>
+                          </div>
+                          <span className="w-16 text-right text-gray-300 font-serif text-[11px]">
+                            {count} ({pct}%)
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* PREFERÊNCIA POR FAIXA DE HORÁRIO */}
+                <div className="p-4 bg-[#12110E] rounded-2xl border border-[#262118] space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-serif font-bold text-gray-200">Distribuição por Faixa de Horário</span>
+                    <span className="text-white font-serif text-[11px]">
+                      Pico: {selectedClientForInsights.topTime}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-3 bg-[#1C1A14] rounded-xl border border-[#262118]">
+                      <span className="text-[10px] text-gray-400 uppercase font-serif block">Manhã (09h-12h)</span>
+                      <strong className="text-base font-serif font-bold text-white mt-1 block">
+                        {selectedClientForInsights.periodCounts.Manha} visitas
+                      </strong>
+                    </div>
+                    <div className="p-3 bg-[#1C1A14] rounded-xl border border-[#262118]">
+                      <span className="text-[10px] text-gray-400 uppercase font-serif block">Tarde (12h-17h)</span>
+                      <strong className="text-base font-serif font-bold text-white mt-1 block">
+                        {selectedClientForInsights.periodCounts.Tarde} visitas
+                      </strong>
+                    </div>
+                    <div className="p-3 bg-[#1C1A14] rounded-xl border border-[#262118]">
+                      <span className="text-[10px] text-gray-400 uppercase font-serif block">Noite (18h-20h)</span>
+                      <strong className="text-base font-serif font-bold text-[#C9A356] mt-1 block">
+                        {selectedClientForInsights.periodCounts.Noite} visitas
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* HISTÓRICO DE ATENDIMENTOS RECENTES */}
+                <div className="space-y-2">
+                  <h5 className="font-serif text-xs font-bold text-gray-300 uppercase tracking-wider">Últimos Atendimentos Registrados</h5>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                    {selectedClientForInsights.appointments.length === 0 ? (
+                      <p className="text-xs text-gray-500 py-2">Nenhum atendimento registrado ainda.</p>
+                    ) : (
+                      selectedClientForInsights.appointments.slice(0, 5).map((a, i) => (
+                        <div key={i} className="p-2.5 bg-[#12110E] rounded-xl border border-[#262118] flex justify-between items-center text-xs">
+                          <div>
+                            <span className="font-bold text-white">{a.service || 'Corte'}</span>
+                            <span className="text-gray-400 text-[11px] block">{a.day}, {a.date} às {a.time} • {a.barber}</span>
+                          </div>
+                          <span className="font-serif font-bold text-[#C9A356]">
+                            R$ {Number(a.total || a.price || 0).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* BOTÃO WHATSAPP DE CONVITE */}
+                {selectedClientForInsights.phone && (
+                  <a
+                    href={`https://wa.me/55${selectedClientForInsights.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedClientForInsights.name}! Tudo bem? É da Valverd's BarberShop. Notamos que você costuma nos visitar às ${selectedClientForInsights.topDayFullName}s por volta de ${selectedClientForInsights.topTime}. Que tal garantir o seu horário para renovar o visual?`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-serif font-bold text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <Icons.Phone className="w-4 h-4" /> Convidar no WhatsApp para {selectedClientForInsights.topDayFullName} às {selectedClientForInsights.topTime}
+                  </a>
+                )}
               </div>
             </div>
           )}
