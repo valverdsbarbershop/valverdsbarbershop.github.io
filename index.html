@@ -3717,42 +3717,68 @@
         return { days, list, peakBarber, peakDay, peakVal };
       }, [barbers, appointments, currentWeek]);
 
-      // Dados para o Gráfico de Faturamento por Forma de Pagamento ao longo dos dias da semana
+      // Dados para o Gráfico de Faturamento por Forma de Pagamento ao longo dos dias da semana selecionada (currentWeek)
       const paymentMethodsData = useMemo(() => {
-        const daysOfWeek = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const days = currentWeek?.days || [
+          { name: 'Seg', date: '06/10' },
+          { name: 'Ter', date: '07/10' },
+          { name: 'Qua', date: '08/10' },
+          { name: 'Qui', date: '09/10' },
+          { name: 'Sex', date: '10/10' },
+          { name: 'Sáb', date: '11/10' }
+        ];
+        const daysOfWeek = days.map(d => d.name);
         const methods = ['PIX', 'DÉBITO', 'CRÉDITO', 'DINHEIRO'];
         
         const totalsByDayAndMethod = {};
-        daysOfWeek.forEach(d => {
-          totalsByDayAndMethod[d] = { PIX: 0, 'DÉBITO': 0, 'CRÉDITO': 0, DINHEIRO: 0, total: 0 };
+        days.forEach(d => {
+          totalsByDayAndMethod[d.name] = { PIX: 0, 'DÉBITO': 0, 'CRÉDITO': 0, DINHEIRO: 0, total: 0 };
         });
 
-        appointments.forEach(a => {
-          if (a.status === 'concluido' && a.day && totalsByDayAndMethod[a.day]) {
-            const rawMethod = (a.paymentMethod || 'PIX').toUpperCase();
-            const methodKey = rawMethod.includes('DÉB') || rawMethod.includes('DEB') ? 'DÉBITO' :
-                              rawMethod.includes('CRÉD') || rawMethod.includes('CRED') ? 'CRÉDITO' :
-                              rawMethod.includes('DIN') ? 'DINHEIRO' : 'PIX';
-            const val = Number(a.total || a.price || 0);
-            totalsByDayAndMethod[a.day][methodKey] += val;
-            totalsByDayAndMethod[a.day].total += val;
+        // 1. Agendamentos concluídos exclusivamente na semana selecionada
+        (selectedWeekAppointments || []).forEach(a => {
+          if (a.status === 'concluido') {
+            const matchedDayObj = days.find(d => 
+              (a.isoDate && a.isoDate === d.isoDate) ||
+              (a.date && (a.date === d.date || a.date.startsWith(d.date))) ||
+              (!a.isoDate && (!a.date || !a.date.includes('/')) && a.day === d.name)
+            );
+            const targetDay = matchedDayObj ? matchedDayObj.name : (totalsByDayAndMethod[a.day] ? a.day : null);
+
+            if (targetDay && totalsByDayAndMethod[targetDay]) {
+              const rawMethod = (a.paymentMethod || 'PIX').toUpperCase();
+              const methodKey = rawMethod.includes('DÉB') || rawMethod.includes('DEB') ? 'DÉBITO' :
+                                rawMethod.includes('CRÉD') || rawMethod.includes('CRED') ? 'CRÉDITO' :
+                                rawMethod.includes('DIN') ? 'DINHEIRO' : 'PIX';
+              const val = Number(a.total || a.price || 0);
+              totalsByDayAndMethod[targetDay][methodKey] += val;
+              totalsByDayAndMethod[targetDay].total += val;
+            }
           }
         });
 
-        counterSales.forEach(s => {
-          const rawMethod = (s.payment || 'PIX').toUpperCase();
-          const methodKey = rawMethod.includes('DÉB') || rawMethod.includes('DEB') ? 'DÉBITO' :
-                            rawMethod.includes('CRÉD') || rawMethod.includes('CRED') ? 'CRÉDITO' :
-                            rawMethod.includes('DIN') ? 'DINHEIRO' : 'PIX';
-          const day = 'Seg';
-          if (totalsByDayAndMethod[day]) {
-            totalsByDayAndMethod[day][methodKey] += Number(s.total || 0);
-            totalsByDayAndMethod[day].total += Number(s.total || 0);
+        // 2. Vendas de balcão da semana selecionada
+        (counterSales || []).forEach(s => {
+          const matchedDayObj = days.find(d =>
+            (s.isoDate && s.isoDate === d.isoDate) ||
+            (s.date && s.date === d.date) ||
+            (s.day && s.day === d.name)
+          );
+          const targetDay = matchedDayObj ? matchedDayObj.name : null;
+
+          if (targetDay && totalsByDayAndMethod[targetDay]) {
+            const rawMethod = (s.paymentMethod || s.payment || 'PIX').toUpperCase();
+            const methodKey = rawMethod.includes('DÉB') || rawMethod.includes('DEB') ? 'DÉBITO' :
+                              rawMethod.includes('CRÉD') || rawMethod.includes('CRED') ? 'CRÉDITO' :
+                              rawMethod.includes('DIN') ? 'DINHEIRO' : 'PIX';
+            const val = Number(s.total || 0);
+            totalsByDayAndMethod[targetDay][methodKey] += val;
+            totalsByDayAndMethod[targetDay].total += val;
           }
         });
 
         const methodTotals = { PIX: 0, 'DÉBITO': 0, 'CRÉDITO': 0, DINHEIRO: 0 };
-        let peakDay = 'Seg';
+        let peakDay = daysOfWeek[0] || 'Seg';
         let peakMethod = 'PIX';
         let peakVal = 0;
 
@@ -3768,8 +3794,8 @@
           });
         });
 
-        return { daysOfWeek, methods, totalsByDayAndMethod, methodTotals, peakDay, peakMethod, peakVal };
-      }, [appointments, counterSales]);
+        return { days, daysOfWeek, methods, totalsByDayAndMethod, methodTotals, peakDay, peakMethod, peakVal };
+      }, [currentWeek, selectedWeekAppointments, counterSales]);
 
       // Histórico consolidado e detalhado de todas as saídas do Bar e Cosméticos (Balcão + Comandas de Atendimento)
       const allBarAndProductSales = useMemo(() => {
@@ -4172,7 +4198,7 @@
           if (barberHistoryPeriod === 'hoje') {
             filtered = bAppts.filter(a => a.isoDate === selectedAgendaDate || a.day === selectedAgendaWeekday);
           } else if (barberHistoryPeriod === 'semana') {
-            filtered = bAppts.filter(a => a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined));
+            filtered = bAppts.filter(a => isAppointmentInWeek(a, currentWeek));
           } else if (barberHistoryPeriod === 'mes') {
             const currIsoPrefix = selectedAgendaDate ? selectedAgendaDate.substring(0, 7) : '2026-10';
             filtered = bAppts.filter(a => !a.isoDate || a.isoDate.startsWith(currIsoPrefix));
@@ -7350,10 +7376,10 @@
                             <div>
                               <div className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold flex items-center gap-1.5">
                                 <Icons.TrendingUp className="w-3.5 h-3.5 text-[#C9A356]" />
-                                <span>INTELIGÊNCIA FINANCEIRA &amp; FORMAS DE PAGAMENTO</span>
+                                <span>INTELIGÊNCIA FINANCEIRA &amp; FORMAS DE PAGAMENTO • {currentWeek.label}</span>
                               </div>
                               <h3 className="font-serif text-xl font-bold text-white mt-0.5">Evolução do Faturamento por Forma de Pagamento</h3>
-                              <p className="text-xs text-gray-400">Identifique com clareza em quais dias cada forma de pagamento (PIX, Débito, Crédito e Dinheiro) tem maior saída.</p>
+                              <p className="text-xs text-gray-400">Identifique com clareza em quais dias cada forma de pagamento tem maior saída na semana selecionada ({currentWeek.label}).</p>
                             </div>
 
                             <div className="bg-[#1C1A14] border border-[#C9A356]/40 px-4 py-2.5 rounded-2xl text-xs font-serif text-right shadow">
@@ -7438,14 +7464,16 @@
                                     );
                                   })}
 
-                                  {/* Rótulos X dos Dias da Semana */}
+                                  {/* Rótulos X dos Dias da Semana com datas reais */}
                                   {days.map((d, idx) => {
                                     const x = getX(idx);
+                                    const dayObj = paymentMethodsData.days[idx];
+                                    const dateLabel = dayObj && dayObj.date ? ` (${dayObj.date.split('/')[0]})` : '';
                                     return (
                                       <g key={d}>
                                         <line x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom} stroke="#1A1813" />
                                         <text x={x} y={height - paddingBottom + 18} textAnchor="middle" fill="#D8D4CA" fontSize="11" fontWeight="bold" fontFamily="serif">
-                                          {d}
+                                          {d}{dateLabel}
                                         </text>
                                       </g>
                                     );
