@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "Valverd's BarberShop",
   "short_name": "Valverd's",
   "description": "Beard, hair and mustache — Gestão executiva e agendamento de barbearia",
@@ -9,13 +9,13 @@
   "theme_color": "#0B0B0B",
   "icons": [
     {
-      "src": "logo_valverds_clean.png",
+      "src": "./logo_valverds_clean.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "logo_valverds_clean.png",
+      "src": "./logo_valverds_clean.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
