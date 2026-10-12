@@ -4729,10 +4729,10 @@
           const manualIso = bookingForm.isoDate || matchedDay.isoDate || getTodayDateISO();
           const todayIsoNow = getTodayDateISO();
           const currentTimeNow = getCurrentTimeHHMM();
-          const canStaffSchedulePastTime = ['dono', 'barbeiro', 'superadmin'].includes(currentUser?.role);
+          const canStaffSchedulePastTime = ['dono', 'barbeiro', 'superadmin', 'admin'].includes(currentUser?.role);
 
           // REGRA ANTI HORÁRIO PARA TRÁS (DATA E HORA)
-          if (manualIso < todayIsoNow) {
+          if (manualIso < todayIsoNow && !canStaffSchedulePastTime) {
             alert('Data Inválida!\n\nNão é permitido agendar horários em datas passadas (ontem ou anterior). Por favor, selecione hoje ou uma data futura.');
             return;
           }
@@ -11465,7 +11465,7 @@
                         <label className="block text-gray-400 font-serif uppercase mb-1">Data:</label>
                         <input
                           type="date"
-                          min={getTodayDateISO()}
+                          min={['dono', 'barbeiro', 'superadmin', 'admin'].includes(currentUser?.role) ? undefined : getTodayDateISO()}
                           value={bookingForm.isoDate || getTodayDateISO()}
                           onChange={e => {
                             const val = e.target.value;
