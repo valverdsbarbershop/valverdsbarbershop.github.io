@@ -877,7 +877,39 @@
       const OCTOBER_DAYS = generateCurrentMonthDays(2026, 9);
       const SEPTEMBER_DAYS = OCTOBER_DAYS;
 
-      const INITIAL_APPOINTMENTS = [];
+      const officialSeedDate = new Date();
+      const officialSeedIsoDate = `${officialSeedDate.getFullYear()}-${String(officialSeedDate.getMonth() + 1).padStart(2, '0')}-${String(officialSeedDate.getDate()).padStart(2, '0')}`;
+      const officialSeedDay = WEEKDAY_NAMES_PT[officialSeedDate.getDay()];
+      const INITIAL_APPOINTMENTS = [{
+        id: 16066657747,
+        voucherCode: 'VALV-JOSUE',
+        client: 'Josué',
+        phone: '(21) 97512-4755',
+        cpf: '160.666.577-47',
+        isCpfVerified: true,
+        service: 'Corte Masculino',
+        serviceId: 's1',
+        duration: 40,
+        barber: 'Luis Valverde',
+        barberKey: 'luis',
+        day: officialSeedDay,
+        date: `${String(officialSeedDate.getDate()).padStart(2, '0')}/${String(officialSeedDate.getMonth() + 1).padStart(2, '0')}/${officialSeedDate.getFullYear()}`,
+        isoDate: officialSeedIsoDate,
+        dayNum: officialSeedDate.getDate(),
+        time: '16:00',
+        status: 'confirmado',
+        source: 'manual',
+        price: 40,
+        total: 40,
+        paymentMethod: 'Pendente',
+        items: [{ id: 's1', type: 'service', name: 'Corte Masculino', price: 40, duration: 40 }],
+        notes: 'Agendamento registrado pela barbearia.'
+      }];
+      const mergeOfficialAppointments = (list) => {
+        const current = Array.isArray(list) ? list : [];
+        const hasJosue = current.some(a => String(a.cpf || '').replace(/\D/g, '') === '16066657747' && a.time === '16:00');
+        return hasJosue ? current : [...INITIAL_APPOINTMENTS, ...current];
+      };
 
       const INITIAL_CLIENT_PROFILE = {
         id: '',
@@ -1283,7 +1315,7 @@
           const s = localStorage.getItem('valverds_appointments');
           if (s) {
             const parsed = JSON.parse(s);
-            return parsed
+            const savedAppointments = parsed
               .filter(a => a.id >= 1000 || typeof a.id === 'string')
               .map(a => ({
                 ...a,
@@ -1292,6 +1324,7 @@
                 total: Number.isFinite(Number(a.total || a.price)) ? Number(a.total || a.price) : 0,
                 items: Array.isArray(a.items) ? a.items : []
               }));
+            return mergeOfficialAppointments(savedAppointments);
           }
           return INITIAL_APPOINTMENTS;
         } catch(e) { return INITIAL_APPOINTMENTS; }
@@ -2638,8 +2671,9 @@
                 }).filter(a => !deletedAppointmentIds.includes(String(a.id)));
 
                 // O Neon é a fonte definitiva após confirmar as alterações locais pendentes.
-                setAppointments(mapped);
-                try { localStorage.setItem('valverds_appointments', JSON.stringify(mapped)); } catch(e){}
+                const appointmentsWithOfficialRecords = mergeOfficialAppointments(mapped);
+                setAppointments(appointmentsWithOfficialRecords);
+                try { localStorage.setItem('valverds_appointments', JSON.stringify(appointmentsWithOfficialRecords)); } catch(e){}
                 setDbSynced(true);
               }
 
@@ -4695,13 +4729,14 @@
           const manualIso = bookingForm.isoDate || matchedDay.isoDate || getTodayDateISO();
           const todayIsoNow = getTodayDateISO();
           const currentTimeNow = getCurrentTimeHHMM();
+          const canStaffSchedulePastTime = ['dono', 'barbeiro', 'superadmin'].includes(currentUser?.role);
 
           // REGRA ANTI HORÁRIO PARA TRÁS (DATA E HORA)
           if (manualIso < todayIsoNow) {
             alert('Data Inválida!\n\nNão é permitido agendar horários em datas passadas (ontem ou anterior). Por favor, selecione hoje ou uma data futura.');
             return;
           }
-          if (manualIso === todayIsoNow && bookingForm.time < currentTimeNow) {
+          if (manualIso === todayIsoNow && bookingForm.time < currentTimeNow && !canStaffSchedulePastTime) {
             alert(`Horário Inválido!\n\nNão é permitido agendar para um horário que já passou hoje (${bookingForm.time}).\nHorário atual de Brasília: ${currentTimeNow}.\n\nPor favor, selecione um horário futuro.`);
             return;
           }
@@ -11470,6 +11505,7 @@
                             const modalSrv = services.find(s => s.id === bookingForm.serviceId) || services[0];
                             const modalDur = Number(modalSrv?.duration) || 30;
                             const bSetting = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { start: '09:00', end: '19:00', blockedSlots: [] };
+                            const canStaffSchedulePastTime = ['dono', 'barbeiro', 'superadmin'].includes(currentUser?.role);
 
                             return TIME_SLOTS_COMPARE.map(t => {
                               const isToday = (bookingForm.isoDate || getTodayDateISO()) === getTodayDateISO();
@@ -11489,12 +11525,12 @@
                               const hasBlocked = slotsToCheck.some(s => Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(s));
                               const exceedsClose = slotsToCheck.some(s => s >= (bSetting.end || '19:00'));
                               const isStartBlocked = Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(t);
-                              const isDisabled = isPastTime || Boolean(bookedAppt) || hasBlocked || exceedsClose;
+                              const isDisabled = (!canStaffSchedulePastTime && isPastTime) || Boolean(bookedAppt) || hasBlocked || exceedsClose;
                               const endT = getEndTimeForStartTimeAndDuration(t, modalDur);
 
                               return (
                                 <option key={t} value={t} disabled={isDisabled}>
-                                  {t} às {endT} {isPastTime ? '(⏰ Passou)' : bookedAppt ? `(👤 Ocupado: ${bookedAppt.client})` : isStartBlocked ? '(🔒 Pausa)' : hasBlocked ? '(🔒 Conflito com Pausa)' : exceedsClose ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
+                                  {t} às {endT} {isPastTime && !canStaffSchedulePastTime ? '(⏰ Passou)' : isPastTime ? '(✓ Liberado para equipe)' : bookedAppt ? `(👤 Ocupado: ${bookedAppt.client})` : isStartBlocked ? '(🔒 Pausa)' : hasBlocked ? '(🔒 Conflito com Pausa)' : exceedsClose ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
                                 </option>
                               );
                             });
