@@ -1,4 +1,4 @@
-const CACHE_NAME = 'valverds-cache-v2';
+const CACHE_NAME = 'valverds-cache-v20';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
