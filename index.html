@@ -795,6 +795,16 @@
         return isoStr;
       };
 
+      const normalizeAppointmentDateISO = (value) => {
+        if (!value) return '';
+        const dateValue = String(value).trim();
+        const isoMatch = dateValue.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (isoMatch) return isoMatch[1];
+        const brMatch = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`;
+        return '';
+      };
+
       const getWeekdayFromISO = (isoStr) => {
         if (!isoStr) return 'Seg';
         const parts = isoStr.split('-').map(Number);
@@ -876,40 +886,6 @@
       const WEEKS_DATA = generateDynamicWeeks(new Date());
       const OCTOBER_DAYS = generateCurrentMonthDays(2026, 9);
       const SEPTEMBER_DAYS = OCTOBER_DAYS;
-
-      const officialSeedDate = new Date();
-      const officialSeedIsoDate = `${officialSeedDate.getFullYear()}-${String(officialSeedDate.getMonth() + 1).padStart(2, '0')}-${String(officialSeedDate.getDate()).padStart(2, '0')}`;
-      const officialSeedDay = WEEKDAY_NAMES_PT[officialSeedDate.getDay()];
-      const INITIAL_APPOINTMENTS = [{
-        id: 16066657747,
-        voucherCode: 'VALV-JOSUE',
-        client: 'Josué',
-        phone: '(21) 97512-4755',
-        cpf: '160.666.577-47',
-        isCpfVerified: true,
-        service: 'Corte Masculino',
-        serviceId: 's1',
-        duration: 40,
-        barber: 'Luis Valverde',
-        barberKey: 'luis',
-        day: officialSeedDay,
-        date: `${String(officialSeedDate.getDate()).padStart(2, '0')}/${String(officialSeedDate.getMonth() + 1).padStart(2, '0')}/${officialSeedDate.getFullYear()}`,
-        isoDate: officialSeedIsoDate,
-        dayNum: officialSeedDate.getDate(),
-        time: '16:00',
-        status: 'confirmado',
-        source: 'manual',
-        price: 40,
-        total: 40,
-        paymentMethod: 'Pendente',
-        items: [{ id: 's1', type: 'service', name: 'Corte Masculino', price: 40, duration: 40 }],
-        notes: 'Agendamento registrado pela barbearia.'
-      }];
-      const mergeOfficialAppointments = (list) => {
-        const current = Array.isArray(list) ? list : [];
-        const hasJosue = current.some(a => String(a.cpf || '').replace(/\D/g, '') === '16066657747' && a.time === '16:00');
-        return hasJosue ? current : [...INITIAL_APPOINTMENTS, ...current];
-      };
 
       const INITIAL_CLIENT_PROFILE = {
         id: '',
@@ -1316,7 +1292,7 @@
           if (s) {
             const parsed = JSON.parse(s);
             const savedAppointments = parsed
-              .filter(a => a.id >= 1000 || typeof a.id === 'string')
+              .filter(a => (a.id >= 1000 || typeof a.id === 'string') && String(a.id) !== '16066657747')
               .map(a => ({
                 ...a,
                 status: a.status === 'no_show' ? 'faltou' : (a.status || 'confirmado'),
@@ -1324,10 +1300,10 @@
                 total: Number.isFinite(Number(a.total || a.price)) ? Number(a.total || a.price) : 0,
                 items: Array.isArray(a.items) ? a.items : []
               }));
-            return mergeOfficialAppointments(savedAppointments);
+            return savedAppointments;
           }
-          return INITIAL_APPOINTMENTS;
-        } catch(e) { return INITIAL_APPOINTMENTS; }
+          return [];
+        } catch(e) { return []; }
         });
         // Regra de integridade: uma alteração local fica protegida até o Neon confirmar
         // a gravação. Assim, uma sincronização posterior não restaura dados antigos.
@@ -2636,13 +2612,7 @@
               if (appts && Array.isArray(appts)) {
                 const deletedAppointmentIds = getDeletedAppointmentIds();
                 const mapped = appts.map(a => {
-                  let iso = '';
-                  if (a.appt_date && a.appt_date.includes('/')) {
-                    const parts = a.appt_date.split('/');
-                    if (parts.length === 3) {
-                      iso = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                    }
-                  }
+                  const iso = normalizeAppointmentDateISO(a.appt_date);
                   const cloudAppointment = {
                     id: Number(a.id),
                     voucherCode: a.voucher_code,
@@ -2654,8 +2624,8 @@
                     barber: a.barber_name,
                     barberKey: a.barber_key,
                     day: a.day_name,
-                    date: a.appt_date,
-                    isoDate: iso || a.appt_date,
+                    date: formatDateBR(iso) || a.appt_date,
+                    isoDate: iso,
                     time: a.appt_time,
                     status: normalizeAppointmentStatus(a.status),
                     price: Number.isFinite(Number(a.price)) ? Number(a.price) : 0,
@@ -2671,9 +2641,8 @@
                 }).filter(a => !deletedAppointmentIds.includes(String(a.id)));
 
                 // O Neon é a fonte definitiva após confirmar as alterações locais pendentes.
-                const appointmentsWithOfficialRecords = mergeOfficialAppointments(mapped);
-                setAppointments(appointmentsWithOfficialRecords);
-                try { localStorage.setItem('valverds_appointments', JSON.stringify(appointmentsWithOfficialRecords)); } catch(e){}
+                setAppointments(mapped);
+                try { localStorage.setItem('valverds_appointments', JSON.stringify(mapped)); } catch(e){}
                 setDbSynced(true);
               }
 
@@ -3484,10 +3453,7 @@
         const todaysAppointments = useMemo(() => {
           return appointments.filter(a => {
             if (isAppointmentReleased(a)) return false;
-            if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
-            if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
-            if (a.day && a.day === selectedAgendaWeekday) return true;
-            return false;
+            return normalizeAppointmentDateISO(a.isoDate || a.date) === selectedAgendaDate;
           }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
         }, [appointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
 
@@ -3690,10 +3656,7 @@
         const myTodaysAppointments = useMemo(() => {
           return (myAllAppointments || []).filter(a => {
             if (!a || isAppointmentReleased(a)) return false;
-            if (a.isoDate && a.isoDate === selectedAgendaDate) return true;
-            if (a.date && (a.date === selectedAgendaDateBR || a.date === selectedAgendaDateBR.substring(0, 5))) return true;
-            if (a.day && a.day === selectedAgendaWeekday) return true;
-            return false;
+            return normalizeAppointmentDateISO(a.isoDate || a.date) === selectedAgendaDate;
           }).sort((a, b) => ((a && a.time) || '').localeCompare((b && b.time) || ''));
         }, [myAllAppointments, selectedAgendaDate, selectedAgendaDateBR, selectedAgendaWeekday]);
 
@@ -4230,7 +4193,7 @@
             
             let filtered = bAppts;
             if (barberHistoryPeriod === 'hoje') {
-              filtered = bAppts.filter(a => a.isoDate === selectedAgendaDate || a.day === selectedAgendaWeekday);
+              filtered = bAppts.filter(a => normalizeAppointmentDateISO(a.isoDate || a.date) === selectedAgendaDate);
             } else if (barberHistoryPeriod === 'semana') {
               filtered = bAppts.filter(a => isAppointmentInWeek(a, currentWeek));
             } else if (barberHistoryPeriod === 'mes') {
@@ -8272,7 +8235,7 @@
                                       <div className="bg-transparent rounded-xl p-1 opacity-0"></div>
                                       <div className="bg-transparent rounded-xl p-1 opacity-0"></div>
                                       {OCTOBER_DAYS.map((d) => {
-                                        const dayAppts = appointments.filter(a => (a.isoDate === d.isoDate || (a.dayNum && a.dayNum === d.dayNum)) && !isAppointmentReleased(a));
+                                        const dayAppts = appointments.filter(a => normalizeAppointmentDateISO(a.isoDate || a.date) === d.isoDate && !isAppointmentReleased(a));
                                         const isSelected = selectedAgendaDate === d.isoDate;
                                         return (
                                           <button
