@@ -1555,9 +1555,12 @@
             const matchBarber = a.barberKey === barberKey || (barberKey === 'luis' && a.barber && a.barber.includes('Luis')) || (barberKey === 'yago' && a.barber && a.barber.includes('Yago'));
             const notCancelled = !isAppointmentReleased(a);
             if (!matchBarber || !notCancelled) return;
-            if (targetDate && (a.isoDate === targetDate || a.date === targetDate)) {
-              getAppointmentOccupiedSlots(a, services).forEach(s => bookedSlotsSet.add(s));
-            } else if (!targetDate && a.day === dayName) {
+            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+            if (targetDate) {
+              if (aIso ? aIso === targetDate : a.date === targetDate) {
+                getAppointmentOccupiedSlots(a, services).forEach(s => bookedSlotsSet.add(s));
+              }
+            } else if (!aIso && a.day === dayName) {
               getAppointmentOccupiedSlots(a, services).forEach(s => bookedSlotsSet.add(s));
             }
           });
@@ -1831,7 +1834,10 @@
             if (isAppointmentReleased(a)) return false;
             const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
             if (!matchBarber) return false;
-            const matchDate = (clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName;
+            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+            const matchDate = clientBookingFlow.selectedDate
+              ? (aIso ? aIso === clientBookingFlow.selectedDate : a.day === clientBookingFlow.dayName)
+              : a.day === clientBookingFlow.dayName;
             if (!matchDate) return false;
 
             const occupied = getAppointmentOccupiedSlots(a, services);
@@ -4664,7 +4670,10 @@
             if (isAppointmentReleased(a)) return false;
             const matchBarber = a.barberKey === bookingForm.barberKey || (bookingForm.barberKey === 'luis' && a.barber?.includes('Luis')) || (bookingForm.barberKey === 'yago' && a.barber?.includes('Yago'));
             if (!matchBarber) return false;
-            const matchDate = (bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day;
+            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+            const matchDate = bookingForm.isoDate
+              ? (aIso ? aIso === bookingForm.isoDate : a.day === bookingForm.day)
+              : a.day === bookingForm.day;
             if (!matchDate) return false;
 
             const occupied = getAppointmentOccupiedSlots(a, services);
@@ -6422,8 +6431,9 @@
                                   </thead>
                                   <tbody className="divide-y divide-[#221E17]">
                                     {TIME_SLOTS_COMPARE.map((slot) => {
-                                      const luisAppt = appointments.find(a => (a.barberKey === 'luis' || a.barber === 'Luis Valverde' || a.barber?.includes('Luis')) && a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
-                                      const yagoAppt = appointments.find(a => (a.barberKey === 'yago' || a.barber === 'Yago Barber' || a.barber?.includes('Yago')) && a.day === selectedWeekDay && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
+                                      const curAgendaDay = currentWeek.days?.find(d => d.name === selectedWeekDay);
+                                      const luisAppt = appointments.find(a => (a.barberKey === 'luis' || a.barber === 'Luis Valverde' || a.barber?.includes('Luis')) && (curAgendaDay?.isoDate ? ((a.isoDate || normalizeAppointmentDateISO(a.date)) === curAgendaDay.isoDate) : (a.day === selectedWeekDay && isAppointmentInWeek(a, currentWeek))) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
+                                      const yagoAppt = appointments.find(a => (a.barberKey === 'yago' || a.barber === 'Yago Barber' || a.barber?.includes('Yago')) && (curAgendaDay?.isoDate ? ((a.isoDate || normalizeAppointmentDateISO(a.date)) === curAgendaDay.isoDate) : (a.day === selectedWeekDay && isAppointmentInWeek(a, currentWeek))) && !isAppointmentReleased(a) && getAppointmentOccupiedSlots(a, services).includes(slot));
                                       const isLuisBlocked = Array.isArray(dailyBarberSettings.luis?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.luis[selectedWeekDay].blockedSlots.includes(slot);
                                       const isYagoBlocked = Array.isArray(dailyBarberSettings.yago?.[selectedWeekDay]?.blockedSlots) && dailyBarberSettings.yago[selectedWeekDay].blockedSlots.includes(slot);
                                       const canEditLuis = currentUser.role === 'dono' || currentUser.role === 'superadmin' || currentUser.barberKey === 'luis';
@@ -6744,7 +6754,7 @@
                             ].map(day => {
                               const bKey = currentUser.barberKey || 'yago';
                               const setting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][day.key]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
-                              const freeSlots = getAvailableSlotsForBarberAndDay(bKey, day.key);
+                              const freeSlots = getAvailableSlotsForBarberAndDay(bKey, day.key, currentWeek.days?.find(d => d.name === day.key)?.isoDate);
 
                               // Horários Marcados Reais para o Barbeiro neste dia
                               const dayAppointments = appointments.filter(a => {
@@ -6752,7 +6762,7 @@
                                   (bKey === 'luis' && (a.barber?.includes('Luis') || a.barberKey === 'luis')) || 
                                   (bKey === 'yago' && (a.barber?.includes('Yago') || a.barberKey === 'yago'));
                                 const notCancelled = !isAppointmentReleased(a);
-                                return matchBarber && notCancelled && a.day === day.key;
+                                return matchBarber && notCancelled && a.day === day.key && isAppointmentInWeek(a, currentWeek);
                               }).sort((m, n) => (m.time || '').localeCompare(n.time || ''));
 
                               return (
@@ -6935,6 +6945,7 @@
                                                 const hasAppt = appointments.some(a => 
                                                   (a.barberKey === bKey || (bKey === 'luis' && a.barber?.includes('Luis')) || (bKey === 'yago' && a.barber?.includes('Yago'))) &&
                                                   a.day === day.key &&
+                                                  isAppointmentInWeek(a, currentWeek) &&
                                                   !isAppointmentReleased(a) &&
                                                   getAppointmentOccupiedSlots(a, services).includes(t)
                                                 );
@@ -8936,7 +8947,7 @@
                                             (bKey === 'luis' && (a.barber?.includes('Luis') || a.barberKey === 'luis')) || 
                                             (bKey === 'yago' && (a.barber?.includes('Yago') || a.barberKey === 'yago'));
                                           const notCancelled = !isAppointmentReleased(a);
-                                          return matchBarber && notCancelled && a.day === dName;
+                                          return matchBarber && notCancelled && a.day === dName && isAppointmentInWeek(a, currentWeek);
                                         }).sort((m, n) => (m.time || '').localeCompare(n.time || ''));
 
                                         return (
@@ -9307,7 +9318,7 @@
                                       <tr key={timeSlot} className="hover:bg-[#1C1A14]">
                                         <td className="py-2.5 px-3 text-left font-serif font-bold text-[#C9A356]">{timeSlot}</td>
                                         {days.map((dayName, idx) => {
-                                          const apptsInSlot = appointments.filter(a => a.day === dayName && a.time && a.time.startsWith(timeSlot.slice(0, 2)) && !isAppointmentReleased(a));
+                                          const apptsInSlot = appointments.filter(a => a.day === dayName && a.time && a.time.startsWith(timeSlot.slice(0, 2)) && !isAppointmentReleased(a) && isAppointmentInWeek(a, currentWeek));
                                           const maxChairs = Math.max(1, barbers.length);
                                           const rate = Math.min(100, Math.round((apptsInSlot.length / maxChairs) * 100));
                                           const isPeak = rate >= 80;
@@ -10676,7 +10687,10 @@
                                             if (isAppointmentReleased(a)) return false;
                                             const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
                                             if (!matchBarber) return false;
-                                            const matchDate = (clientBookingFlow.selectedDate && a.isoDate === clientBookingFlow.selectedDate) || a.day === clientBookingFlow.dayName;
+                                            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+                                            const matchDate = clientBookingFlow.selectedDate
+                                              ? (aIso ? aIso === clientBookingFlow.selectedDate : a.day === clientBookingFlow.dayName)
+                                              : a.day === clientBookingFlow.dayName;
                                             if (!matchDate) return false;
                                             const occ = getAppointmentOccupiedSlots(a, services);
                                             return reqSlots.some(s => occ.includes(s));
@@ -11054,7 +11068,11 @@
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {currentWeek.days.map((d) => {
-                          const dayAppts = appointments.filter(a => a.day === d.name && !isAppointmentReleased(a) && (a.weekId === currentWeek.id || (currentWeek.id === 0 && a.weekId === undefined)));
+                          const dayAppts = appointments.filter(a => {
+                            if (isAppointmentReleased(a)) return false;
+                            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+                            return aIso ? aIso === d.isoDate : (a.day === d.name && isAppointmentInWeek(a, currentWeek));
+                          });
                           return (
                             <div key={d.name} className="bg-[#12110E] p-5 rounded-2xl border border-[#262118] space-y-3">
                               <div className="flex justify-between items-center pb-2 border-b border-[#201C16]">
@@ -11069,7 +11087,7 @@
 
                               <div className="space-y-2 text-xs">
                                 {barbers.map((b) => {
-                                  const bSlots = getAvailableSlotsForBarberAndDay(b.barberKey, d.name);
+                                  const bSlots = getAvailableSlotsForBarberAndDay(b.barberKey, d.name, d.isoDate);
                                   const isAvail = (dailyBarberSettings[b.barberKey] && dailyBarberSettings[b.barberKey][d.name]?.available) !== false;
                                   return (
                                     <div key={b.id} className="flex justify-between items-center p-2 rounded-xl bg-[#181612] border border-[#242018]">
@@ -11479,7 +11497,10 @@
                                 if (isAppointmentReleased(a)) return false;
                                 const matchBarber = a.barberKey === bookingForm.barberKey || (bookingForm.barberKey === 'luis' && a.barber?.includes('Luis')) || (bookingForm.barberKey === 'yago' && a.barber?.includes('Yago'));
                                 if (!matchBarber) return false;
-                                const matchDate = (bookingForm.isoDate && a.isoDate === bookingForm.isoDate) || a.day === bookingForm.day;
+                                const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
+                                const matchDate = bookingForm.isoDate
+                                  ? (aIso ? aIso === bookingForm.isoDate : a.day === bookingForm.day)
+                                  : a.day === bookingForm.day;
                                 if (!matchDate) return false;
                                 const occ = getAppointmentOccupiedSlots(a, services);
                                 return slotsToCheck.some(s => occ.includes(s));
