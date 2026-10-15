@@ -1879,9 +1879,7 @@
             return isTimeIntervalColliding(clientBookingFlow.time, srvDuration, a.time, aDur);
           });
           if (collidingAppt) {
-            const cDur = getAppointmentDurationMinutes(collidingAppt, services);
-            const cEnd = getEndTimeForStartTimeAndDuration(collidingAppt.time, cDur);
-            alert(`Conflito de Horário!\n\nO serviço '${selectedSrv.name}' dura ${srvDuration} min e terminaria às ${getEndTimeForStartTimeAndDuration(clientBookingFlow.time, srvDuration)}.\nPorém, há atendimento com ${collidingAppt.client} (${collidingAppt.time} às ${cEnd}).\n\nPor favor, escolha outro horário livre.`);
+            alert(`Conflito de Horário!\n\nO serviço '${selectedSrv.name}' dura ${srvDuration} min e terminaria às ${getEndTimeForStartTimeAndDuration(clientBookingFlow.time, srvDuration)}.\nPorém, este horário já está ocupado por outro atendimento.\n\nPor favor, escolha outro horário livre.`);
             return;
           }
 
@@ -4719,9 +4717,11 @@
             return isTimeIntervalColliding(bookingForm.time, srvDuration, a.time, aDur);
           });
           if (collidingManualAppt) {
+            const isStaffBarber = ['dono', 'barbeiro', 'superadmin', 'admin'].includes(currentUser?.role);
             const mDur = getAppointmentDurationMinutes(collidingManualAppt, services);
             const mEnd = getEndTimeForStartTimeAndDuration(collidingManualAppt.time, mDur);
-            alert(`Conflito de Horário!\n\nO serviço '${srv.name}' (${srvDuration} min) colide com o atendimento de ${collidingManualAppt.client} (${collidingManualAppt.time} às ${mEnd}).\n\nPor favor, selecione outro horário livre.`);
+            const detailMsg = isStaffBarber ? ` com o atendimento de ${collidingManualAppt.client} (${collidingManualAppt.time} às ${mEnd})` : ' com outro atendimento já agendado';
+            alert(`Conflito de Horário!\n\nO serviço '${srv.name}' (${srvDuration} min) colide${detailMsg}.\n\nPor favor, selecione outro horário livre.`);
             return;
           }
 
@@ -6490,7 +6490,7 @@
                                             {luisAppt ? (
                                               <span className="inline-flex items-center gap-1.5 bg-red-950/40 border border-red-800/40 text-red-200 px-3 py-1 rounded-full text-[11px] font-medium">
                                                 <span>●</span>
-                                                <span>{currentUser.role === 'barbeiro' ? 'Cadeira 1 Ocupada' : (`Ocupado: ${luisAppt.client} (${luisAppt.service})`)}</span>
+                                                <span>{['dono', 'superadmin', 'admin', 'recepcao'].includes(currentUser?.role) || (currentUser?.role === 'barbeiro' && (currentUser?.barberKey === 'luis' || !currentUser?.barberKey)) ? (`Ocupado: ${luisAppt.client} (${luisAppt.service})`) : 'Cadeira 1 Ocupada'}</span>
                                               </span>
                                             ) : isLuisBlocked ? (
                                               <button
@@ -6522,7 +6522,7 @@
                                             ) : yagoAppt ? (
                                               <span className="inline-flex items-center gap-1.5 bg-red-950/40 border border-red-800/40 text-red-200 px-3 py-1 rounded-full text-[11px] font-medium">
                                                 <span>●</span>
-                                                <span>Ocupado: <strong>{yagoAppt.client}</strong> ({yagoAppt.service})</span>
+                                                <span>{['dono', 'superadmin', 'admin', 'recepcao'].includes(currentUser?.role) || (currentUser?.role === 'barbeiro' && currentUser?.barberKey === 'yago') ? (<>Ocupado: <strong>{yagoAppt.client}</strong> ({yagoAppt.service})</>) : 'Cadeira 2 Ocupada'}</span>
                                               </span>
                                             ) : isYagoBlocked ? (
                                               <button
@@ -10742,15 +10742,7 @@
 
                                           let clientBookedLabel = '';
                                           if (bookedAppt) {
-                                            const bDur = getAppointmentDurationMinutes(bookedAppt, services);
-                                            const bEnd = getEndTimeForStartTimeAndDuration(bookedAppt.time, bDur);
-                                            if (bookedAppt.time === t) {
-                                              clientBookedLabel = '(👤 Ocupado)';
-                                            } else if (t > bookedAppt.time) {
-                                              clientBookedLabel = `(👤 Em atendimento até ${bEnd})`;
-                                            } else {
-                                              clientBookedLabel = `(⏳ Próximo cliente às ${bookedAppt.time})`;
-                                            }
+                                            clientBookedLabel = '(👤 Ocupado)';
                                           }
 
                                           const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
@@ -11563,16 +11555,21 @@
                                 return isTimeIntervalColliding(t, modalDur, a.time, aDur);
                               });
 
+                              const isBarberStaff = ['dono', 'barbeiro', 'superadmin', 'admin', 'recepcao'].includes(currentUser?.role);
                               let staffBookedLabel = '';
                               if (bookedAppt) {
-                                const bDur = getAppointmentDurationMinutes(bookedAppt, services);
-                                const bEnd = getEndTimeForStartTimeAndDuration(bookedAppt.time, bDur);
-                                if (bookedAppt.time === t) {
-                                  staffBookedLabel = `(👤 Agendado: ${bookedAppt.client})`;
-                                } else if (t > bookedAppt.time) {
-                                  staffBookedLabel = `(👤 Em atendimento até ${bEnd})`;
+                                if (isBarberStaff) {
+                                  const bDur = getAppointmentDurationMinutes(bookedAppt, services);
+                                  const bEnd = getEndTimeForStartTimeAndDuration(bookedAppt.time, bDur);
+                                  if (bookedAppt.time === t) {
+                                    staffBookedLabel = `(👤 Agendado: ${bookedAppt.client})`;
+                                  } else if (t > bookedAppt.time) {
+                                    staffBookedLabel = `(👤 Em atendimento até ${bEnd} - ${bookedAppt.client})`;
+                                  } else {
+                                    staffBookedLabel = `(⏳ Próximo às ${bookedAppt.time} - ${bookedAppt.client})`;
+                                  }
                                 } else {
-                                  staffBookedLabel = `(⏳ Vaga curta / Próximo às ${bookedAppt.time})`;
+                                  staffBookedLabel = '(👤 Ocupado)';
                                 }
                               }
 
