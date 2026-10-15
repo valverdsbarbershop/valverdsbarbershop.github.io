@@ -1236,20 +1236,20 @@
           } catch(e) {}
           return {
             luis: {
-              Seg: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
-              Ter: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
-              Qua: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
-              Qui: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
-              Sex: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
-              Sáb: { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] },
+              Seg: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
+              Ter: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
+              Qua: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
+              Qui: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
+              Sex: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
+              Sáb: { available: true, start: '09:00', end: '22:00', note: '', blockedSlots: [] },
             },
             yago: {
-              Seg: { available: false, start: '10:00', end: '19:00', note: 'Folga Semanal', blockedSlots: [] },
-              Ter: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
-              Qua: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
-              Qui: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
-              Sex: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
-              Sáb: { available: true, start: '10:00', end: '19:00', note: '', blockedSlots: [] },
+              Seg: { available: false, start: '10:00', end: '22:00', note: 'Folga Semanal', blockedSlots: [] },
+              Ter: { available: true, start: '10:00', end: '22:00', note: '', blockedSlots: [] },
+              Qua: { available: true, start: '10:00', end: '22:00', note: '', blockedSlots: [] },
+              Qui: { available: true, start: '10:00', end: '22:00', note: '', blockedSlots: [] },
+              Sex: { available: true, start: '10:00', end: '22:00', note: '', blockedSlots: [] },
+              Sáb: { available: true, start: '10:00', end: '22:00', note: '', blockedSlots: [] },
             }
           };
         });
@@ -1558,7 +1558,7 @@
 
         // Helper para obter horários livres de um barbeiro em um dia/data específica considerando a duração do serviço
         const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null, serviceDurationOrId = null) => {
-          const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
+          const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
           if (!barberSetting.available) return [];
 
           const blockedSlots = Array.isArray(barberSetting.blockedSlots) ? barberSetting.blockedSlots : [];
@@ -1597,10 +1597,16 @@
             }
           });
 
-          // Avalia cada slot de início t
+          // Avalia cada slot de início t de acordo com a jornada configurada na gestão dia
+          const barberEndMin = timeToMinutes(barberSetting.end || '22:00');
           return ALL_48_TIME_SLOTS.filter(t => {
             if (t < barberSetting.start) return false;
             if (isToday && t < currentTime) return false;
+
+            // Valida se o término do atendimento ultrapassa o horário de saída configurado na gestão dia
+            const tStartMin = timeToMinutes(t);
+            const tEndMin = tStartMin + targetDuration;
+            if (tEndMin > barberEndMin) return false;
 
             const startIdx = ALL_48_TIME_SLOTS.indexOf(t);
             if (startIdx === -1) return false;
@@ -1610,9 +1616,6 @@
               const nextIdx = startIdx + i;
               if (nextIdx >= ALL_48_TIME_SLOTS.length) return false;
               const slotToCheck = ALL_48_TIME_SLOTS[nextIdx];
-
-              // Ultrapassa encerramento do expediente do barbeiro
-              if (slotToCheck >= barberSetting.end) return false;
 
               // Bloqueado pelo barbeiro (pausa/intervalo)
               if (blockedSlots.includes(slotToCheck)) return false;
@@ -1883,7 +1886,7 @@
           }
 
           // TRAVA 3.1: BLOQUEIO ESPECÍFICO DE HORÁRIO / INTERVALO PELO BARBEIRO E EXPEDIENTE
-          const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][clientBookingFlow.dayName]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
+          const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][clientBookingFlow.dayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
           if (!barberDaySchedule.available) {
             alert(`O profissional selecionado não está atendendo em ${clientBookingFlow.dayFullName || clientBookingFlow.dayName} (Folga ou Ausência). Por favor, selecione outro dia.`);
             return;
@@ -1893,9 +1896,11 @@
             alert(`O atendimento de ${srvDuration} min a partir de ${clientBookingFlow.time} coincide com um intervalo/pausa do barbeiro. Por favor, escolha outro horário disponível.`);
             return;
           }
-          const exceedsClosing = requiredSlots.some(s => s >= (barberDaySchedule.end || '19:00'));
+          const clientEndMin = timeToMinutes(clientBookingFlow.time) + srvDuration;
+          const scheduleEndMin = timeToMinutes(barberDaySchedule.end || '22:00');
+          const exceedsClosing = clientEndMin > scheduleEndMin;
           if (exceedsClosing) {
-            alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de término do expediente do barbeiro (${barberDaySchedule.end || '19:00'}). Por favor, escolha um horário mais cedo.`);
+            alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de término do expediente do barbeiro (${barberDaySchedule.end || '22:00'}). Por favor, escolha um horário mais cedo.`);
             return;
           }
 
@@ -4721,15 +4726,18 @@
           }
 
           // TRAVA 2.1: INTERVALO DO BARBEIRO E EXPEDIENTE
-          const barberScheduleDay = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { available: true, start: '09:00', end: '19:00', blockedSlots: [] };
+          const barberScheduleDay = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
           const hasBlockedConsecutive = requiredSlots.some(s => Array.isArray(barberScheduleDay.blockedSlots) && barberScheduleDay.blockedSlots.includes(s));
           if (hasBlockedConsecutive) {
             alert(`O atendimento de ${srvDuration} min a partir de ${bookingForm.time} coincide com um intervalo/pausa do barbeiro. Por favor, selecione outro horário.`);
             return;
           }
-          const exceedsClosing = requiredSlots.some(s => s >= (barberScheduleDay.end || '19:00'));
+          const canStaffOverride = ['dono', 'barbeiro', 'superadmin', 'admin'].includes(currentUser?.role);
+          const manualEndMin = timeToMinutes(bookingForm.time) + srvDuration;
+          const scheduleEndMin = timeToMinutes(barberScheduleDay.end || '22:00');
+          const exceedsClosing = !canStaffOverride && (manualEndMin > scheduleEndMin);
           if (exceedsClosing) {
-            alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de encerramento do expediente (${barberScheduleDay.end || '19:00'}). Por favor, selecione um horário mais cedo.`);
+            alert(`A duração deste serviço (${srvDuration} min) ultrapassa o horário de encerramento do expediente (${barberScheduleDay.end || '22:00'}). Por favor, selecione um horário mais cedo.`);
             return;
           }
 
@@ -10680,7 +10688,7 @@
                                   <div>
                                     <span className="text-[11px] font-serif text-gray-400 mb-1.5 block">Horários recomendados (comportam {currentDuration} min completos):</span>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                                      {availableSlots.slice(0, 16).map((timeStr) => {
+                                      {availableSlots.map((timeStr) => {
                                         const isSelected = clientBookingFlow.time === timeStr;
                                         const slotEnd = getEndTimeForStartTimeAndDuration(timeStr, currentDuration);
                                         return (
@@ -10713,7 +10721,7 @@
                                         className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
                                       >
                                         {ALL_48_TIME_SLOTS.map(t => {
-                                          const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || { start: '09:00', end: '19:00', blockedSlots: [] };
+                                          const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || { start: '09:00', end: '22:00', blockedSlots: [] };
                                           const isToday = (clientBookingFlow.selectedDate || getTodayDateISO()) === getTodayDateISO();
                                           const isPastTime = isToday && t < getCurrentTimeHHMM();
                                           const reqSlots = getSlotsForStartTimeAndDuration(t, currentDuration);
@@ -10746,7 +10754,7 @@
                                           }
 
                                           const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
-                                          const exceedsClosing = reqSlots.some(s => s >= (currentDayConf.end || '19:00'));
+                                          const exceedsClosing = (timeToMinutes(t) + currentDuration) > timeToMinutes(currentDayConf.end || '22:00');
                                           const isDisabled = isPastTime || isStartBlocked || Boolean(bookedAppt) || hasBlockedConsecutive || exceedsClosing;
                                           const endT = getEndTimeForStartTimeAndDuration(t, currentDuration);
 
@@ -11534,7 +11542,7 @@
                           {(() => {
                             const modalSrv = services.find(s => s.id === bookingForm.serviceId) || services[0];
                             const modalDur = Number(modalSrv?.duration) || 30;
-                            const bSetting = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { start: '09:00', end: '19:00', blockedSlots: [] };
+                            const bSetting = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { start: '09:00', end: '22:00', blockedSlots: [] };
                             const canStaffSchedulePastTime = ['dono', 'barbeiro', 'superadmin'].includes(currentUser?.role);
 
                             return TIME_SLOTS_COMPARE.map(t => {
@@ -11569,7 +11577,7 @@
                               }
 
                               const hasBlocked = slotsToCheck.some(s => Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(s));
-                              const exceedsClose = slotsToCheck.some(s => s >= (bSetting.end || '19:00'));
+                              const exceedsClose = !canStaffSchedulePastTime && ((timeToMinutes(t) + modalDur) > timeToMinutes(bSetting.end || '22:00'));
                               const isStartBlocked = Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(t);
                               const isDisabled = (!canStaffSchedulePastTime && isPastTime) || Boolean(bookedAppt) || hasBlocked || exceedsClose;
                               const endT = getEndTimeForStartTimeAndDuration(t, modalDur);
