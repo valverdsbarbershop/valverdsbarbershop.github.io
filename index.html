@@ -602,8 +602,8 @@
       const GOOGLE_MAPS_LINK = 'https://www.google.com/maps/search/?api=1&query=Valverd%27s+BarberShop+R.+Ant%C3%B4nio+Veloso+J%C3%BAnior%2C+77+-+Campos+El%C3%ADseos%2C+Resende+-+RJ%2C+27541-200';
 
       const INITIAL_SERVICES = [
-        { id: 's1', name: 'Corte Masculino', price: 40, duration: 40, category: 'Cabelo', description: 'Técnica precisa na tesoura ou máquina, degrade limpo e finalização impecável.' },
-        { id: 's2', name: 'Corte Infantil', price: 50, duration: 35, category: 'Cabelo', description: 'Atendimento calmo, paciente e no estilo para os pequenos.' },
+        { id: 's1', name: 'Corte Masculino', price: 40, duration: 30, category: 'Cabelo', description: 'Técnica precisa na tesoura ou máquina, degrade limpo e finalização impecável.' },
+        { id: 's2', name: 'Corte Infantil', price: 50, duration: 30, category: 'Cabelo', description: 'Atendimento calmo, paciente e no estilo para os pequenos.' },
         { id: 's3', name: 'Barba + Cabelo (Combo Especial)', price: 65, duration: 60, category: 'Combo', description: 'A experiência completa: corte alinhado e barba desenhada na navalha.' },
         { id: 's4', name: 'Somente Barba', price: 35, duration: 30, category: 'Barba', description: 'Barboterapia com toalha quente, hidratação, navalha afiada e pós-barba.' },
         { id: 's5', name: 'Design de Sobrancelha', price: 20, duration: 15, category: 'Estética', description: 'Alinhamento preciso na navalha para realçar o olhar.' },
@@ -1478,6 +1478,26 @@
         };
 
         // === GESTÃO INTELIGENTE DE DURAÇÃO & BLOQUEIO CONSECUTIVO DE SLOTS ===
+        const timeToMinutes = (t) => {
+          if (!t || typeof t !== 'string' || !t.includes(':')) return 0;
+          const [h, m] = t.split(':').map(Number);
+          return (h || 0) * 60 + (m || 0);
+        };
+
+        const minutesToTime = (min) => {
+          const h = Math.floor(min / 60) % 24;
+          const m = min % 60;
+          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        };
+
+        const isTimeIntervalColliding = (start1, dur1, start2, dur2) => {
+          const s1 = timeToMinutes(start1);
+          const e1 = s1 + Math.max(1, Number(dur1) || 30);
+          const s2 = timeToMinutes(start2);
+          const e2 = s2 + Math.max(1, Number(dur2) || 30);
+          return Math.max(s1, s2) < Math.min(e1, e2);
+        };
+
         const getServiceDuration = (serviceOrIdOrName, servicesList = services) => {
           if (!serviceOrIdOrName) return 30;
           if (typeof serviceOrIdOrName === 'number') return serviceOrIdOrName;
@@ -1488,20 +1508,31 @@
           return match?.duration ? Number(match.duration) : 30;
         };
 
+        const getAppointmentDurationMinutes = (appt, servicesList = services) => {
+          if (!appt) return 30;
+          let dur = Number(appt.duration);
+          if (!dur || isNaN(dur)) {
+            const srvItem = Array.isArray(appt.items) ? appt.items.find(it => it.type === 'service') : null;
+            const match = (servicesList || []).find(s => s.id === (srvItem?.id || appt.serviceId) || s.name === (srvItem?.name || appt.service));
+            dur = match?.duration ? Number(match.duration) : 30;
+          }
+          return Math.max(1, dur || 30);
+        };
+
         const getSlotsCountForDuration = (durationMinutes) => {
           const dur = Math.max(1, Number(durationMinutes) || 30);
           return Math.max(1, Math.ceil(dur / 30));
         };
 
         const getSlotsForStartTimeAndDuration = (startTime, durationMinutes) => {
-          const count = getSlotsCountForDuration(durationMinutes);
-          const startIdx = ALL_48_TIME_SLOTS.indexOf(startTime);
-          if (startIdx === -1) return [startTime];
-          const slots = [];
-          for (let i = 0; i < count && (startIdx + i) < ALL_48_TIME_SLOTS.length; i++) {
-            slots.push(ALL_48_TIME_SLOTS[startIdx + i]);
-          }
-          return slots;
+          const reqDur = Math.max(1, Number(durationMinutes) || 30);
+          const reqStart = timeToMinutes(startTime);
+          const reqEnd = reqStart + reqDur;
+          return ALL_48_TIME_SLOTS.filter(s => {
+            const sStart = timeToMinutes(s);
+            const sEnd = sStart + 30;
+            return Math.max(sStart, reqStart) < Math.min(sEnd, reqEnd);
+          });
         };
 
         const getEndTimeForStartTimeAndDuration = (startTime, durationMinutes) => {
@@ -1515,13 +1546,14 @@
 
         const getAppointmentOccupiedSlots = (appt, servicesList = services) => {
           if (!appt || !appt.time) return [];
-          let dur = Number(appt.duration);
-          if (!dur || isNaN(dur)) {
-            const srvItem = Array.isArray(appt.items) ? appt.items.find(it => it.type === 'service') : null;
-            const match = (servicesList || []).find(s => s.id === (srvItem?.id || appt.serviceId) || s.name === (srvItem?.name || appt.service));
-            dur = match?.duration ? Number(match.duration) : 30;
-          }
-          return getSlotsForStartTimeAndDuration(appt.time, dur);
+          const dur = getAppointmentDurationMinutes(appt, servicesList);
+          const apptStart = timeToMinutes(appt.time);
+          const apptEnd = apptStart + dur;
+          return ALL_48_TIME_SLOTS.filter(s => {
+            const sStart = timeToMinutes(s);
+            const sEnd = sStart + 30;
+            return Math.max(sStart, apptStart) < Math.min(sEnd, apptEnd);
+          });
         };
 
         // Helper para obter horários livres de um barbeiro em um dia/data específica considerando a duração do serviço
@@ -1840,11 +1872,13 @@
               : a.day === clientBookingFlow.dayName;
             if (!matchDate) return false;
 
-            const occupied = getAppointmentOccupiedSlots(a, services);
-            return requiredSlots.some(s => occupied.includes(s));
+            const aDur = getAppointmentDurationMinutes(a, services);
+            return isTimeIntervalColliding(clientBookingFlow.time, srvDuration, a.time, aDur);
           });
           if (collidingAppt) {
-            alert(`Conflito de Horário!\n\nO serviço '${selectedSrv.name}' dura ${srvDuration} min e ocupa os horários [${requiredSlots.join(', ')}].\nPorém, há outro atendimento marcado nesta cadeira com ${collidingAppt.client} (${collidingAppt.time}).\n\nPor favor, escolha outro horário livre.`);
+            const cDur = getAppointmentDurationMinutes(collidingAppt, services);
+            const cEnd = getEndTimeForStartTimeAndDuration(collidingAppt.time, cDur);
+            alert(`Conflito de Horário!\n\nO serviço '${selectedSrv.name}' dura ${srvDuration} min e terminaria às ${getEndTimeForStartTimeAndDuration(clientBookingFlow.time, srvDuration)}.\nPorém, há atendimento com ${collidingAppt.client} (${collidingAppt.time} às ${cEnd}).\n\nPor favor, escolha outro horário livre.`);
             return;
           }
 
@@ -4676,11 +4710,13 @@
               : a.day === bookingForm.day;
             if (!matchDate) return false;
 
-            const occupied = getAppointmentOccupiedSlots(a, services);
-            return requiredSlots.some(s => occupied.includes(s));
+            const aDur = getAppointmentDurationMinutes(a, services);
+            return isTimeIntervalColliding(bookingForm.time, srvDuration, a.time, aDur);
           });
           if (collidingManualAppt) {
-            alert(`Conflito de Horário!\n\nO serviço '${srv.name}' (${srvDuration} min) ocupa os horários [${requiredSlots.join(', ')}].\nPorém, já existe atendimento marcado para ${collidingManualAppt.client} (${collidingManualAppt.time}).\n\nPor favor, selecione outro horário livre.`);
+            const mDur = getAppointmentDurationMinutes(collidingManualAppt, services);
+            const mEnd = getEndTimeForStartTimeAndDuration(collidingManualAppt.time, mDur);
+            alert(`Conflito de Horário!\n\nO serviço '${srv.name}' (${srvDuration} min) colide com o atendimento de ${collidingManualAppt.client} (${collidingManualAppt.time} às ${mEnd}).\n\nPor favor, selecione outro horário livre.`);
             return;
           }
 
@@ -10692,9 +10728,22 @@
                                               ? (aIso ? aIso === clientBookingFlow.selectedDate : a.day === clientBookingFlow.dayName)
                                               : a.day === clientBookingFlow.dayName;
                                             if (!matchDate) return false;
-                                            const occ = getAppointmentOccupiedSlots(a, services);
-                                            return reqSlots.some(s => occ.includes(s));
+                                            const aDur = getAppointmentDurationMinutes(a, services);
+                                            return isTimeIntervalColliding(t, currentDuration, a.time, aDur);
                                           });
+
+                                          let clientBookedLabel = '';
+                                          if (bookedAppt) {
+                                            const bDur = getAppointmentDurationMinutes(bookedAppt, services);
+                                            const bEnd = getEndTimeForStartTimeAndDuration(bookedAppt.time, bDur);
+                                            if (bookedAppt.time === t) {
+                                              clientBookedLabel = '(👤 Ocupado)';
+                                            } else if (t > bookedAppt.time) {
+                                              clientBookedLabel = `(👤 Em atendimento até ${bEnd})`;
+                                            } else {
+                                              clientBookedLabel = `(⏳ Próximo cliente às ${bookedAppt.time})`;
+                                            }
+                                          }
 
                                           const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
                                           const exceedsClosing = reqSlots.some(s => s >= (currentDayConf.end || '19:00'));
@@ -10703,7 +10752,7 @@
 
                                           return (
                                             <option key={`slot-48-${t}`} value={t} disabled={isDisabled}>
-                                              {t} às {endT} {isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : bookedAppt ? '(👤 Ocupado)' : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
+                                              {t} às {endT} {isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : clientBookedLabel ? clientBookedLabel : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
                                             </option>
                                           );
                                         })}
@@ -11502,9 +11551,22 @@
                                   ? (aIso ? aIso === bookingForm.isoDate : a.day === bookingForm.day)
                                   : a.day === bookingForm.day;
                                 if (!matchDate) return false;
-                                const occ = getAppointmentOccupiedSlots(a, services);
-                                return slotsToCheck.some(s => occ.includes(s));
+                                const aDur = getAppointmentDurationMinutes(a, services);
+                                return isTimeIntervalColliding(t, modalDur, a.time, aDur);
                               });
+
+                              let staffBookedLabel = '';
+                              if (bookedAppt) {
+                                const bDur = getAppointmentDurationMinutes(bookedAppt, services);
+                                const bEnd = getEndTimeForStartTimeAndDuration(bookedAppt.time, bDur);
+                                if (bookedAppt.time === t) {
+                                  staffBookedLabel = `(👤 Agendado: ${bookedAppt.client})`;
+                                } else if (t > bookedAppt.time) {
+                                  staffBookedLabel = `(👤 Em atendimento até ${bEnd})`;
+                                } else {
+                                  staffBookedLabel = `(⏳ Vaga curta / Próximo às ${bookedAppt.time})`;
+                                }
+                              }
 
                               const hasBlocked = slotsToCheck.some(s => Array.isArray(bSetting.blockedSlots) && bSetting.blockedSlots.includes(s));
                               const exceedsClose = slotsToCheck.some(s => s >= (bSetting.end || '19:00'));
@@ -11514,7 +11576,7 @@
 
                               return (
                                 <option key={t} value={t} disabled={isDisabled}>
-                                  {t} às {endT} {isPastTime && !canStaffSchedulePastTime ? '(⏰ Passou)' : isPastTime ? '(✓ Liberado para equipe)' : bookedAppt ? `(👤 Ocupado: ${bookedAppt.client})` : isStartBlocked ? '(🔒 Pausa)' : hasBlocked ? '(🔒 Conflito com Pausa)' : exceedsClose ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
+                                  {t} às {endT} {isPastTime && !canStaffSchedulePastTime ? '(⏰ Passou)' : isPastTime ? '(✓ Liberado para equipe)' : staffBookedLabel ? staffBookedLabel : isStartBlocked ? '(🔒 Pausa)' : hasBlocked ? '(🔒 Conflito com Pausa)' : exceedsClose ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
                                 </option>
                               );
                             });
