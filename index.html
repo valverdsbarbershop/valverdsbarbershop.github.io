@@ -10361,7 +10361,7 @@
                                   onClick={() => {
                                     const source = prompt("Digite o nome da campanha ou rede social (Ex: instagram, stories, email_outubro, panfleto):", "instagram");
                                     if (source) {
-                                      const link = `https://valverdsbarbershop.github.io/?src=${encodeURIComponent(source.trim().toLowerCase())}`;
+                                      const link = `https://valverdsbarbershop.com.br/?src=${encodeURIComponent(source.trim().toLowerCase())}`;
                                       navigator.clipboard.writeText(link);
                                       alert(`Link rastreável criado e copiado para sua área de transferência!\n\n${link}\n\nUse este link em posts, na bio do Instagram ou no e-mail!`);
                                     }
@@ -14852,7 +14852,7 @@
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {/* ENVIAR PELO WHATSAPP */}
                       <a
-                        href="https://wa.me/?text=Ol%C3%A1!%20A%20Valverd's%20BarberShop%20agora%20tem%20site%20oficial!%20Agende%20seu%20hor%C3%A1rio%20em%20segundos:%20https://valverdsbarbershop.github.io/"
+                        href="https://wa.me/?text=Ol%C3%A1!%20A%20Valverd's%20BarberShop%20agora%20tem%20site%20oficial!%20Agende%20seu%20hor%C3%A1rio%20em%20segundos:%20https://valverdsbarbershop.com.br/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-serif font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-2 transition-all shadow"
@@ -14866,11 +14866,11 @@
                         type="button"
                         onClick={() => {
                           try {
-                            navigator.clipboard.writeText('https://valverdsbarbershop.github.io/');
+                            navigator.clipboard.writeText('https://valverdsbarbershop.com.br/');
                             setShareCopiedToast(true);
                             setTimeout(() => setShareCopiedToast(false), 3000);
                           } catch(e) {
-                            alert('Link: https://valverdsbarbershop.github.io/');
+                            alert('Link: https://valverdsbarbershop.com.br/');
                           }
                         }}
                         className="py-3 px-4 rounded-xl bg-[#221F18] hover:bg-[#2F2B22] text-[#C9A356] border border-[#C9A356]/40 font-serif font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-2 transition-all shadow"
@@ -14889,11 +14889,11 @@
                             navigator.share({
                               title: "Valverd's BarberShop",
                               text: "Agende seu corte na Valverd's BarberShop no site oficial!",
-                              url: "https://valverdsbarbershop.github.io/"
+                              url: "https://valverdsbarbershop.com.br/"
                             }).catch(() => {});
                           } else {
                             try {
-                              navigator.clipboard.writeText('https://valverdsbarbershop.github.io/');
+                              navigator.clipboard.writeText('https://valverdsbarbershop.com.br/');
                               setShareCopiedToast(true);
                               setTimeout(() => setShareCopiedToast(false), 3000);
                             } catch(e){}
@@ -14918,7 +14918,7 @@
                   </div>
 
                   <div className="pt-2 text-center text-[10px] text-gray-500 font-serif">
-                    Valverd's BarberShop • Campos Elíseos, Resende - RJ • Site: https://valverdsbarbershop.github.io/
+                    Valverd's BarberShop • Campos Elíseos, Resende - RJ • Site: https://valverdsbarbershop.com.br/
                   </div>
                 </div>
               </div>
@@ -15122,7 +15122,7 @@
         var isChecking = false;
 
         async function refreshWhenPublished() {
-          if (isChecking || !navigator.onLine || !location.hostname.endsWith('github.io')) return;
+          if (isChecking || !navigator.onLine || !(location.hostname.endsWith('github.io') || location.hostname.endsWith('valverdsbarbershop.com.br'))) return;
           isChecking = true;
           try {
             var response = await fetch(repoCommitsUrl, {
