@@ -997,12 +997,16 @@
         return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
       };
 
-      // Privacidade/LGPD em aparelhos compartilhados (balcão, tablet, celular emprestado):
-      // a identidade do cliente (nome, CPF, WhatsApp) fica só na aba aberta (sessionStorage)
-      // e some ao fechar o navegador. Apaga o que versões antigas gravaram para sempre.
+      // Privacidade/LGPD: a identidade do cliente (nome, CPF, WhatsApp) fica salva só no
+      // aparelho de quem agendou/consultou com o próprio CPF. Versões antigas também gravavam
+      // o cliente de um encaixe feito pela equipe no aparelho da equipe, então o que foi salvo
+      // até agora é apagado uma única vez.
       try {
-        localStorage.removeItem('valverds_booking_identity');
-        localStorage.removeItem('valverds_active_client');
+        if (!localStorage.getItem('valverds_identity_purge_v1')) {
+          localStorage.removeItem('valverds_booking_identity');
+          localStorage.removeItem('valverds_active_client');
+          localStorage.setItem('valverds_identity_purge_v1', '1');
+        }
         if (!localStorage.getItem('valverds_session_token')) {
           // Sem sessão da equipe, o aparelho não guarda lista de clientes nem agenda completa
           localStorage.removeItem('valverds_clients');
@@ -1010,9 +1014,9 @@
         }
       } catch(e) {}
       const clientIdentityStore = {
-        get(key) { try { return sessionStorage.getItem(key); } catch(e) { return null; } },
-        set(key, value) { try { sessionStorage.setItem(key, value); } catch(e) {} },
-        remove(key) { try { sessionStorage.removeItem(key); } catch(e) {} }
+        get(key) { try { return localStorage.getItem(key); } catch(e) { return null; } },
+        set(key, value) { try { localStorage.setItem(key, value); } catch(e) {} },
+        remove(key) { try { localStorage.removeItem(key); } catch(e) {} }
       };
       // CPF na tela sem os dígitos do meio: 160.***.***-47
       const maskCpfForDisplay = (cpf) => {
@@ -2124,15 +2128,17 @@
           setClientOwnAppointments(prev => [newAppt, ...prev.filter(a => a.id !== newAppt.id)]);
           setClientBookingSuccessToast(true);
           setConfirmedBookingModal(newAppt);
-          // Perfil do cliente neste aparelho (para "Meu Corte" e para cancelar sem redigitar)
-          registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
-          try {
+          // Perfil do cliente neste aparelho (para "Meu Corte" e para cancelar sem redigitar).
+          // Se for a equipe logada agendando por alguém, o aparelho não guarda esse cliente.
+          const isOwnDevice = !getStaffToken();
+          registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone, isOwnDevice);
+          if (isOwnDevice) {
             clientIdentityStore.set('valverds_booking_identity', JSON.stringify({
               name: newAppt.client,
               phone: newAppt.phone,
               cpf: newAppt.cpf
             }));
-          } catch(e) {}
+          }
           setTimeout(() => setClientBookingSuccessToast(false), 5000);
           setClientTab('meu_corte');
         };
@@ -2198,7 +2204,8 @@
 
         useEffect(() => {
           try {
-            if (clientProfile && clientProfile.cpf) {
+            // Só no aparelho do próprio cliente; no aparelho da equipe logada nunca fica salvo
+            if (clientProfile && clientProfile.cpf && !getStaffToken()) {
               clientIdentityStore.set('valverds_active_client', JSON.stringify(clientProfile));
             }
           } catch(e) {}
@@ -2352,7 +2359,7 @@
           };
           setClientOwnAppointments(ownAppts);
           setClientProfile(profile);
-          try { clientIdentityStore.set('valverds_active_client', JSON.stringify(profile)); } catch(e){}
+          if (!getStaffToken()) clientIdentityStore.set('valverds_active_client', JSON.stringify(profile));
           setClientTab('meu_corte');
           setClientSearchFeedback(`Olá, ${cliName}! Encontramos seus dados com sucesso.`);
         };
