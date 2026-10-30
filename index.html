@@ -1330,6 +1330,9 @@
           } catch(e) {}
           return {};
         });
+        // Linha do tempo do início do site: barbeiro mostrado ('' = escolhe sozinho quem tem vaga)
+        const [heroRailBarber, setHeroRailBarber] = useState('');
+
         // Calendário da aba "Escalas da Equipe": barbeiro, mês (AAAA-MM) e dia (AAAA-MM-DD) escolhidos
         const [escalaCalBarber, setEscalaCalBarber] = useState('');
         const [escalaCalMonth, setEscalaCalMonth] = useState(() => getTodayDateISO().slice(0, 7));
@@ -5778,61 +5781,7 @@
                           Corte, barba e acabamento na tesoura, na máquina e na navalha. Dê um tapa no seu estilo.
                         </p>
 
-                        {/* Próximos horários livres: hoje ou o próximo dia com vaga */}
-                        {(() => {
-                          const todayIsoHero = getTodayDateISO();
-                          let found = null;
-                          for (let offset = 0; offset < 7 && !found; offset++) {
-                            const dt = new Date(Number(todayIsoHero.slice(0, 4)), Number(todayIsoHero.slice(5, 7)) - 1, Number(todayIsoHero.slice(8, 10)) + offset);
-                            const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-                            const dayName = WEEKDAY_NAMES_PT[dt.getDay()];
-                            const shopDay = shopHours.find(sh => sh.short === dayName);
-                            if (dayName === 'Dom' || (shopDay && shopDay.isOpen === false)) continue;
-                            const slots = [];
-                            barbers.forEach(b => {
-                              getAvailableSlotsForBarberAndDay(b.barberKey, dayName, iso, 30).forEach(t => {
-                                slots.push({ time: t, barberKey: b.barberKey, barberName: (b.name || '').split(' ')[0] });
-                              });
-                            });
-                            if (slots.length) {
-                              slots.sort((x, y) => x.time.localeCompare(y.time));
-                              const seen = new Set();
-                              const unique = slots.filter(s => (seen.has(s.time) ? false : (seen.add(s.time), true))).slice(0, 6);
-                              found = {
-                                iso,
-                                label: offset === 0 ? 'hoje' : offset === 1 ? 'amanhã' : `${WEEKDAY_FULL_NAMES_PT[dt.getDay()].toLowerCase()}, ${formatDateBR(iso).slice(0, 5)}`,
-                                slots: unique
-                              };
-                            }
-                          }
-                          return (
-                            <div className={`mt-8 p-4 sm:p-5 rounded-2xl border max-w-lg ${theme === 'clean' ? 'bg-white border-[#E2D7BF]' : 'bg-[#14120E] border-[#2C2619]'}`}>
-                              <h2 className="font-serif text-lg mb-3">
-                                {found ? `Horários livres ${found.label}` : 'Agenda da semana cheia'}
-                              </h2>
-                              {found ? (
-                                <div className="grid grid-cols-3 gap-2">
-                                  {found.slots.map(s => (
-                                    <button
-                                      key={`${s.time}-${s.barberKey}`}
-                                      onClick={() => handleOpenBookingModal({ barberKey: s.barberKey, time: s.time, isoDate: found.iso })}
-                                      className={`py-2.5 rounded-xl border text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A356] ${theme === 'clean' ? 'border-[#D9C9A3] hover:bg-[#F3EAD5]' : 'border-[#3A3222] hover:border-[#C9A356] hover:bg-[#1E1A12]'}`}
-                                    >
-                                      <span className="block font-serif font-bold text-base">{s.time}</span>
-                                      <span className={`block text-xs ${theme === 'clean' ? 'text-[#6B6355]' : 'text-[#A8A296]'}`}>com {s.barberName}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className={`text-sm ${theme === 'clean' ? 'text-[#4A443A]' : 'text-[#B9B3A6]'}`}>
-                                  Escolha outra data no agendamento ou chame no WhatsApp para um encaixe.
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        <div className="mt-6 flex flex-col sm:flex-row gap-3 max-w-lg">
+                        <div className="mt-8 flex flex-col sm:flex-row gap-3 max-w-lg">
                           <button
                             onClick={() => handleOpenBookingModal({ barberKey: 'luis' })}
                             className="flex-1 px-6 py-3.5 bg-[#C9A356] hover:bg-[#B59044] text-[#0B0B0B] font-serif text-base font-bold rounded-xl shadow-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0B0B] focus-visible:ring-[#C9A356]"
@@ -5862,6 +5811,173 @@
                         </figcaption>
                       </figure>
                     </div>
+
+                    {/* LINHA DO TEMPO DO DIA: ocupado x livre por barbeiro, toque no livre para agendar */}
+                    {(() => {
+                      const railBarbers = (barbers || []).filter(b => b && b.barberKey);
+                      if (!railBarbers.length) return null;
+                      const isClean = theme === 'clean';
+                      const todayIsoR = getTodayDateISO();
+
+                      // Mostra hoje; se hoje não tiver mais vaga, o próximo dia com vaga
+                      let target = null;
+                      for (let offset = 0; offset < 7 && !target; offset++) {
+                        const dt = new Date(Number(todayIsoR.slice(0, 4)), Number(todayIsoR.slice(5, 7)) - 1, Number(todayIsoR.slice(8, 10)) + offset);
+                        const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+                        const dayName = WEEKDAY_NAMES_PT[dt.getDay()];
+                        const shopDay = shopHours.find(sh => sh.short === dayName);
+                        if (dayName === 'Dom' || (shopDay && shopDay.isOpen === false)) continue;
+                        const withSlots = railBarbers.filter(b => getAvailableSlotsForBarberAndDay(b.barberKey, dayName, iso, 30).length > 0);
+                        if (withSlots.length) target = { iso, dayName, offset, dt, withSlots };
+                      }
+
+                      const cardClass = `mt-10 lg:mt-14 rounded-3xl border p-5 sm:p-7 ${isClean ? 'bg-white border-[#E2D7BF]' : 'bg-[#14120E] border-[#2C2619]'}`;
+                      if (!target) {
+                        return (
+                          <div className={`max-w-6xl mx-auto ${cardClass}`}>
+                            <h2 className="font-serif text-2xl font-bold">Agenda da semana cheia</h2>
+                            <p className={`mt-2 text-base ${isClean ? 'text-[#4A443A]' : 'text-[#B9B3A6]'}`}>Chame no WhatsApp para um encaixe ou escolha outra data no agendamento.</p>
+                          </div>
+                        );
+                      }
+
+                      const bk = railBarbers.some(b => b.barberKey === heroRailBarber) ? heroRailBarber : target.withSlots[0].barberKey;
+                      const barberObj = railBarbers.find(b => b.barberKey === bk);
+                      const setting = (dailyBarberSettings[bk] && dailyBarberSettings[bk][target.dayName]) || { available: true, start: '09:00', end: '19:30', blockedSlots: [] };
+                      const isOff = setting.available === false || isBarberClosedOnDate(bk, target.iso);
+                      const startMin = timeToMinutes(setting.start || '09:00');
+                      const endMin = timeToMinutes(setting.end || '19:30');
+                      const span = Math.max(30, endMin - startMin);
+                      const pos = (m) => `${((Math.min(Math.max(m, startMin), endMin) - startMin) / span) * 100}%`;
+                      const width = (a, b) => `${((Math.min(b, endMin) - Math.max(a, startMin)) / span) * 100}%`;
+
+                      const busy = appointments
+                        .filter(a => (a.barberKey === bk || (barberObj && a.barber === barberObj.name)) && !isAppointmentReleased(a)
+                          && normalizeAppointmentDateISO(a.isoDate || a.date) === target.iso && a.time)
+                        .map(a => { const s = timeToMinutes(a.time); return [s, s + getAppointmentDurationMinutes(a, services)]; });
+                      const pauses = (Array.isArray(setting.blockedSlots) ? setting.blockedSlots : [])
+                        .map(s => { const m = timeToMinutes(s); return [m, m + 30]; });
+                      const free = isOff ? [] : getAvailableSlotsForBarberAndDay(bk, target.dayName, target.iso, 30);
+                      const nowMin = target.offset === 0 ? timeToMinutes(getCurrentTimeHHMM()) : null;
+                      const hours = [];
+                      for (let h = Math.ceil(startMin / 60); h * 60 <= endMin; h++) hours.push(h);
+                      const title = target.offset === 0 ? 'Hoje na cadeira'
+                        : target.offset === 1 ? 'Amanhã na cadeira'
+                        : `${WEEKDAY_FULL_NAMES_PT[target.dt.getDay()]}, ${formatDateBR(target.iso).slice(0, 5)}`;
+                      const hatch = isClean
+                        ? 'repeating-linear-gradient(135deg, #EDE6D6 0 6px, #E4DAC5 6px 12px)'
+                        : 'repeating-linear-gradient(135deg, #1D1A14 0 6px, #17150F 6px 12px)';
+
+                      return (
+                        <div className={`max-w-6xl mx-auto ${cardClass}`}>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <h2 className="font-serif text-2xl font-bold">{title}</h2>
+                            <div className="flex gap-2" role="group" aria-label="Escolha o barbeiro">
+                              {railBarbers.map(b => (
+                                <button
+                                  key={b.barberKey}
+                                  type="button"
+                                  aria-pressed={b.barberKey === bk}
+                                  onClick={() => setHeroRailBarber(b.barberKey)}
+                                  className={`px-4 py-2 rounded-full text-sm font-serif font-bold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A356] ${b.barberKey === bk
+                                    ? 'bg-[#C9A356] text-[#0B0B0B] border-[#C9A356]'
+                                    : (isClean ? 'bg-white text-[#4A443A] border-[#D9C9A3]' : 'bg-transparent text-[#B9B3A6] border-[#3A3222] hover:border-[#C9A356]/60')}`}
+                                >
+                                  {(b.name || '').split(' ')[0]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {isOff ? (
+                            <p className={`mt-5 text-base ${isClean ? 'text-[#4A443A]' : 'text-[#B9B3A6]'}`}>
+                              {barberObj ? barberObj.name.split(' ')[0] : 'Este barbeiro'} não atende neste dia. Escolha outro barbeiro acima.
+                            </p>
+                          ) : (
+                            <div
+                              className="mt-5 overflow-x-auto pb-2"
+                              ref={el => {
+                                // No celular, já abre a linha no primeiro horário livre.
+                                // Só marca como feito quando o horário livre já está na tela
+                                // (a primeira montagem pode acontecer antes de a agenda chegar).
+                                if (!el || el.dataset.railFor === `${bk}-${target.iso}`) return;
+                                const firstFree = el.querySelector('[data-rail-free]');
+                                if (!firstFree || el.scrollWidth <= el.clientWidth) return;
+                                el.scrollLeft = Math.max(0, firstFree.offsetLeft - 24);
+                                el.dataset.railFor = `${bk}-${target.iso}`;
+                              }}
+                            >
+                              <div className="relative min-w-[760px] h-[108px]">
+                                {hours.map(h => (
+                                  <React.Fragment key={h}>
+                                    <span
+                                      className={`absolute top-0 text-xs ${isClean ? 'text-[#6B6355]' : 'text-[#8C877C]'}`}
+                                      style={{ left: pos(h * 60), transform: h * 60 === startMin ? 'none' : 'translateX(-50%)' }}
+                                    >
+                                      {h}h
+                                    </span>
+                                    <span className={`absolute top-[22px] w-px h-[64px] ${isClean ? 'bg-[#E2D7BF]' : 'bg-[#2A251C]'}`} style={{ left: pos(h * 60) }}></span>
+                                  </React.Fragment>
+                                ))}
+                                <div className={`absolute left-0 right-0 top-[36px] h-[44px] rounded-xl border ${isClean ? 'bg-[#FAF7F0] border-[#E2D7BF]' : 'bg-[#0E0D0A] border-[#2A251C]'}`}></div>
+                                {nowMin !== null && nowMin > startMin && (
+                                  <div
+                                    className={`absolute top-[36px] h-[44px] rounded-l-xl ${isClean ? 'bg-[#EFE9DC]' : 'bg-black/50'}`}
+                                    style={{ left: 0, width: width(startMin, Math.min(nowMin, endMin)) }}
+                                    title="Já passou"
+                                  ></div>
+                                )}
+                                {[...busy, ...pauses].filter(([a, b]) => b > startMin && a < endMin).map(([a, b], i) => (
+                                  <div
+                                    key={`ocupado-${i}`}
+                                    className={`absolute top-[36px] h-[44px] rounded-xl border ${isClean ? 'border-[#DCD0B6]' : 'border-[#2A251C]'}`}
+                                    style={{ left: pos(a), width: width(a, b), background: hatch }}
+                                    title="Ocupado"
+                                  ></div>
+                                ))}
+                                {free.map(t => {
+                                  const m = timeToMinutes(t);
+                                  return (
+                                    <button
+                                      key={t}
+                                      type="button"
+                                      data-rail-free
+                                      onClick={() => handleOpenBookingModal({ barberKey: bk, time: t, isoDate: target.iso })}
+                                      aria-label={`Agendar com ${barberObj ? barberObj.name.split(' ')[0] : ''} às ${t}`}
+                                      className={`absolute top-[36px] h-[44px] rounded-xl border text-sm font-serif font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A356] ${isClean
+                                        ? 'bg-[#F6EBCF] border-[#C9A356] text-[#1C1917] hover:bg-[#C9A356]'
+                                        : 'bg-[#C9A356]/15 border-[#C9A356] text-[#F1EBDD] hover:bg-[#C9A356] hover:text-[#0B0B0B]'}`}
+                                      style={{ left: `calc(${pos(m)} + 2px)`, width: `calc(${width(m, m + 30)} - 4px)` }}
+                                    >
+                                      {t}
+                                    </button>
+                                  );
+                                })}
+                                {nowMin !== null && nowMin > startMin && nowMin < endMin && (
+                                  <div className={`absolute top-[26px] w-0.5 h-[64px] ${isClean ? 'bg-[#1C1917]' : 'bg-[#F1EBDD]'}`} style={{ left: pos(nowMin) }}>
+                                    <span className={`absolute top-[66px] left-1/2 -translate-x-1/2 text-xs ${isClean ? 'text-[#1C1917]' : 'text-[#F1EBDD]'}`}>agora</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className={`mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm ${isClean ? 'text-[#6B6355]' : 'text-[#A8A296]'}`}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className={`inline-block w-6 h-3 rounded border ${isClean ? 'bg-[#F6EBCF]' : 'bg-[#C9A356]/15'} border-[#C9A356]`}></span>
+                              Livre: toque para agendar
+                            </span>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="inline-block w-6 h-3 rounded" style={{ background: hatch }}></span>
+                              Ocupado
+                            </span>
+                            {!isOff && free.length > 0 && (
+                              <span>{free.length} horário(s) livre(s) com {barberObj ? barberObj.name.split(' ')[0] : ''}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </section>
 
                   {/* PILARES */}
