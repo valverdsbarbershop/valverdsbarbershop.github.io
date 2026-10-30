@@ -1020,32 +1020,70 @@
         }
       };
 
-      async function neonQuery(sql, params = []) {
+      // Sessão da equipe: token devolvido por api.login / api.login_google.
+      // O usuário público do banco (site_web) não acessa tabelas: só chama as funções do schema api.
+      const SESSION_TOKEN_KEY = 'valverds_session_token';
+      const getStaffToken = () => {
+        try { return localStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch(e) { return ''; }
+      };
+      const setStaffToken = (token) => {
+        const previous = getStaffToken();
         try {
-          const payload = {
-            query: sql,
-            params: Array.isArray(params) ? params : []
-          };
+          if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
+          else localStorage.removeItem(SESSION_TOKEN_KEY);
+        } catch(e) {}
+        if ((token || '') !== previous) {
+          setTimeout(() => {
+            try { window.dispatchEvent(new CustomEvent('valverds-sync-now')); } catch(e) {}
+          }, 0);
+        }
+      };
+
+      async function neonRaw(sql, params = []) {
+        try {
           const res = await fetch(NEON_CONFIG.url, {
             method: 'POST',
             headers: {
               'neon-connection-string': NEON_CONFIG.conn
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ query: sql, params: Array.isArray(params) ? params : [] })
           });
           if (!res.ok) {
             const errText = await res.text();
             console.warn('Neon DB HTTP Warning:', res.status, errText);
-            notifyDbWriteFailure(sql);
+            if (errText.includes('sessao_invalida')) {
+              try { window.dispatchEvent(new CustomEvent('valverds-session-expired')); } catch(e) {}
+            }
             return null;
           }
           const data = await res.json();
           return data.rows || [];
         } catch (err) {
           console.warn('Neon DB connection error:', err);
+          return null;
+        }
+      }
+
+      // Chama uma função pública do schema api; a SQL deve devolver a coluna "r".
+      async function neonRpc(sql, params = []) {
+        const rows = await neonRaw(sql, params);
+        return rows && rows[0] ? rows[0].r : null;
+      }
+
+      // Operações da equipe: passam pela api.staff_exec, que só executa com sessão válida.
+      async function neonQuery(sql, params = []) {
+        const token = getStaffToken();
+        if (!token) {
           notifyDbWriteFailure(sql);
           return null;
         }
+        const safeParams = (Array.isArray(params) ? params : []).map(p => p === undefined ? null : p);
+        const result = await neonRpc('SELECT api.staff_exec($1, $2, $3::jsonb) AS r', [token, sql, JSON.stringify(safeParams)]);
+        if (result === null) {
+          notifyDbWriteFailure(sql);
+          return null;
+        }
+        return Array.isArray(result) ? result : [];
       }
 
       const saveOperationalSetting = (key, value) => neonQuery(`
@@ -1208,7 +1246,8 @@
           try {
             const isAuth = localStorage.getItem('valverds_auth') === 'true';
             const saved = localStorage.getItem('valverds_logged_user');
-            return isAuth && !!saved;
+            // Sem token de sessão do banco, não há login (o painel não carrega dados)
+            return isAuth && !!saved && !!getStaffToken();
           } catch(e) { return false; }
         });
 
@@ -1942,59 +1981,12 @@
             return;
           }
 
-          let barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][bookingDayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
-          // Confere a escala direto no banco: se o barbeiro fechou a agenda depois
-          // que o cliente abriu o site, a tela dele ainda pode estar desatualizada.
-          clientBookingSubmittingRef.current = true;
-          let freshScheduleRows = null;
-          let freshClosureRows = null;
-          let freshApptRows = null;
-          try {
-            [freshScheduleRows, freshClosureRows, freshApptRows] = await Promise.all([
-              neonQuery(
-                'SELECT is_available, start_time, end_time, note FROM barber_daily_schedules WHERE barber_key = $1 AND day_name = $2;',
-                [clientBookingFlow.barberKey, bookingDayName]
-              ),
-              neonQuery("SELECT setting_value FROM app_settings WHERE setting_key = 'barber_date_closures';"),
-              // Agendamentos que outros clientes acabaram de marcar e esta tela ainda não recebeu
-              neonQuery(
-                'SELECT appt_time, service_name, items, status FROM appointments WHERE barber_key = $1 AND appt_date = $2;',
-                [clientBookingFlow.barberKey, formatDateBR(finalIsoDate)]
-              )
-            ]);
-          } finally {
-            clientBookingSubmittingRef.current = false;
-          }
-          const freshClosures = (Array.isArray(freshClosureRows) && freshClosureRows[0] && freshClosureRows[0].setting_value) || barberDateClosures;
-          if (isBarberClosedOnDate(clientBookingFlow.barberKey, finalIsoDate, freshClosures)) {
+          // Conferências rápidas com o que a tela já tem; a validação definitiva
+          // (agenda fechada, conflito de horário, CPF etc.) é feita no banco pela api.public_book.
+          const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][bookingDayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
+          if (isBarberClosedOnDate(clientBookingFlow.barberKey, finalIsoDate)) {
             alert(`O profissional selecionado fechou a agenda em ${formatDateBR(finalIsoDate)}. Por favor, selecione outro dia ou outro profissional.`);
             return;
-          }
-          const freshClash = (Array.isArray(freshApptRows) ? freshApptRows : []).find(r => {
-            if (isAppointmentReleased(normalizeAppointmentStatus(r.status))) return false;
-            const items = typeof r.items === 'string' ? (() => { try { return JSON.parse(r.items); } catch(err) { return []; } })() : r.items;
-            const rDur = getAppointmentDurationMinutes({ time: r.appt_time, service: r.service_name, items: Array.isArray(items) ? items : [] }, services);
-            return isTimeIntervalColliding(clientBookingFlow.time, srvDuration, r.appt_time, rDur);
-          });
-          if (freshClash) {
-            alert(`Esse horário acabou de ser reservado por outro cliente. Por favor, escolha outro horário livre.`);
-            return;
-          }
-          if (Array.isArray(freshScheduleRows) && freshScheduleRows[0]) {
-            const row = freshScheduleRows[0];
-            let freshBlocked = [];
-            if (typeof row.note === 'string' && row.note.trim().startsWith('{')) {
-              try {
-                const parsedNote = JSON.parse(row.note.trim());
-                if (Array.isArray(parsedNote.blockedSlots)) freshBlocked = parsedNote.blockedSlots;
-              } catch(err) {}
-            }
-            barberDaySchedule = {
-              available: Boolean(row.is_available),
-              start: row.start_time || barberDaySchedule.start || '09:00',
-              end: row.end_time || barberDaySchedule.end || '22:00',
-              blockedSlots: freshBlocked
-            };
           }
           if (!barberDaySchedule.available) {
             alert(`O profissional selecionado não está atendendo em ${formatDateBR(finalIsoDate)} (Folga ou Agenda Fechada). Por favor, selecione outro dia ou outro profissional.`);
@@ -2030,48 +2022,89 @@
             return;
           }
 
-          const extrasList = products.filter(p => clientBookingFlow.selectedExtras.includes(p.id));
-          const extrasTotal = extrasList.reduce((acc, p) => acc + p.price, 0);
-          const totalPrice = selectedSrv.price + extrasTotal;
+          // Grava pelo banco: ele confere tudo de novo (agenda, conflito, CPF bloqueado,
+          // 1 horário ativo por CPF) e calcula preço e voucher, sem confiar no navegador.
+          clientBookingSubmittingRef.current = true;
+          let booking = null;
+          try {
+            booking = await neonRpc('SELECT api.public_book($1::jsonb) AS r', [JSON.stringify({
+              name: clientBookingFlow.clientName.trim(),
+              phone: maskPhone(clientBookingFlow.clientPhone),
+              cpf: maskCPF(clientBookingFlow.clientCpf),
+              service_id: selectedSrv.id,
+              extra_ids: clientBookingFlow.selectedExtras || [],
+              barber_key: selectedBarber.barberKey,
+              iso_date: finalIsoDate,
+              time: clientBookingFlow.time,
+              notes: (clientBookingFlow.clientNotes || '').trim()
+            })]);
+          } finally {
+            clientBookingSubmittingRef.current = false;
+          }
 
-          const finalDateBR = formatDateBR(finalIsoDate);
-          const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
+          if (!booking) {
+            alert('Não foi possível confirmar agora. Verifique sua internet e tente novamente.');
+            return;
+          }
+          if (booking.error) {
+            const bookingErrors = {
+              nome: 'Por favor, informe seu nome e sobrenome.',
+              telefone: 'Por favor, informe um WhatsApp válido com DDD.',
+              cpf: 'CPF inválido. Confira os números digitados.',
+              horario: 'Horário inválido. Escolha um horário da lista.',
+              data: 'Data inválida. Escolha outra data.',
+              passado: 'Esse horário já passou. Escolha um horário futuro.',
+              cpf_bloqueado: 'Este CPF possui restrição de agendamento online por falta anterior.\n\nPara agendar, fale com a barbearia pelo WhatsApp oficial: (21) 97010-0668.',
+              ja_tem_horario: `Você já possui um horário marcado${booking.appointment ? ` (${booking.appointment.appt_date} às ${booking.appointment.appt_time} com ${booking.appointment.barber_name})` : ''}.\n\nCada cliente pode manter 1 horário ativo. Para remarcar, cancele o atual na aba "Meu Corte".`,
+              servico: 'Serviço indisponível. Escolha outro serviço.',
+              barbeiro: 'Profissional indisponível. Escolha outro profissional.',
+              loja_fechada: `A barbearia não abre em ${formatDateBR(finalIsoDate)}. Escolha outro dia.`,
+              agenda_fechada: `O profissional não está atendendo em ${formatDateBR(finalIsoDate)}. Escolha outro dia ou outro profissional.`,
+              antes_abertura: `O atendimento começa às ${booking.start || '09:00'}. Escolha um horário a partir desse.`,
+              apos_fechamento: `Esse serviço terminaria depois do fim do expediente (${booking.end || ''}). Escolha um horário mais cedo.`,
+              pausa: 'Esse horário coincide com um intervalo do barbeiro. Escolha outro horário.',
+              ocupado: 'Esse horário acabou de ser reservado por outro cliente. Escolha outro horário livre.'
+            };
+            alert(bookingErrors[booking.error] || 'Não foi possível confirmar o agendamento. Tente outro horário.');
+            if (booking.error === 'ocupado' || booking.error === 'agenda_fechada') {
+              try { window.dispatchEvent(new CustomEvent('valverds-sync-now')); } catch(e) {}
+            }
+            return;
+          }
 
+          const saved = booking.appointment || {};
           const newAppt = {
-            id: Date.now(),
+            id: Number(saved.id),
             weekId: currentWeek.id,
-            day: bookingDayName,
-            date: finalDateBR,
+            day: saved.day_name || bookingDayName,
+            date: saved.appt_date || formatDateBR(finalIsoDate),
             isoDate: finalIsoDate,
             dayNum: Number(finalIsoDate.slice(8, 10)) || matchedDay.num,
-            client: clientBookingFlow.clientName.trim(),
-            phone: maskPhone(clientBookingFlow.clientPhone),
-            cpf: maskCPF(clientBookingFlow.clientCpf),
+            client: saved.client_name,
+            phone: saved.phone,
+            cpf: saved.cpf,
             isCpfVerified: true,
-            voucherCode: voucherCode,
-            service: selectedSrv.name + (extrasList.length > 0 ? ` + ${extrasList.map(x => x.name).join(', ')}` : ''),
+            voucherCode: saved.voucher_code,
+            service: saved.service_name,
             serviceId: selectedSrv.id,
             duration: srvDuration,
-            barber: selectedBarber.name,
-            barberKey: selectedBarber.barberKey,
-            time: clientBookingFlow.time,
+            barber: saved.barber_name,
+            barberKey: saved.barber_key,
+            time: saved.appt_time,
             status: 'confirmado',
             source: 'online',
-            // price = só serviços (base da comissão); total = serviços + produtos
-            price: selectedSrv.price,
-            items: [
-              { id: selectedSrv.id, type: 'service', name: selectedSrv.name, price: selectedSrv.price, duration: srvDuration },
-              ...extrasList.map(x => ({ id: x.id, type: 'product', name: x.name, price: x.price }))
-            ],
-            total: totalPrice,
-            paymentMethod: 'Presencial / PIX',
-            notes: `Voucher #${voucherCode} • Agendado online via site • CPF: ${maskCPF(clientBookingFlow.clientCpf)} • Duração: ${srvDuration} min`
+            price: Number(saved.price) || 0,
+            items: Array.isArray(saved.items) ? saved.items : [],
+            total: Number(saved.total) || 0,
+            paymentMethod: saved.payment_method,
+            notes: saved.notes
           };
 
           setAppointments(prev => [newAppt, ...prev]);
+          setClientOwnAppointments(prev => [newAppt, ...prev.filter(a => a.id !== newAppt.id)]);
           setClientBookingSuccessToast(true);
           setConfirmedBookingModal(newAppt);
-          // Cadastro automático do cliente pelo CPF
+          // Perfil do cliente neste aparelho (para "Meu Corte" e para cancelar sem redigitar)
           registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
           try {
             localStorage.setItem('valverds_booking_identity', JSON.stringify({
@@ -2080,16 +2113,6 @@
               cpf: newAppt.cpf
             }));
           } catch(e) {}
-
-          // Gravação em Tempo Real no Neon Cloud
-          neonQuery(`
-            INSERT INTO appointments (id, voucher_code, client_name, phone, cpf, is_cpf_verified, service_name, barber_name, barber_key, day_name, appt_date, appt_time, status, price, total, payment_method, notes, items)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb);
-          `, [
-            newAppt.id, newAppt.voucherCode, newAppt.client, newAppt.phone, newAppt.cpf, newAppt.isCpfVerified,
-            newAppt.service, newAppt.barber, newAppt.barberKey, newAppt.day, newAppt.date, newAppt.time,
-            newAppt.status, newAppt.price, newAppt.total, newAppt.paymentMethod, newAppt.notes, JSON.stringify(newAppt.items)
-          ]);
           setTimeout(() => setClientBookingSuccessToast(false), 5000);
           setClientTab('meu_corte');
         };
@@ -2173,6 +2196,9 @@
 
         const [clientCpfInput, setClientCpfInput] = useState('');
         const [clientPhoneCheckInput, setClientPhoneCheckInput] = useState('');
+        // Agendamentos do próprio cliente (vindos da api.client_lookup / api.public_book).
+        // A lista geral de agendamentos do visitante não tem CPF nem nome de ninguém.
+        const [clientOwnAppointments, setClientOwnAppointments] = useState([]);
         const [clientSearchFeedback, setClientSearchFeedback] = useState('');
 
         // Funcao que cadastra ou atualiza o cliente automaticamente ao usar o CPF
@@ -2221,7 +2247,8 @@
           };
           setClientProfile(activeObj);
           try { localStorage.setItem('valverds_active_client', JSON.stringify(activeObj)); } catch(e){}
-          neonQuery(`
+          // No agendamento online o próprio banco (api.public_book) cadastra o cliente
+          if (getStaffToken()) neonQuery(`
             INSERT INTO clients (id, name, cpf, phone, tier, last_visit)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (cpf) DO UPDATE SET
@@ -2232,7 +2259,33 @@
         };
 
         // Login / Consulta rápida de agendamentos pelo CPF
-        const handleLookupClientByCpf = (e) => {
+        // Linha da tabela appointments (como o banco devolve) no formato usado pela tela
+        const mapDbAppointmentRow = (a) => {
+          const iso = normalizeAppointmentDateISO(a.appt_date);
+          return {
+            id: Number(a.id),
+            voucherCode: a.voucher_code,
+            client: a.client_name,
+            phone: a.phone,
+            cpf: a.cpf,
+            service: a.service_name,
+            barber: a.barber_name,
+            barberKey: a.barber_key,
+            day: a.day_name,
+            date: formatDateBR(iso) || a.appt_date,
+            isoDate: iso,
+            time: a.appt_time,
+            status: normalizeAppointmentStatus(a.status),
+            price: Number(a.price) || 0,
+            total: Number(a.total || a.price) || 0,
+            items: Array.isArray(a.items) ? a.items : [],
+            paymentMethod: a.payment_method,
+            notes: a.notes
+          };
+        };
+
+        // Consulta de agendamentos pelo CPF + 4 últimos dígitos do WhatsApp (conferidos no banco)
+        const handleLookupClientByCpf = async (e) => {
           if (e) e.preventDefault();
           setClientSearchFeedback('');
           const formatted = maskCPF(clientCpfInput);
@@ -2240,44 +2293,73 @@
             setClientSearchFeedback('Por favor, informe um CPF válido para consultar.');
             return;
           }
+          const last4 = clientPhoneCheckInput.replace(/\D/g, '');
+          if (last4.length !== 4) {
+            setClientSearchFeedback('Informe também os 4 últimos dígitos do WhatsApp usado no agendamento.');
+            return;
+          }
 
-          // Buscar agendamentos e cadastro
-          const foundAppts = appointments.filter(a => a.cpf === formatted);
-          const foundCli = registeredClients.find(c => c.cpf === formatted);
-
-          if (foundAppts.length > 0 || foundCli) {
-            const cliName = (foundCli && foundCli.name) || (foundAppts[0] && foundAppts[0].client) || 'Cliente';
-            const cliPhone = (foundCli && foundCli.phone) || (foundAppts[0] && foundAppts[0].phone) || '';
-            // Só o CPF não basta: confere os 4 últimos dígitos do WhatsApp cadastrado
-            const phoneDigits = cliPhone.replace(/\D/g, '');
-            if (phoneDigits.length >= 4 && clientPhoneCheckInput.replace(/\D/g, '') !== phoneDigits.slice(-4)) {
-              setClientSearchFeedback('Para sua segurança, informe os 4 últimos dígitos do WhatsApp usado no agendamento.');
-              return;
-            }
-            const profile = {
-              id: foundCli ? foundCli.id : 'cli_' + Date.now(),
-              cpf: formatted,
-              name: cliName,
-              phone: cliPhone,
-              tier: 'Cliente Cadastrado'
-            };
-            setClientProfile(profile);
-            try { localStorage.setItem('valverds_active_client', JSON.stringify(profile)); } catch(e){}
-            setClientTab('meu_corte');
-            setClientSearchFeedback(`Olá, ${cliName}! Encontramos seus dados com sucesso.`);
-          } else {
-            // Cadastrar cliente novo com esse CPF
-            const newCli = {
-              id: 'cli_' + Date.now(),
-              cpf: formatted,
-              name: 'Novo Cliente',
-              phone: '',
-              tier: 'Novo Cliente'
-            };
-            setClientProfile(newCli);
+          const found = await neonRpc('SELECT api.client_lookup($1, $2) AS r', [formatted, last4]);
+          if (!found) {
+            setClientSearchFeedback('Não foi possível consultar agora. Verifique sua internet e tente de novo.');
+            return;
+          }
+          if (found.error === 'bloqueado') {
+            setClientSearchFeedback('Muitas tentativas. Aguarde 15 minutos e tente novamente.');
+            return;
+          }
+          if (found.error) {
+            setClientSearchFeedback('CPF e dígitos do WhatsApp não conferem com nenhum agendamento. Se for seu primeiro horário, é só agendar!');
             setClientBookingFlow(prev => ({ ...prev, clientCpf: formatted }));
-            setClientSearchFeedback('CPF não possui horários anteriores. Vamos fazer seu primeiro agendamento!');
-            setClientTab('agendar');
+            return;
+          }
+
+          const ownAppts = (found.appointments || []).map(mapDbAppointmentRow);
+          const cliName = (found.client && found.client.name) || (ownAppts[0] && ownAppts[0].client) || 'Cliente';
+          const cliPhone = (found.client && found.client.phone) || (ownAppts[0] && ownAppts[0].phone) || '';
+          const profile = {
+            id: (found.client && found.client.id) || 'cli_' + Date.now(),
+            cpf: found.cpf || formatted,
+            name: cliName,
+            phone: cliPhone,
+            tier: 'Cliente Cadastrado'
+          };
+          setClientOwnAppointments(ownAppts);
+          setClientProfile(profile);
+          try { localStorage.setItem('valverds_active_client', JSON.stringify(profile)); } catch(e){}
+          setClientTab('meu_corte');
+          setClientSearchFeedback(`Olá, ${cliName}! Encontramos seus dados com sucesso.`);
+        };
+
+        // Cliente que já se identificou neste aparelho: recarrega os horários dele ao abrir o site
+        useEffect(() => {
+          const cpf = clientProfile && clientProfile.cpf;
+          const last4 = String((clientProfile && clientProfile.phone) || '').replace(/\D/g, '').slice(-4);
+          if (!cpf || last4.length !== 4) return;
+          neonRpc('SELECT api.client_lookup($1, $2) AS r', [cpf, last4]).then(found => {
+            if (found && !found.error && Array.isArray(found.appointments)) {
+              setClientOwnAppointments(found.appointments.map(mapDbAppointmentRow));
+            }
+          });
+        }, [clientProfile && clientProfile.cpf]);
+
+        // Cancelamento pelo próprio cliente (o banco confere CPF + 4 dígitos do WhatsApp)
+        const handleClientCancelOwnBooking = async (appt) => {
+          if (!appt || !clientProfile || !clientProfile.cpf) return;
+          if (!confirm(`Cancelar seu horário de ${appt.day} (${appt.date}) às ${appt.time} com ${appt.barber}?\n\nO horário ficará livre para outro cliente.`)) return;
+          const last4 = String(clientProfile.phone || '').replace(/\D/g, '').slice(-4);
+          const result = await neonRpc('SELECT api.client_cancel($1, $2, $3) AS r', [clientProfile.cpf, last4, appt.id]);
+          if (result && result.ok) {
+            setClientOwnAppointments(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelado' } : a));
+            setAppointments(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelado' } : a));
+            setClientSearchFeedback('Seu horário foi cancelado. Quando quiser, é só agendar um novo.');
+          } else {
+            const cancelErrors = {
+              ja_passou: 'Esse horário já passou e não pode mais ser cancelado pelo site.',
+              status: 'Esse atendimento já começou ou foi finalizado.',
+              bloqueado: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.'
+            };
+            alert((result && cancelErrors[result.error]) || 'Não foi possível cancelar agora. Consulte novamente seu CPF ou fale com a barbearia pelo WhatsApp.');
           }
         };
 
@@ -2286,6 +2368,7 @@
           try { localStorage.removeItem('valverds_active_client'); } catch(e){}
           setClientCpfInput('');
           setClientSearchFeedback('');
+          setClientOwnAppointments([]);
           setClientTab('agendar');
         };
 
@@ -2472,12 +2555,12 @@
             };
             setSystemUsers(prev => [...prev, newUser]);
           }
-          neonQuery(`
-            INSERT INTO users (name, email, password_hash, phone, role)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (email) DO UPDATE SET
-              name = EXCLUDED.name, phone = EXCLUDED.phone, role = EXCLUDED.role;
-          `, [userFormData.name.trim(), userFormData.email.trim().toLowerCase(), 'pending-password', userFormData.phone.trim(), userFormData.role]);
+          // Usuário novo entra sem senha utilizável; o dono gera a senha pelo "Resetar senha"
+          neonRpc('SELECT api.staff_upsert_user($1, $2, $3, $4, $5, NULL, NULL) AS r', [
+            getStaffToken(), userFormData.name.trim(), userFormData.email.trim().toLowerCase(), userFormData.phone.trim(), userFormData.role
+          ]).then(r => {
+            if (!r || !r.ok) alert('Não foi possível salvar o usuário no banco. Só o proprietário ou administrador pode cadastrar usuários.');
+          });
           setIsUserModalOpen(false);
         };
 
@@ -2715,7 +2798,11 @@
           }
           const tempPass = 'V' + Math.floor(100000 + Math.random() * 900000);
           try {
-            await neonQuery(`UPDATE users SET password_hash = crypt($1, gen_salt('bf')), must_change_password = true WHERE LOWER(email) = $2;`, [tempPass, user.email.toLowerCase()]);
+            const resetResult = await neonRpc('SELECT api.staff_set_password($1, $2, $3, true) AS r', [getStaffToken(), user.email.toLowerCase(), tempPass]);
+            if (!resetResult || !resetResult.ok) {
+              alert('Não foi possível resetar a senha no banco. Tente novamente.');
+              return;
+            }
           } catch(e) { console.error('DB reset pass error:', e); }
 
           setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === user.email.toLowerCase() ? { ...u, password: tempPass, mustChangePassword: true } : u));
@@ -2751,9 +2838,11 @@
 
           try {
             const userEmail = currentUser.email || (currentUser.role === 'superadmin' ? 'bernardolamin3@gmail.com' : 'valverdsbarbeshop@gmail.com');
-            await neonQuery(`
-              UPDATE users SET password_hash = crypt($1, gen_salt('bf')), must_change_password = false WHERE LOWER(email) = $2;
-            `, [changePasswordForm.newPassword, userEmail.toLowerCase()]);
+            const changed = await neonRpc('SELECT api.staff_set_password($1, $2, $3, false) AS r', [getStaffToken(), userEmail.toLowerCase(), changePasswordForm.newPassword]);
+            if (!changed || !changed.ok) {
+              setChangePasswordStatus({ msg: 'Não foi possível salvar a nova senha. Entre novamente e tente de novo.', isError: true });
+              return;
+            }
 
             setChangePasswordStatus({ msg: 'Senha atualizada com sucesso no banco de dados!', isError: false });
             try {
@@ -2785,7 +2874,92 @@
 
         // Sincronização em Tempo Real com o Banco de Dados Neon Cloud
         useEffect(() => {
+          // Escalas do banco (barber_daily_schedules) no formato usado pela tela
+          const buildDailyFromRows = (scheduleRows) => {
+            const builtDaily = {};
+            scheduleRows.forEach(row => {
+              const bKey = row.barber_key;
+              if (!builtDaily[bKey]) builtDaily[bKey] = {};
+              let parsedNote = row.note || '';
+              let parsedBlocked = [];
+              if (row.note && typeof row.note === 'string' && row.note.trim().startsWith('{') && row.note.trim().endsWith('}')) {
+                try {
+                  const parsedObj = JSON.parse(row.note.trim());
+                  parsedNote = parsedObj.note !== undefined ? parsedObj.note : '';
+                  if (Array.isArray(parsedObj.blockedSlots)) parsedBlocked = parsedObj.blockedSlots;
+                } catch(e) {
+                  parsedNote = row.note;
+                }
+              }
+              builtDaily[bKey][row.day_name] = {
+                available: Boolean(row.is_available),
+                start: row.start_time || '09:00',
+                end: row.end_time || '19:00',
+                note: parsedNote,
+                blockedSlots: parsedBlocked
+              };
+            });
+            return builtDaily;
+          };
+
+          // Visitante (sem sessão da equipe): só dados públicos, sem nome/CPF/telefone de clientes
+          async function syncPublic() {
+            const data = await neonRpc('SELECT api.public_bootstrap() AS r');
+            if (!data) return;
+            if (Array.isArray(data.appointments)) {
+              setAppointments(data.appointments.map(a => {
+                const iso = normalizeAppointmentDateISO(a.appt_date);
+                return {
+                  id: Number(a.id),
+                  client: '',
+                  phone: '',
+                  cpf: '',
+                  service: a.service_name,
+                  barber: a.barber_name,
+                  barberKey: a.barber_key,
+                  day: a.day_name,
+                  date: formatDateBR(iso) || a.appt_date,
+                  isoDate: iso,
+                  time: a.appt_time,
+                  status: normalizeAppointmentStatus(a.status),
+                  price: 0,
+                  total: 0,
+                  items: Array.isArray(a.items) ? a.items : []
+                };
+              }));
+              setDbSynced(true);
+            }
+            const settings = data.settings || {};
+            if (Array.isArray(settings.shop_hours) && settings.shop_hours.length) setShopHours(settings.shop_hours);
+            if (Array.isArray(data.schedules) && data.schedules.length) {
+              setDailyBarberSettings(buildDailyFromRows(data.schedules));
+            } else if (settings.daily_barber_settings && typeof settings.daily_barber_settings === 'object') {
+              setDailyBarberSettings(settings.daily_barber_settings);
+            }
+            if (Array.isArray(settings.barber_schedules) && settings.barber_schedules.length) setBarberSchedules(settings.barber_schedules);
+            if (settings.barber_date_closures && typeof settings.barber_date_closures === 'object') setBarberDateClosures(settings.barber_date_closures);
+            if (Array.isArray(data.services) && data.services.length) setServices(data.services.map(s => ({
+              id: s.id, name: s.name, category: s.category || 'Cabelo', price: Number(s.price),
+              duration: Number(s.duration) || 30, description: s.description || ''
+            })));
+            if (Array.isArray(data.barbers) && data.barbers.length) setBarbers(data.barbers.map(b => ({
+              id: b.id, barberKey: b.barber_key, name: b.name, role: b.role, chair: b.chair, avatar: b.avatar,
+              commissionRate: 0, handle: b.handle, rating: Number(b.rating), reviews: 0,
+              phone: b.phone, email: '', startTime: b.start_time, endTime: b.end_time
+            })));
+            if (Array.isArray(data.products) && data.products.length) setProducts(data.products.map(p => ({
+              id: p.id, name: p.name, category: p.category, price: Number(p.price), cost: 0,
+              stock: Number(p.stock), minStock: Number(p.min_stock), type: p.type, active: true
+            })));
+            if (data.has_owner === false) setIsFirstAccessModalOpen(true);
+            setOperationalDataLoaded(true);
+          }
+
           async function syncWithNeon() {
+            if (!getStaffToken()) {
+              try { await syncPublic(); } catch(err) { console.warn('Erro ao carregar dados públicos:', err); }
+              return;
+            }
             try {
               // 1. Carregar agendamentos reais em nuvem
               const appts = await neonQuery('SELECT * FROM appointments ORDER BY id DESC;');
@@ -2982,8 +3156,8 @@
               } catch(e){}
 
               // 3. Verificar se já existe Dono cadastrado no Neon
-              const users = await neonQuery("SELECT count(*) FROM users WHERE role = 'dono';");
-              if (users && Number(users[0]?.count || 0) === 0) {
+              const hasOwner = await neonRpc('SELECT api.has_owner() AS r');
+              if (hasOwner === false) {
                 setIsFirstAccessModalOpen(true);
               }
             } catch(err) {
@@ -2995,9 +3169,12 @@
           const intervalId = setInterval(syncWithNeon, 12000);
           const handleFocus = () => syncWithNeon();
           window.addEventListener('focus', handleFocus);
+          // Logo após entrar/sair, recarrega na hora com o nível de acesso novo
+          window.addEventListener('valverds-sync-now', handleFocus);
           return () => {
             clearInterval(intervalId);
             window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('valverds-sync-now', handleFocus);
           };
         }, []);
 
@@ -3014,18 +3191,23 @@
           }
 
           try {
-            await neonQuery(`
-              INSERT INTO users (name, email, password_hash, phone, role, barber_key)
-              VALUES ($1, $2, crypt($3, gen_salt('bf')), $4, $5, $6)
-              ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-            `, [
+            // Só funciona enquanto não existir nenhum dono cadastrado (conferido no banco)
+            const created = await neonRpc('SELECT api.first_access($1, $2, $3, $4) AS r', [
               firstAccessForm.name.trim(),
               firstAccessForm.email.trim().toLowerCase(),
-              firstAccessForm.password,
               firstAccessForm.phone,
-              'dono',
-              'luis'
+              firstAccessForm.password
             ]);
+            if (!created || !created.token) {
+              alert(created && created.error === 'ja_existe_dono'
+                ? 'Já existe um proprietário cadastrado. Entre pelo login da equipe.'
+                : 'Não foi possível criar o cadastro. Verifique os dados (senha com no mínimo 6 caracteres) e a internet.');
+              setIsFirstAccessModalOpen(false);
+              return;
+            }
+            setStaffToken(created.token);
+            setIsAuthenticated(true);
+            localStorage.setItem('valverds_auth', 'true');
 
             const logged = {
               name: firstAccessForm.name,
@@ -3060,21 +3242,23 @@
             inputEmail = 'bernardolamin3@gmail.com';
           }
 
-          // Validação estritamente no Banco de Dados Neon via pgcrypto (bcrypt + salt)
-          let rows = await neonQuery(`
-            SELECT id, name, email, role, barber_key, must_change_password,
-                   (password_hash = $3) AS is_legacy_plain_password
-            FROM users
-            WHERE (LOWER(email) = $1 OR LOWER(email) = $2)
-              AND (password_hash = crypt($3, password_hash) OR password_hash = $3);
-          `, [inputEmail, rawEmail, inputPassword]);
+          // A senha é conferida dentro do banco (api.login), que devolve o token da sessão
+          const loginResult = await neonRpc(
+            'SELECT api.login(ARRAY(SELECT jsonb_array_elements_text($1::jsonb)), $2) AS r',
+            [JSON.stringify([inputEmail, rawEmail]), inputPassword]
+          );
+          if (loginResult && loginResult.error === 'bloqueado') {
+            setLoginError('Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.');
+            return;
+          }
+          if (loginResult === null) {
+            setLoginError('Não foi possível conectar. Verifique a internet e tente de novo.');
+            return;
+          }
 
-          if (rows && rows.length > 0) {
-            const u = rows[0];
-            // Senhas antigas ficaram gravadas sem criptografia: converte no primeiro login
-            if (u.is_legacy_plain_password) {
-              neonQuery(`UPDATE users SET password_hash = crypt($1, gen_salt('bf')) WHERE id = $2 AND password_hash = $1;`, [inputPassword, u.id]);
-            }
+          if (loginResult && loginResult.token && loginResult.user) {
+            const u = loginResult.user;
+            setStaffToken(loginResult.token);
             const logged = {
               name: u.name || (u.role === 'barbeiro' ? 'Yago Barber' : 'Luis Valverde'),
               email: u.email,
@@ -3182,18 +3366,18 @@
                   let loggedRole = 'cliente';
                   let title = 'Cliente VIP';
                   let barberKey = 'cliente';
-                  if (email === 'bernardolamin3@gmail.com') {
-                    loggedRole = 'superadmin';
-                    title = 'Administrador';
-                    barberKey = 'luis';
-                  } else if (email === 'valverdsbarbeshop@gmail.com' || email.includes('valverd')) {
-                    loggedRole = 'dono';
-                    title = 'Proprietário';
-                    barberKey = 'luis';
-                  } else if (email === 'yago@valverds.com') {
-                    loggedRole = 'barbeiro';
-                    title = 'Barbeiro';
-                    barberKey = 'yago';
+                  // O banco confere a sessão do Google e diz se o e-mail é da equipe
+                  const googleSessionToken = data.session && data.session.token;
+                  const googleLogin = googleSessionToken
+                    ? await neonRpc('SELECT api.login_google($1) AS r', [googleSessionToken])
+                    : null;
+                  if (googleLogin && googleLogin.token && googleLogin.user) {
+                    setStaffToken(googleLogin.token);
+                    loggedRole = googleLogin.user.role || 'cliente';
+                    barberKey = googleLogin.user.barber_key || (loggedRole === 'barbeiro' ? 'yago' : 'luis');
+                    title = loggedRole === 'superadmin' ? 'Administrador' : loggedRole === 'dono' ? 'Proprietário' : loggedRole === 'barbeiro' ? 'Barbeiro' : 'Recepção';
+                  } else {
+                    setStaffToken('');
                   }
                   const logged = {
                     name: data.user.name || (email.split('@')[0]),
@@ -3204,9 +3388,12 @@
                     avatar: data.user.image || (loggedRole === 'dono' ? 'luis_valverde.jpg' : (loggedRole === 'barbeiro' ? 'foto_barbeiro_yago.jpg' : 'logo_valverds_clean.png'))
                   };
                   setCurrentUser(logged);
-                  setIsAuthenticated(true);
-                  localStorage.setItem('valverds_auth', 'true');
                   localStorage.setItem('valverds_logged_user', JSON.stringify(logged));
+                  // Painel só para quem o banco confirmou como equipe (com token de sessão)
+                  if (loggedRole !== 'cliente') {
+                    setIsAuthenticated(true);
+                    localStorage.setItem('valverds_auth', 'true');
+                  }
                   if (loggedRole === 'cliente') {
                     setCurrentView('client');
                     setClientTab('meu_corte');
@@ -3252,6 +3439,9 @@
         };
 
         const handleLogout = () => {
+          const oldToken = getStaffToken();
+          if (oldToken) neonRpc('SELECT api.logout($1) AS r', [oldToken]);
+          setStaffToken('');
           try {
             sessionStorage.setItem('valverds_just_logged_out', 'true');
             localStorage.removeItem('valverds_auth');
@@ -3278,6 +3468,30 @@
             }).catch(() => {});
           } catch(e){}
         };
+
+        // Confere no banco se a sessão salva neste aparelho ainda vale; sessão vencida = sai do painel
+        useEffect(() => {
+          const onExpired = () => {
+            if (getStaffToken()) {
+              handleLogout();
+              alert('Sua sessão expirou. Entre novamente.');
+            }
+          };
+          window.addEventListener('valverds-session-expired', onExpired);
+          const token = getStaffToken();
+          const savedLogged = (() => { try { return localStorage.getItem('valverds_auth') === 'true'; } catch(e) { return false; } })();
+          if (token) {
+            neonRpc('SELECT api.check_session($1) AS r', [token]).then(u => {
+              if (u === null) {
+                // Sem resposta do banco (internet) não derruba; só quando o banco disser que não vale
+                neonRaw('SELECT 1 AS ok').then(rows => { if (rows) handleLogout(); });
+              }
+            });
+          } else if (savedLogged) {
+            handleLogout();
+          }
+          return () => window.removeEventListener('valverds-session-expired', onExpired);
+        }, []);
 
         const [barberEditStartTime, setBarberEditStartTime] = useState('10:00');
         const [barberEditEndTime, setBarberEditEndTime] = useState('19:00');
@@ -4745,11 +4959,11 @@
           ]);
 
           if (createdBarber.email && newBarberForm.password) {
-            neonQuery(`
-              INSERT INTO users (name, email, password_hash, phone, role, barber_key)
-              VALUES ($1, $2, crypt($3, gen_salt('bf')), $4, $5, $6)
-              ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-            `, [createdBarber.name, createdBarber.email, newBarberForm.password, createdBarber.phone, 'barbeiro', barberKey]);
+            neonRpc('SELECT api.staff_upsert_user($1, $2, $3, $4, $5, $6, $7) AS r', [
+              getStaffToken(), createdBarber.name, createdBarber.email, createdBarber.phone, 'barbeiro', barberKey, newBarberForm.password
+            ]).then(r => {
+              if (!r || !r.ok) alert('O barbeiro foi salvo, mas o acesso de login dele não foi criado. Só o proprietário ou administrador pode criar logins.');
+            });
           }
 
           setIsNewBarberModalOpen(false);
@@ -11176,8 +11390,10 @@
 
                   {/* 2. ABA MEU AGENDAMENTO CONFIRMADO & AGENDA COMPLETA DO CLIENTE */}
                   {clientTab === 'meu_corte' && (() => {
-                    const clientApptsList = clientProfile && clientProfile.cpf 
-                      ? appointments.filter(a => a.cpf === clientProfile.cpf)
+                    const clientApptsList = clientProfile && clientProfile.cpf
+                      ? (clientOwnAppointments.length
+                          ? clientOwnAppointments.filter(a => a.cpf === clientProfile.cpf)
+                          : appointments.filter(a => a.cpf === clientProfile.cpf))
                       : [];
                     
                     const activeBooking = clientApptsList.find(a => isAppointmentActive(a)) || null;
@@ -11338,11 +11554,7 @@
                               if (!notStarted || !isUpcoming) return null;
                               return (
                                 <button
-                                  onClick={() => {
-                                    if (!confirm(`Cancelar seu horário de ${activeBooking.day} (${activeBooking.date}) às ${activeBooking.time} com ${activeBooking.barber}?\n\nO horário ficará livre para outro cliente.`)) return;
-                                    changeAppointmentStatus(activeBooking.id, 'cancelado', { note: 'Cancelado pelo próprio cliente no site' });
-                                    setClientSearchFeedback('Seu horário foi cancelado. Quando quiser, é só agendar um novo.');
-                                  }}
+                                  onClick={() => handleClientCancelOwnBooking(activeBooking)}
                                   className="px-5 py-2.5 bg-[#1F1C16] hover:bg-red-950/60 text-red-300 border border-red-900/50 rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
                                 >
                                   <Icons.X className="w-4 h-4" />
@@ -13381,11 +13593,14 @@
                         registeredAt: new Date().toLocaleDateString('pt-BR')
                       };
                       setMarketingLeads(prev => [newLead, ...prev]);
-                      neonQuery(`
-                        INSERT INTO marketing_leads (id, name, phone, email, birth_date, source, clicks, registered_at, payload)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
-                        ON CONFLICT (id) DO NOTHING;
-                      `, [newLead.id, newLead.name, newLead.phone, newLead.email, newLead.birthDate, newLead.source, newLead.clicks, newLead.registeredAt, JSON.stringify(newLead)]);
+                      neonRpc('SELECT api.public_lead($1::jsonb) AS r', [JSON.stringify({
+                        name: newLead.name, phone: newLead.phone, email: newLead.email,
+                        birth_date: newLead.birthDate, source: newLead.source
+                      })]).then(r => {
+                        if (!r || !r.ok) {
+                          try { window.dispatchEvent(new CustomEvent('valverds-db-write-failed')); } catch(e) {}
+                        }
+                      });
                       setIsLeadCaptureModalOpen(false);
                       setLeadForm({ name: '', phone: '', email: '', birthDate: '' });
                       setLeadSuccessToast(true);
