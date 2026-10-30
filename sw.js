@@ -1,4 +1,6 @@
-const CACHE_NAME = 'valverds-cache-v21';
+// v22: descarta o cache da v21, que guardou páginas no lugar de fotos durante o
+// loop de redirecionamento do domínio (30/10/2026).
+const CACHE_NAME = 'valverds-cache-v22';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -23,17 +25,16 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // so arquivos do proprio site
 
-  // Paginas e o proprio HTML sempre revalidam com o servidor, ignorando o cache
-  // HTTP do navegador (o GitHub Pages manda guardar por 10 minutos).
-  const isPage = req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
-  const network = isPage
-    ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
-    : fetch(req);
+  // Tudo revalida com o servidor (ETag), ignorando o cache HTTP do navegador:
+  // páginas aparecem atualizadas na hora, e um redirecionamento antigo guardado
+  // pelo navegador não continua trocando uma foto por outra coisa.
+  const network = fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' });
 
   e.respondWith(
     network
       .then((res) => {
-        if (res && res.status === 200) {
+        // Só guarda resposta direta: se veio de redirecionamento, pode ser outra página
+        if (res && res.status === 200 && !res.redirected) {
           const resClone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
         }
