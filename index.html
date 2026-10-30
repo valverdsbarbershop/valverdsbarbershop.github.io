@@ -1013,6 +1013,13 @@
         conn: 'postgresql://site_web:4qP6ALC2cWj15XQmtLRYTLNA8UgL@ep-jolly-credit-b6kmraae-pooler.c-2.sa-east-1.aws.neon.tech/neondb?sslmode=require'
       };
 
+      // Avisa a tela quando uma gravação falha, para ninguém achar que salvou sem ter salvo
+      const notifyDbWriteFailure = (sql) => {
+        if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql || '')) {
+          try { window.dispatchEvent(new CustomEvent('valverds-db-write-failed')); } catch(e) {}
+        }
+      };
+
       async function neonQuery(sql, params = []) {
         try {
           const payload = {
@@ -1029,12 +1036,14 @@
           if (!res.ok) {
             const errText = await res.text();
             console.warn('Neon DB HTTP Warning:', res.status, errText);
+            notifyDbWriteFailure(sql);
             return null;
           }
           const data = await res.json();
           return data.rows || [];
         } catch (err) {
           console.warn('Neon DB connection error:', err);
+          notifyDbWriteFailure(sql);
           return null;
         }
       }
@@ -1254,6 +1263,38 @@
           };
         });
 
+        // Fechamentos de agenda por DATA (ex.: Yago fechou só 29/10), separados da
+        // escala semanal. Formato: { yago: ['2026-10-29', ...], luis: [...] }
+        const [barberDateClosures, setBarberDateClosures] = useState(() => {
+          try {
+            const s = localStorage.getItem('valverds_date_closures');
+            if (s) return JSON.parse(s) || {};
+          } catch(e) {}
+          return {};
+        });
+        const isBarberClosedOnDate = (barberKey, isoDate, closures = barberDateClosures) =>
+          Boolean(isoDate) && Array.isArray(closures?.[barberKey]) && closures[barberKey].includes(isoDate);
+
+        const toggleBarberDateClosure = async (barberKey, isoDate) => {
+          if (!barberKey || !isoDate) return;
+          lastScheduleEditTimeRef.current = Date.now();
+          // Lê a versão atual do banco antes de gravar, para não apagar o que outro aparelho salvou
+          let base = barberDateClosures;
+          const rows = await neonQuery("SELECT setting_value FROM app_settings WHERE setting_key = 'barber_date_closures';");
+          if (Array.isArray(rows) && rows[0] && rows[0].setting_value && typeof rows[0].setting_value === 'object') {
+            base = rows[0].setting_value;
+          }
+          const current = Array.isArray(base[barberKey]) ? base[barberKey] : [];
+          const willClose = !current.includes(isoDate);
+          const todayIso = getTodayDateISO();
+          // Mantém só datas de hoje em diante, para a lista não crescer para sempre
+          const nextList = (willClose ? [...current, isoDate] : current.filter(d => d !== isoDate)).filter(d => d >= todayIso).sort();
+          const next = { ...base, [barberKey]: nextList };
+          setBarberDateClosures(next);
+          try { localStorage.setItem('valverds_date_closures', JSON.stringify(next)); } catch(e) {}
+          await saveOperationalSetting('barber_date_closures', next);
+        };
+
         // Estado do Novo Fluxo de Agendamento do Cliente (Barbeiro -> Serviços + Bar -> Dia/Data -> Horário -> Nome/WhatsApp/CPF)
         const [clientBookingFlow, setClientBookingFlow] = useState(() => {
           const todayIso = getTodayDateISO();
@@ -1367,15 +1408,17 @@
         useEffect(() => { try { localStorage.setItem('valverds_daily_settings', JSON.stringify(dailyBarberSettings)); } catch(e){} }, [dailyBarberSettings]);
 
         // Cache local para uso offline; o Neon é a fonte de verdade após o carregamento.
+        // Só a equipe logada grava configurações: o navegador do cliente pode ter
+        // um cache antigo e não deve sobrescrever o que está no banco.
         useEffect(() => {
-          if (operationalDataLoaded) saveOperationalSetting('shop_hours', shopHours);
-        }, [shopHours, operationalDataLoaded]);
+          if (operationalDataLoaded && isAuthenticated) saveOperationalSetting('shop_hours', shopHours);
+        }, [shopHours, operationalDataLoaded, isAuthenticated]);
         useEffect(() => {
-          if (operationalDataLoaded) saveOperationalSetting('barber_schedules', barberSchedules);
-        }, [barberSchedules, operationalDataLoaded]);
+          if (operationalDataLoaded && isAuthenticated) saveOperationalSetting('barber_schedules', barberSchedules);
+        }, [barberSchedules, operationalDataLoaded, isAuthenticated]);
         useEffect(() => {
-          if (operationalDataLoaded) saveOperationalSetting('daily_barber_settings', dailyBarberSettings);
-        }, [dailyBarberSettings, operationalDataLoaded]);
+          if (operationalDataLoaded && isAuthenticated) saveOperationalSetting('daily_barber_settings', dailyBarberSettings);
+        }, [dailyBarberSettings, operationalDataLoaded, isAuthenticated]);
 
         const RELEASED_APPOINTMENT_STATUSES = ['cancelado', 'recusado', 'faltou', 'no_show'];
         const ACTIVE_APPOINTMENT_STATUSES = ['agendado', 'confirmado', 'confirmou_presenca', 'aguardando', 'em_atendimento'];
@@ -1560,6 +1603,7 @@
         const getAvailableSlotsForBarberAndDay = (barberKey, dayName, targetDate = null, serviceDurationOrId = null) => {
           const barberSetting = (dailyBarberSettings[barberKey] && dailyBarberSettings[barberKey][dayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
           if (!barberSetting.available) return [];
+          if (isBarberClosedOnDate(barberKey, targetDate)) return [];
 
           const blockedSlots = Array.isArray(barberSetting.blockedSlots) ? barberSetting.blockedSlots : [];
           const todayIso = getTodayDateISO();
@@ -1678,6 +1722,9 @@
           lastScheduleEditTimeRef.current = Date.now();
           const currentB = dailyBarberSettings[barberKey] || {};
           const currentDay = currentB[dayName] || { available: true, start: '09:00', end: '19:00', note: '', blockedSlots: [] };
+          if (currentDay.available !== false && !confirm(`Isto marca folga em TODA ${dayName} (todas as semanas).\n\nPara fechar só um dia específico, use o botão "Fechar agenda" na agenda do dia.\n\nContinuar com a folga semanal?`)) {
+            return;
+          }
           const updatedDay = {
             ...currentDay,
             available: !currentDay.available,
@@ -1825,8 +1872,9 @@
         };
 
         // Handler para confirmação direta do agendamento do cliente com validação Anti No-Show
-        const handleConfirmClientBooking = (e) => {
+        const handleConfirmClientBooking = async (e) => {
           if (e) e.preventDefault();
+          if (clientBookingSubmittingRef.current) return;
           if (!clientBookingFlow.clientName.trim()) {
             alert('Por favor, informe seu nome e sobrenome.');
             return;
@@ -1855,7 +1903,7 @@
             isAppointmentActive(a)
           );
           if (activeAppt) {
-            alert(`Você já possui um agendamento ativo com este CPF para ${activeAppt.day} às ${activeAppt.time} com ${activeAppt.barber} (Voucher #${activeAppt.voucherCode}).\n\nPara evitar travamento da agenda, cada cliente pode manter 1 horário ativo por vez. Caso precise remarcar, entre em contato pelo WhatsApp.`);
+            alert(`Você já possui um agendamento ativo com este CPF para ${activeAppt.day} às ${activeAppt.time} com ${activeAppt.barber} (Voucher #${activeAppt.voucherCode}).\n\nPara evitar travamento da agenda, cada cliente pode manter 1 horário ativo por vez. Caso precise remarcar, cancele o horário atual na aba "Meu Corte" e agende novamente.`);
             return;
           }
 
@@ -1864,15 +1912,19 @@
           const srvDuration = Number(selectedSrv.duration) || 30;
           const requiredSlots = getSlotsForStartTimeAndDuration(clientBookingFlow.time, srvDuration);
 
+          const matchedDay = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
+          const finalIsoDate = clientBookingFlow.selectedDate || matchedDay.isoDate || getTodayDateISO();
+          // O dia da semana vem sempre da data que será gravada, para a escala
+          // conferida ser a mesma do dia em que o horário vai cair.
+          const bookingDayName = getWeekdayFromISO(finalIsoDate);
+
           // TRAVA 3: BLOQUEIO DE HORÁRIO E DURAÇÃO CONSECUTIVA (ANTI-COLISÃO)
           const collidingAppt = appointments.find(a => {
             if (isAppointmentReleased(a)) return false;
             const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
             if (!matchBarber) return false;
             const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
-            const matchDate = clientBookingFlow.selectedDate
-              ? (aIso ? aIso === clientBookingFlow.selectedDate : a.day === clientBookingFlow.dayName)
-              : a.day === clientBookingFlow.dayName;
+            const matchDate = aIso ? aIso === finalIsoDate : a.day === bookingDayName;
             if (!matchDate) return false;
 
             const aDur = getAppointmentDurationMinutes(a, services);
@@ -1884,9 +1936,72 @@
           }
 
           // TRAVA 3.1: BLOQUEIO ESPECÍFICO DE HORÁRIO / INTERVALO PELO BARBEIRO E EXPEDIENTE
-          const barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][clientBookingFlow.dayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
+          const shopDay = shopHours.find(sh => sh.short === bookingDayName);
+          if (shopDay && shopDay.isOpen === false) {
+            alert(`A barbearia não abre em ${formatDateBR(finalIsoDate)}. Por favor, selecione outro dia.`);
+            return;
+          }
+
+          let barberDaySchedule = (dailyBarberSettings[clientBookingFlow.barberKey] && dailyBarberSettings[clientBookingFlow.barberKey][bookingDayName]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
+          // Confere a escala direto no banco: se o barbeiro fechou a agenda depois
+          // que o cliente abriu o site, a tela dele ainda pode estar desatualizada.
+          clientBookingSubmittingRef.current = true;
+          let freshScheduleRows = null;
+          let freshClosureRows = null;
+          let freshApptRows = null;
+          try {
+            [freshScheduleRows, freshClosureRows, freshApptRows] = await Promise.all([
+              neonQuery(
+                'SELECT is_available, start_time, end_time, note FROM barber_daily_schedules WHERE barber_key = $1 AND day_name = $2;',
+                [clientBookingFlow.barberKey, bookingDayName]
+              ),
+              neonQuery("SELECT setting_value FROM app_settings WHERE setting_key = 'barber_date_closures';"),
+              // Agendamentos que outros clientes acabaram de marcar e esta tela ainda não recebeu
+              neonQuery(
+                'SELECT appt_time, service_name, items, status FROM appointments WHERE barber_key = $1 AND appt_date = $2;',
+                [clientBookingFlow.barberKey, formatDateBR(finalIsoDate)]
+              )
+            ]);
+          } finally {
+            clientBookingSubmittingRef.current = false;
+          }
+          const freshClosures = (Array.isArray(freshClosureRows) && freshClosureRows[0] && freshClosureRows[0].setting_value) || barberDateClosures;
+          if (isBarberClosedOnDate(clientBookingFlow.barberKey, finalIsoDate, freshClosures)) {
+            alert(`O profissional selecionado fechou a agenda em ${formatDateBR(finalIsoDate)}. Por favor, selecione outro dia ou outro profissional.`);
+            return;
+          }
+          const freshClash = (Array.isArray(freshApptRows) ? freshApptRows : []).find(r => {
+            if (isAppointmentReleased(normalizeAppointmentStatus(r.status))) return false;
+            const items = typeof r.items === 'string' ? (() => { try { return JSON.parse(r.items); } catch(err) { return []; } })() : r.items;
+            const rDur = getAppointmentDurationMinutes({ time: r.appt_time, service: r.service_name, items: Array.isArray(items) ? items : [] }, services);
+            return isTimeIntervalColliding(clientBookingFlow.time, srvDuration, r.appt_time, rDur);
+          });
+          if (freshClash) {
+            alert(`Esse horário acabou de ser reservado por outro cliente. Por favor, escolha outro horário livre.`);
+            return;
+          }
+          if (Array.isArray(freshScheduleRows) && freshScheduleRows[0]) {
+            const row = freshScheduleRows[0];
+            let freshBlocked = [];
+            if (typeof row.note === 'string' && row.note.trim().startsWith('{')) {
+              try {
+                const parsedNote = JSON.parse(row.note.trim());
+                if (Array.isArray(parsedNote.blockedSlots)) freshBlocked = parsedNote.blockedSlots;
+              } catch(err) {}
+            }
+            barberDaySchedule = {
+              available: Boolean(row.is_available),
+              start: row.start_time || barberDaySchedule.start || '09:00',
+              end: row.end_time || barberDaySchedule.end || '22:00',
+              blockedSlots: freshBlocked
+            };
+          }
           if (!barberDaySchedule.available) {
-            alert(`O profissional selecionado não está atendendo em ${clientBookingFlow.dayFullName || clientBookingFlow.dayName} (Folga ou Ausência). Por favor, selecione outro dia.`);
+            alert(`O profissional selecionado não está atendendo em ${formatDateBR(finalIsoDate)} (Folga ou Agenda Fechada). Por favor, selecione outro dia ou outro profissional.`);
+            return;
+          }
+          if (clientBookingFlow.time < (barberDaySchedule.start || '09:00')) {
+            alert(`O atendimento começa às ${barberDaySchedule.start || '09:00'}. Por favor, escolha um horário a partir desse horário.`);
             return;
           }
           const hasBlockedConsecutive = requiredSlots.some(s => Array.isArray(barberDaySchedule.blockedSlots) && barberDaySchedule.blockedSlots.includes(s));
@@ -1902,8 +2017,6 @@
             return;
           }
 
-          const matchedDay = currentWeek.days.find(d => d.name === clientBookingFlow.dayName) || currentWeek.days[0];
-          const finalIsoDate = clientBookingFlow.selectedDate || matchedDay.isoDate || getTodayDateISO();
           const todayIsoNow = getTodayDateISO();
           const currentTimeNow = getCurrentTimeHHMM();
 
@@ -1921,16 +2034,16 @@
           const extrasTotal = extrasList.reduce((acc, p) => acc + p.price, 0);
           const totalPrice = selectedSrv.price + extrasTotal;
 
-          const finalDateBR = clientBookingFlow.dateFormatted || formatDateBR(finalIsoDate);
+          const finalDateBR = formatDateBR(finalIsoDate);
           const voucherCode = 'VALV-' + Math.floor(1000 + Math.random() * 9000);
 
           const newAppt = {
             id: Date.now(),
             weekId: currentWeek.id,
-            day: clientBookingFlow.dayName,
+            day: bookingDayName,
             date: finalDateBR,
             isoDate: finalIsoDate,
-            dayNum: clientBookingFlow.dayNum || matchedDay.num,
+            dayNum: Number(finalIsoDate.slice(8, 10)) || matchedDay.num,
             client: clientBookingFlow.clientName.trim(),
             phone: maskPhone(clientBookingFlow.clientPhone),
             cpf: maskCPF(clientBookingFlow.clientCpf),
@@ -1944,7 +2057,8 @@
             time: clientBookingFlow.time,
             status: 'confirmado',
             source: 'online',
-            price: totalPrice,
+            // price = só serviços (base da comissão); total = serviços + produtos
+            price: selectedSrv.price,
             items: [
               { id: selectedSrv.id, type: 'service', name: selectedSrv.name, price: selectedSrv.price, duration: srvDuration },
               ...extrasList.map(x => ({ id: x.id, type: 'product', name: x.name, price: x.price }))
@@ -2058,6 +2172,7 @@
         }, [clientProfile]);
 
         const [clientCpfInput, setClientCpfInput] = useState('');
+        const [clientPhoneCheckInput, setClientPhoneCheckInput] = useState('');
         const [clientSearchFeedback, setClientSearchFeedback] = useState('');
 
         // Funcao que cadastra ou atualiza o cliente automaticamente ao usar o CPF
@@ -2133,6 +2248,12 @@
           if (foundAppts.length > 0 || foundCli) {
             const cliName = (foundCli && foundCli.name) || (foundAppts[0] && foundAppts[0].client) || 'Cliente';
             const cliPhone = (foundCli && foundCli.phone) || (foundAppts[0] && foundAppts[0].phone) || '';
+            // Só o CPF não basta: confere os 4 últimos dígitos do WhatsApp cadastrado
+            const phoneDigits = cliPhone.replace(/\D/g, '');
+            if (phoneDigits.length >= 4 && clientPhoneCheckInput.replace(/\D/g, '') !== phoneDigits.slice(-4)) {
+              setClientSearchFeedback('Para sua segurança, informe os 4 últimos dígitos do WhatsApp usado no agendamento.');
+              return;
+            }
             const profile = {
               id: foundCli ? foundCli.id : 'cli_' + Date.now(),
               cpf: formatted,
@@ -2199,6 +2320,22 @@
 
         // Proteção de Concorrência e Gravação Imediata no SQL Server / Postgres
         const lastScheduleEditTimeRef = useRef(0);
+        const clientBookingSubmittingRef = useRef(false);
+
+        const [dbWriteFailed, setDbWriteFailed] = useState(false);
+        useEffect(() => {
+          let hideTimer = null;
+          const onWriteFailed = () => {
+            setDbWriteFailed(true);
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => setDbWriteFailed(false), 12000);
+          };
+          window.addEventListener('valverds-db-write-failed', onWriteFailed);
+          return () => {
+            clearTimeout(hideTimer);
+            window.removeEventListener('valverds-db-write-failed', onWriteFailed);
+          };
+        }, []);
         const [sqlScheduleSavedToast, setSqlScheduleSavedToast] = useState(false);
 
         // Estados de Autenticação Real & Banco Neon Cloud
@@ -2578,7 +2715,7 @@
           }
           const tempPass = 'V' + Math.floor(100000 + Math.random() * 900000);
           try {
-            await neonQuery(`UPDATE users SET password_hash = $1, must_change_password = true WHERE LOWER(email) = $2;`, [tempPass, user.email.toLowerCase()]);
+            await neonQuery(`UPDATE users SET password_hash = crypt($1, gen_salt('bf')), must_change_password = true WHERE LOWER(email) = $2;`, [tempPass, user.email.toLowerCase()]);
           } catch(e) { console.error('DB reset pass error:', e); }
 
           setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === user.email.toLowerCase() ? { ...u, password: tempPass, mustChangePassword: true } : u));
@@ -2615,7 +2752,7 @@
           try {
             const userEmail = currentUser.email || (currentUser.role === 'superadmin' ? 'bernardolamin3@gmail.com' : 'valverdsbarbeshop@gmail.com');
             await neonQuery(`
-              UPDATE users SET password_hash = $1 WHERE LOWER(email) = $2;
+              UPDATE users SET password_hash = crypt($1, gen_salt('bf')), must_change_password = false WHERE LOWER(email) = $2;
             `, [changePasswordForm.newPassword, userEmail.toLowerCase()]);
 
             setChangePasswordStatus({ msg: 'Senha atualizada com sucesso no banco de dados!', isError: false });
@@ -2701,7 +2838,7 @@
                   neonQuery('SELECT * FROM marketing_leads ORDER BY created_at DESC;'),
                   neonQuery('SELECT * FROM security_logs ORDER BY created_at DESC;'),
                   neonQuery('SELECT * FROM barbers WHERE active = TRUE ORDER BY name;'),
-                  neonQuery('SELECT * FROM users ORDER BY id;'),
+                  neonQuery('SELECT id, name, email, role, phone FROM users ORDER BY id;'),
                   neonQuery('SELECT * FROM barber_daily_schedules ORDER BY barber_key, day_name;')
                 ]);
                 const settings = Object.fromEntries((settingsRows || []).map(r => [r.setting_key, r.setting_value]));
@@ -2743,6 +2880,10 @@
                   if (Array.isArray(settings.barber_schedules) && settings.barber_schedules.length) {
                     setBarberSchedules(settings.barber_schedules);
                   }
+                  if (settings.barber_date_closures && typeof settings.barber_date_closures === 'object') {
+                    setBarberDateClosures(settings.barber_date_closures);
+                    try { localStorage.setItem('valverds_date_closures', JSON.stringify(settings.barber_date_closures)); } catch(e) {}
+                  }
                 }
                 if (Array.isArray(productRows) && productRows.length) setProducts(productRows.map(p => ({
                   id: p.id, name: p.name, category: p.category, price: Number(p.price), cost: Number(p.cost || 0),
@@ -2752,10 +2893,21 @@
                   id: c.id, name: c.name, cpf: c.cpf, phone: c.phone || '', tier: c.tier, lastVisit: c.last_visit
                 })));
                 if (Array.isArray(blockedRows)) setBlockedCpfs(blockedRows.map(row => row.cpf));
-                if (Array.isArray(saleRows) && saleRows.length) setCounterSales(saleRows.map(s => ({
-                  id: Number(s.id), item: s.item_name, category: s.category, qty: Number(s.quantity), total: Number(s.total),
-                  paymentMethod: s.payment_method, time: s.payload?.time || ''
-                })));
+                if (Array.isArray(saleRows) && saleRows.length) setCounterSales(saleRows.map(s => {
+                  // Data da venda: usa a gravada no payload ou, nas antigas, o sold_at do banco
+                  const soldAt = s.sold_at ? new Date(s.sold_at) : null;
+                  const hasSoldAt = soldAt && !isNaN(soldAt.getTime());
+                  const soldIso = s.payload?.isoDate || (hasSoldAt
+                    ? `${soldAt.getFullYear()}-${String(soldAt.getMonth() + 1).padStart(2, '0')}-${String(soldAt.getDate()).padStart(2, '0')}`
+                    : '');
+                  return {
+                    id: Number(s.id), item: s.item_name, category: s.category, qty: Number(s.quantity), total: Number(s.total),
+                    paymentMethod: s.payment_method, time: s.payload?.time || '',
+                    isoDate: soldIso,
+                    date: s.payload?.date || (soldIso ? formatDateBR(soldIso) : ''),
+                    day: s.payload?.day || (soldIso ? getWeekdayFromISO(soldIso) : '')
+                  };
+                }));
                 if (Array.isArray(leadRows) && leadRows.length) setMarketingLeads(leadRows.map(l => ({
                   id: Number(l.id), name: l.name, phone: l.phone, email: l.email || '', birthDate: l.birth_date || '',
                   source: l.source || '', clicks: Number(l.clicks || 0), registeredAt: l.registered_at || ''
@@ -2864,7 +3016,7 @@
           try {
             await neonQuery(`
               INSERT INTO users (name, email, password_hash, phone, role, barber_key)
-              VALUES ($1, $2, $3, $4, $5, $6)
+              VALUES ($1, $2, crypt($3, gen_salt('bf')), $4, $5, $6)
               ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
             `, [
               firstAccessForm.name.trim(),
@@ -2910,13 +3062,19 @@
 
           // Validação estritamente no Banco de Dados Neon via pgcrypto (bcrypt + salt)
           let rows = await neonQuery(`
-            SELECT * FROM users 
+            SELECT id, name, email, role, barber_key, must_change_password,
+                   (password_hash = $3) AS is_legacy_plain_password
+            FROM users
             WHERE (LOWER(email) = $1 OR LOWER(email) = $2)
               AND (password_hash = crypt($3, password_hash) OR password_hash = $3);
           `, [inputEmail, rawEmail, inputPassword]);
 
           if (rows && rows.length > 0) {
             const u = rows[0];
+            // Senhas antigas ficaram gravadas sem criptografia: converte no primeiro login
+            if (u.is_legacy_plain_password) {
+              neonQuery(`UPDATE users SET password_hash = crypt($1, gen_salt('bf')) WHERE id = $2 AND password_hash = $1;`, [inputPassword, u.id]);
+            }
             const logged = {
               name: u.name || (u.role === 'barbeiro' ? 'Yago Barber' : 'Luis Valverde'),
               email: u.email,
@@ -3526,13 +3684,14 @@
 
         // Faturamento Bruto estritamente separado: Serviços vs Bar/Balcão
         const revenueServices = completedToday.reduce((acc, a) => acc + (a.price || 0), 0);
+        // Bar = o que foi cobrado além dos serviços (price já é só a parte de serviços)
         const revenueBarFromAppts = completedToday.reduce((acc, a) => {
-          if (Array.isArray(a.items) && a.items.length > 1) {
-            return acc + a.items.slice(1).reduce((s, it) => s + (it.price || 0), 0);
-          }
-          return acc + Math.max(0, (a.total || a.price) - (a.price || 0));
+          return acc + Math.max(0, (a.total || a.price || 0) - (a.price || 0));
         }, 0);
-        const revenueBalcao = counterSales.reduce((acc, s) => acc + s.total, 0);
+        // Só as vendas de balcão do mesmo dia da agenda selecionada
+        const revenueBalcao = counterSales
+          .filter(s => s.isoDate === selectedAgendaDate)
+          .reduce((acc, s) => acc + (Number(s.total) || 0), 0);
         const totalBarRevenueToday = revenueBarFromAppts + revenueBalcao;
         const totalRevenueToday = revenueServices + totalBarRevenueToday;
 
@@ -3579,11 +3738,11 @@
             }
           });
           let balcaoProductsCost = 0;
-          counterSales.forEach(sale => {
+          counterSales.filter(sale => sale.isoDate === selectedAgendaDate).forEach(sale => {
             balcaoProductsCost += getProductCost(sale.item) * (sale.qty || 1);
           });
           return apptProductsCost + balcaoProductsCost;
-        }, [completedToday, counterSales, products]);
+        }, [completedToday, counterSales, products, selectedAgendaDate]);
 
         const netProfitToday = totalRevenueToday - totalTeamCommissionsToday - totalSuppliesCostToday;
         const netMarginPercent = totalRevenueToday > 0 ? (netProfitToday / totalRevenueToday) * 100 : 0;
@@ -3626,9 +3785,6 @@
 
           const revenueServices = weekCompleted.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
           const revenueBarAppts = weekCompleted.reduce((acc, a) => {
-            if (Array.isArray(a.items) && a.items.length > 1) {
-              return acc + a.items.slice(1).reduce((s, it) => s + (Number(it.price) || 0), 0);
-            }
             return acc + Math.max(0, (Number(a.total || a.price) || 0) - (Number(a.price) || 0));
           }, 0);
 
@@ -4247,7 +4403,9 @@
             const completed = filtered.filter(a => a.status === 'concluido');
             const noShows = filtered.filter(a => a.status === 'faltou' || a.status === 'recusado' || a.status === 'cancelado');
             const revenue = completed.reduce((acc, a) => acc + (a.total || a.price || 0), 0);
-            const commission = revenue * (b.commissionRate / 100);
+            // Comissão só sobre serviços (bar/produtos têm 0%), igual ao DRE
+            const serviceRevenue = completed.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+            const commission = serviceRevenue * ((Number(b.commissionRate) || 0) / 100);
             const avgTicket = completed.length > 0 ? (revenue / completed.length) : 0;
             const totalScheduled = completed.length + noShows.length;
             const attendanceRate = totalScheduled > 0 ? Math.round((completed.length / totalScheduled) * 100) : 100;
@@ -4266,12 +4424,16 @@
         }, [barbers, appointments, barberHistoryPeriod, selectedAgendaDate, selectedAgendaWeekday, currentWeek]);
 
         const updateStock = (id, delta) => {
-          setProducts(prev => prev.map(item => {
-            if (item.id !== id) return item;
-            const updated = { ...item, stock: Math.max(0, item.stock + delta) };
-            saveProductToNeon(updated);
-            return updated;
-          }));
+          setProducts(prev => prev.map(item => item.id === id ? { ...item, stock: Math.max(0, item.stock + delta) } : item));
+          // Soma/subtrai direto no banco (em vez de gravar o número da tela), para
+          // duas pessoas mexendo ao mesmo tempo não apagarem a baixa uma da outra.
+          neonQuery('UPDATE products SET stock = GREATEST(0, stock + $1) WHERE id = $2 RETURNING stock;', [delta, id])
+            .then(rows => {
+              if (Array.isArray(rows) && rows[0]) {
+                const dbStock = Number(rows[0].stock);
+                setProducts(prev => prev.map(item => item.id === id ? { ...item, stock: dbStock } : item));
+              }
+            });
         };
 
         const changeAppointmentStatus = (id, newStatus, options = {}) => {
@@ -4421,6 +4583,24 @@
             total: Number(editingAppt.total ?? editingAppt.price) || 0,
             status: normalizeAppointmentStatus(editingAppt.status)
           };
+
+          // Mudou o horário: confere se bate com outro cliente do mesmo barbeiro no mesmo dia
+          const originalAppt = appointments.find(a => a.id === normalizedEditedAppt.id);
+          if (originalAppt && originalAppt.time !== normalizedEditedAppt.time && !isAppointmentReleased(normalizedEditedAppt)) {
+            const editedIso = normalizeAppointmentDateISO(normalizedEditedAppt.isoDate || normalizedEditedAppt.date);
+            const editedDur = getAppointmentDurationMinutes(normalizedEditedAppt, services);
+            const clash = appointments.find(a => {
+              if (a.id === normalizedEditedAppt.id || isAppointmentReleased(a)) return false;
+              const sameBarber = a.barberKey === normalizedEditedAppt.barberKey || (a.barber && a.barber === normalizedEditedAppt.barber);
+              if (!sameBarber) return false;
+              if (normalizeAppointmentDateISO(a.isoDate || a.date) !== editedIso) return false;
+              return isTimeIntervalColliding(normalizedEditedAppt.time, editedDur, a.time, getAppointmentDurationMinutes(a, services));
+            });
+            if (clash && !confirm(`Atenção: o novo horário (${normalizedEditedAppt.time}) bate com o atendimento de ${clash.client} às ${clash.time} com o mesmo barbeiro.\n\nSalvar mesmo assim (encaixe)?`)) {
+              return;
+            }
+          }
+
           setAppointments(prev => prev.map(a => a.id === normalizedEditedAppt.id ? normalizedEditedAppt : a));
           try {
             const localSaved = JSON.parse(localStorage.getItem('valverds_appointments') || '[]');
@@ -4567,7 +4747,7 @@
           if (createdBarber.email && newBarberForm.password) {
             neonQuery(`
               INSERT INTO users (name, email, password_hash, phone, role, barber_key)
-              VALUES ($1, $2, $3, $4, $5, $6)
+              VALUES ($1, $2, crypt($3, gen_salt('bf')), $4, $5, $6)
               ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
             `, [createdBarber.name, createdBarber.email, newBarberForm.password, createdBarber.phone, 'barbeiro', barberKey]);
           }
@@ -4726,7 +4906,13 @@
           }
 
           // TRAVA 2.1: INTERVALO DO BARBEIRO E EXPEDIENTE
-          const barberScheduleDay = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][bookingForm.day]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
+          const manualDayKey = bookingForm.isoDate ? getWeekdayFromISO(bookingForm.isoDate) : bookingForm.day;
+          const barberScheduleDay = (dailyBarberSettings[bookingForm.barberKey] && dailyBarberSettings[bookingForm.barberKey][manualDayKey]) || { available: true, start: '09:00', end: '22:00', blockedSlots: [] };
+          // Folga ou agenda fechada: avisa (a equipe ainda pode encaixar se confirmar)
+          const isBarberOff = barberScheduleDay.available === false || isBarberClosedOnDate(bookingForm.barberKey, bookingForm.isoDate);
+          if (isBarberOff && !confirm(`${brb.name} está de folga / com a agenda fechada em ${bookingForm.isoDate ? formatDateBR(bookingForm.isoDate) : manualDayKey}.\n\nAgendar mesmo assim?`)) {
+            return;
+          }
           const hasBlockedConsecutive = requiredSlots.some(s => Array.isArray(barberScheduleDay.blockedSlots) && barberScheduleDay.blockedSlots.includes(s));
           if (hasBlockedConsecutive) {
             alert(`O atendimento de ${srvDuration} min a partir de ${bookingForm.time} coincide com um intervalo/pausa do barbeiro. Por favor, selecione outro horário.`);
@@ -4763,7 +4949,7 @@
           const newAppt = {
             id: Date.now(),
             weekId: currentWeek.id,
-            day: bookingForm.day,
+            day: manualDayKey,
             date: manualDateBR,
             isoDate: manualIso,
             dayNum: bookingForm.dayNum || matchedDay.num,
@@ -4824,7 +5010,8 @@
             ...appt,
             items: Array.isArray(appt.items) && appt.items.length
               ? [...appt.items]
-              : (appt.service ? [{ type: 'service', name: appt.service, price: appt.price || 0 }] : [])
+              : (appt.service ? [{ type: 'service', name: appt.service, price: appt.price || 0 }] : []),
+            total: Number(appt.total || appt.price || 0)
           });
           setAdditionalItemId('');
           setManualCheckoutTotal(String(Number(appt.total || appt.price || 0).toFixed(2)));
@@ -4833,40 +5020,44 @@
 
         const addItemToCheckout = (product) => {
           if (!checkoutAppt || !product) return;
-          if (product.price > 0 && product.stock <= 0) {
+          // O estoque só é baixado ao confirmar o pagamento; aqui só confere se ainda tem
+          const alreadyInCart = checkoutAppt.items.filter(it => it.type === 'product' && it.id === product.id).length;
+          if (product.price > 0 && product.stock - alreadyInCart <= 0) {
             alert('Item sem estoque disponível!');
             return;
           }
-          updateStock(product.id, -1);
+          const newTotal = (Number(checkoutAppt.total) || 0) + (Number(product.price) || 0);
           setCheckoutAppt(prev => ({
             ...prev,
-            items: [...prev.items, { id: product.id, type: 'product', name: product.name, price: product.price }],
-            total: prev.total + product.price
+            items: [...prev.items, { id: product.id, type: 'product', name: product.name, price: product.price, pendingStock: true }],
+            total: newTotal
           }));
+          // O valor a cobrar acompanha os itens; quem quiser outro valor ajusta depois.
+          setManualCheckoutTotal(newTotal.toFixed(2));
           setAdditionalItemId('');
         };
 
         const addServiceToCheckout = (service) => {
           if (!checkoutAppt || !service) return;
+          const newTotal = (Number(checkoutAppt.total) || 0) + (Number(service.price) || 0);
           setCheckoutAppt(prev => ({
             ...prev,
             items: [...prev.items, { id: service.id, type: 'service', name: service.name, price: service.price }],
-            total: prev.total + service.price
+            total: newTotal
           }));
+          setManualCheckoutTotal(newTotal.toFixed(2));
         };
 
         const removeCheckoutItem = (index) => {
           if (!checkoutAppt || index < 0) return;
           const item = checkoutAppt.items[index];
-          const matchingProduct = item?.type === 'product'
-            ? products.find(p => p.id === item.id || p.name === item.name)
-            : null;
-          if (matchingProduct) updateStock(matchingProduct.id, 1);
+          const newTotal = Math.max(0, (Number(checkoutAppt.total) || 0) - (Number(item?.price) || 0));
           setCheckoutAppt(prev => ({
             ...prev,
             items: prev.items.filter((_, itemIndex) => itemIndex !== index),
-            total: Math.max(0, prev.total - (Number(item?.price) || 0))
+            total: newTotal
           }));
+          setManualCheckoutTotal(newTotal.toFixed(2));
         };
 
         const handleConfirmCheckout = () => {
@@ -4883,10 +5074,31 @@
           }
           const finalTotal = parsedManualTotal === null ? Number(checkoutAppt.total) || 0 : parsedManualTotal;
           const updatedServiceName = checkoutAppt.items.map(item => item.name).join(' + ') || 'Comanda ajustada no checkout';
+          // price = parte de serviços (base do faturamento de serviços e da comissão).
+          // Recalculado a partir do que foi realmente feito, e não do que foi agendado.
+          // Desconto ou acréscimo manual entra na parte de serviços.
+          const productsTotal = checkoutAppt.items
+            .filter(item => item.type === 'product')
+            .reduce((acc, item) => acc + (Number(item.price) || 0), 0);
+          const finalServicePrice = Math.max(0, finalTotal - productsTotal);
+
+          // Baixa de estoque só agora, no pagamento. Atendimento já concluído antes
+          // (reaberto para ajuste) só baixa os produtos adicionados nesta cobrança.
+          const wasAlreadyCompleted = checkoutAppt.status === 'concluido';
+          const finalItems = checkoutAppt.items.map(item => {
+            if (item.type !== 'product' || item.stockDeducted) return item;
+            const { pendingStock, ...cleanItem } = item;
+            if (wasAlreadyCompleted && !pendingStock) return cleanItem;
+            const matchingProduct = products.find(p => p.id === item.id || p.name === item.name);
+            if (matchingProduct) updateStock(matchingProduct.id, -1);
+            return { ...cleanItem, stockDeducted: true };
+          });
+
           const updatedAppointment = {
             ...checkoutAppt,
             status: 'concluido',
-            items: checkoutAppt.items,
+            items: finalItems,
+            price: finalServicePrice,
             total: finalTotal,
             service: updatedServiceName,
             paymentMethod: selectedPayment
@@ -4900,9 +5112,10 @@
           } catch(e) {}
           persistAppointmentPatch(checkoutAppt.id, {
             status: 'concluido',
+            price: finalServicePrice,
             total: finalTotal,
             service: updatedServiceName,
-            items: checkoutAppt.items,
+            items: finalItems,
             paymentMethod: selectedPayment
           });
           setIsCheckoutModalOpen(false);
@@ -6259,6 +6472,23 @@
                               >
                                 <Icons.Plus className="w-3.5 h-3.5" /> Encaixe
                               </button>
+                              {selectedAgendaDate >= getTodayDateISO() && (() => {
+                                const myKey = currentUser.barberKey || 'yago';
+                                const closedHere = isBarberClosedOnDate(myKey, selectedAgendaDate);
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      const msg = closedHere
+                                        ? `Reabrir sua agenda em ${formatDateBR(selectedAgendaDate)}?`
+                                        : `Fechar sua agenda SOMENTE em ${formatDateBR(selectedAgendaDate)}?\n\nOs clientes não conseguirão marcar nesta data. As outras semanas continuam normais.`;
+                                      if (confirm(msg)) toggleBarberDateClosure(myKey, selectedAgendaDate);
+                                    }}
+                                    className={`px-4 py-2 font-serif text-xs font-bold uppercase rounded-full border flex items-center gap-1.5 ${closedHere ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/50' : 'bg-[#1F1C16] text-red-300 border-red-900/50 hover:bg-red-950/40'}`}
+                                  >
+                                    {closedHere ? `Reabrir ${formatDateBR(selectedAgendaDate).slice(0, 5)}` : `Fechar agenda ${formatDateBR(selectedAgendaDate).slice(0, 5)}`}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -7200,7 +7430,8 @@
                                   const bAppts = selectedWeekAppointments.filter(a => (a.barber === b.name || a.barberKey === b.barberKey || a.barberKey === b.id || (b.name.includes('Luis') && a.barber?.includes('Luis')) || (b.name.includes('Yago') && a.barber?.includes('Yago'))) && !isAppointmentReleased(a));
                                   const bCompleted = bAppts.filter(a => a.status === 'concluido');
                                   const bRevenue = bCompleted.reduce((acc, a) => acc + Number(a.total || a.price || 0), 0);
-                                  const bCommission = bRevenue * ((Number(b.commissionRate) || 0) / 100);
+                                  const bServiceRevenue = bCompleted.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+                                  const bCommission = bServiceRevenue * ((Number(b.commissionRate) || 0) / 100);
                                   return (
                                     <div key={b.id} className="p-4 bg-[#1B1914] rounded-2xl border border-[#2B251B] space-y-3">
                                       <div className="flex justify-between items-center">
@@ -8378,6 +8609,13 @@
                                               {(() => {
                                                 const bKey = barber.barberKey || (barber.name.includes('Luis') ? 'luis' : 'yago');
                                                 const bSetting = (dailyBarberSettings[bKey] && dailyBarberSettings[bKey][selectedAgendaWeekday]) || { available: true, start: '09:00', end: '19:00' };
+                                                if (isBarberClosedOnDate(bKey, selectedAgendaDate)) {
+                                                  return (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/60 text-red-400 border border-red-800/40">
+                                                      🔴 Agenda fechada nesta data
+                                                    </span>
+                                                  );
+                                                }
                                                 if (!bSetting.available) {
                                                   return (
                                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/60 text-red-400 border border-red-800/40 animate-pulse">
@@ -8403,6 +8641,25 @@
                                                 return bSetting.available ? `Jornada de hoje: ${bSetting.start || '09:00'} às ${bSetting.end || '19:00'}` : 'Indisponível para agendamentos hoje';
                                               })()}
                                             </div>
+                                            {(() => {
+                                              const bKey = barber.barberKey || (barber.name.includes('Luis') ? 'luis' : 'yago');
+                                              if (selectedAgendaDate < getTodayDateISO()) return null;
+                                              const closedHere = isBarberClosedOnDate(bKey, selectedAgendaDate);
+                                              return (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const msg = closedHere
+                                                      ? `Reabrir a agenda de ${barber.name} em ${formatDateBR(selectedAgendaDate)}?`
+                                                      : `Fechar a agenda de ${barber.name} SOMENTE em ${formatDateBR(selectedAgendaDate)}?\n\nOs clientes não conseguirão marcar nesta data. As outras semanas não mudam.`;
+                                                    if (confirm(msg)) toggleBarberDateClosure(bKey, selectedAgendaDate);
+                                                  }}
+                                                  className={`mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${closedHere ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/50 hover:bg-emerald-900/50' : 'bg-[#1F1C16] text-gray-300 border-[#3A3326] hover:border-red-800/60 hover:text-red-300'}`}
+                                                >
+                                                  {closedHere ? 'Reabrir esta data' : 'Fechar agenda só nesta data'}
+                                                </button>
+                                              );
+                                            })()}
                                           </div>
                                         </div>
                                         <span className="text-xs text-gray-400">{barberAppts.length} agendados na data</span>
@@ -10554,7 +10811,7 @@
                                   const slots = (!isSunday && !isPast && config.available !== false)
                                     ? getAvailableSlotsForBarberAndDay(barber.barberKey, dayName, iso).length
                                     : 0;
-                                  return { ...barber, slots, available: !isSunday && !isPast && config.available !== false };
+                                  return { ...barber, slots, available: !isSunday && !isPast && config.available !== false && !isBarberClosedOnDate(barber.barberKey, iso) };
                                 });
                                 const dayHasAvailability = barberAvailability.some(barber => barber.slots > 0);
                                 calendarCells.push(
@@ -10671,7 +10928,8 @@
                           {(() => {
                             const currentSrv = services.find(s => s.id === clientBookingFlow.serviceId) || services[0];
                             const currentDuration = Number(currentSrv?.duration) || 30;
-                            const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, clientBookingFlow.dayName, clientBookingFlow.selectedDate, currentDuration);
+                            const flowDayName = clientBookingFlow.selectedDate ? getWeekdayFromISO(clientBookingFlow.selectedDate) : clientBookingFlow.dayName;
+                            const availableSlots = getAvailableSlotsForBarberAndDay(clientBookingFlow.barberKey, flowDayName, clientBookingFlow.selectedDate, currentDuration);
                             const endTime = getEndTimeForStartTimeAndDuration(clientBookingFlow.time, currentDuration);
                             return (
                               <div className="space-y-3">
@@ -10721,7 +10979,9 @@
                                         className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
                                       >
                                         {ALL_48_TIME_SLOTS.map(t => {
-                                          const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[clientBookingFlow.dayName] || { start: '09:00', end: '22:00', blockedSlots: [] };
+                                          const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[flowDayName] || { start: '09:00', end: '22:00', blockedSlots: [] };
+                                          const isDayClosed = currentDayConf.available === false || isBarberClosedOnDate(clientBookingFlow.barberKey, clientBookingFlow.selectedDate);
+                                          const isBeforeStart = t < (currentDayConf.start || '09:00');
                                           const isToday = (clientBookingFlow.selectedDate || getTodayDateISO()) === getTodayDateISO();
                                           const isPastTime = isToday && t < getCurrentTimeHHMM();
                                           const reqSlots = getSlotsForStartTimeAndDuration(t, currentDuration);
@@ -10747,12 +11007,12 @@
 
                                           const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
                                           const exceedsClosing = (timeToMinutes(t) + currentDuration) > timeToMinutes(currentDayConf.end || '22:00');
-                                          const isDisabled = isPastTime || isStartBlocked || Boolean(bookedAppt) || hasBlockedConsecutive || exceedsClosing;
+                                          const isDisabled = isDayClosed || isBeforeStart || isPastTime || isStartBlocked || Boolean(bookedAppt) || hasBlockedConsecutive || exceedsClosing;
                                           const endT = getEndTimeForStartTimeAndDuration(t, currentDuration);
 
                                           return (
                                             <option key={`slot-48-${t}`} value={t} disabled={isDisabled}>
-                                              {t} às {endT} {isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : clientBookedLabel ? clientBookedLabel : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
+                                              {t} às {endT} {isDayClosed ? '(🔒 Agenda fechada)' : isBeforeStart ? '(🔒 Antes da abertura)' : isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : clientBookedLabel ? clientBookedLabel : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
                                             </option>
                                           );
                                         })}
@@ -10938,9 +11198,9 @@
                           <span className="text-3xl">🔍</span>
                           <h3 className="font-serif text-lg font-bold text-white">Consulte seus Agendamentos pelo CPF</h3>
                           <p className="text-xs text-gray-400 max-w-md mx-auto">
-                            Digite seu CPF abaixo para visualizar a data, horário, voucher e barbeiro marcado para o seu atendimento.
+                            Digite seu CPF e os 4 últimos dígitos do WhatsApp usado no agendamento para ver a data, horário, voucher e barbeiro marcado.
                           </p>
-                          <form onSubmit={handleLookupClientByCpf} className="flex justify-center items-center gap-2 max-w-sm mx-auto pt-2">
+                          <form onSubmit={handleLookupClientByCpf} className="flex flex-wrap justify-center items-center gap-2 max-w-md mx-auto pt-2">
                             <input
                               type="text"
                               maxLength="14"
@@ -10948,6 +11208,16 @@
                               value={clientCpfInput}
                               onChange={e => setClientCpfInput(maskCPF(e.target.value))}
                               className="px-4 py-2 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#C9A356] flex-1"
+                            />
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength="4"
+                              placeholder="4 últimos do Whats"
+                              aria-label="4 últimos dígitos do WhatsApp"
+                              value={clientPhoneCheckInput}
+                              onChange={e => setClientPhoneCheckInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              className="w-32 px-3 py-2 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#C9A356]"
                             />
                             <button
                               type="submit"
@@ -11059,6 +11329,27 @@
                                 </a>
                               );
                             })()}
+                            {(() => {
+                              // O próprio cliente cancela, enquanto o atendimento ainda não começou
+                              const bookingIso = activeBooking.isoDate || normalizeAppointmentDateISO(activeBooking.date);
+                              const notStarted = ['agendado', 'confirmado', 'confirmou_presenca'].includes(activeBooking.status);
+                              const isUpcoming = !bookingIso || bookingIso > getTodayDateISO() ||
+                                (bookingIso === getTodayDateISO() && (activeBooking.time || '') > getCurrentTimeHHMM());
+                              if (!notStarted || !isUpcoming) return null;
+                              return (
+                                <button
+                                  onClick={() => {
+                                    if (!confirm(`Cancelar seu horário de ${activeBooking.day} (${activeBooking.date}) às ${activeBooking.time} com ${activeBooking.barber}?\n\nO horário ficará livre para outro cliente.`)) return;
+                                    changeAppointmentStatus(activeBooking.id, 'cancelado', { note: 'Cancelado pelo próprio cliente no site' });
+                                    setClientSearchFeedback('Seu horário foi cancelado. Quando quiser, é só agendar um novo.');
+                                  }}
+                                  className="px-5 py-2.5 bg-[#1F1C16] hover:bg-red-950/60 text-red-300 border border-red-900/50 rounded-full text-xs font-serif font-bold transition-all flex items-center gap-2"
+                                >
+                                  <Icons.X className="w-4 h-4" />
+                                  <span>Cancelar meu horário</span>
+                                </button>
+                              );
+                            })()}
                             <button
                               onClick={() => setClientTab('agendar')}
                               className="px-5 py-2.5 bg-[#C9A356] hover:bg-[#B59044] text-black rounded-full text-xs font-serif font-bold uppercase transition-all shadow ml-auto flex items-center gap-1.5"
@@ -11137,7 +11428,7 @@
                               <div className="space-y-2 text-xs">
                                 {barbers.map((b) => {
                                   const bSlots = getAvailableSlotsForBarberAndDay(b.barberKey, d.name, d.isoDate);
-                                  const isAvail = (dailyBarberSettings[b.barberKey] && dailyBarberSettings[b.barberKey][d.name]?.available) !== false;
+                                  const isAvail = (dailyBarberSettings[b.barberKey] && dailyBarberSettings[b.barberKey][d.name]?.available) !== false && !isBarberClosedOnDate(b.barberKey, d.isoDate);
                                   return (
                                     <div key={b.id} className="flex justify-between items-center p-2 rounded-xl bg-[#181612] border border-[#242018]">
                                       <div className="flex items-center gap-2">
@@ -11158,7 +11449,14 @@
 
                               <button
                                 onClick={() => {
-                                  setClientBookingFlow(prev => ({ ...prev, dayName: d.name }));
+                                  setClientBookingFlow(prev => ({
+                                    ...prev,
+                                    dayName: d.name,
+                                    dayFullName: d.fullName,
+                                    selectedDate: d.isoDate,
+                                    dateFormatted: formatDateBR(d.isoDate),
+                                    dayNum: d.num
+                                  }));
                                   setClientTab('agendar');
                                 }}
                                 className="w-full py-2 bg-[#1F1C16] hover:bg-[#C9A356] text-gray-300 hover:text-black rounded-xl text-xs font-serif font-bold uppercase transition-all flex items-center justify-center gap-1"
@@ -11694,7 +11992,7 @@
                     </div>
 
                     <div className="p-3 bg-[#17150F] border border-[#5D4B25] rounded-2xl">
-                      <label className="block text-[#DFBD78] font-serif uppercase mb-1 font-medium">Valor inicial do agendamento (R$)</label>
+                      <label className="block text-[#DFBD78] font-serif uppercase mb-1 font-medium">Valor do serviço (R$)</label>
                       <input
                         type="number"
                         min="0"
@@ -11714,7 +12012,11 @@
                             }
                             return item;
                           });
-                          setEditingAppt({ ...editingAppt, price: value, total: value, items: updatedItems });
+                          // O valor digitado é o do serviço; produtos já lançados continuam somando no total
+                          const productsSum = updatedItems
+                            .filter(item => item.type === 'product')
+                            .reduce((acc, item) => acc + (Number(item.price) || 0), 0);
+                          setEditingAppt({ ...editingAppt, price: value, total: value + productsSum, items: updatedItems });
                         }}
                         className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#3B3321] rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A356]"
                       />
@@ -13466,9 +13768,18 @@
                   </div>
 
                   {(() => {
-                    const completedAppts = appointments.filter(a => a.status === 'concluido');
-                    const srvTotal = completedAppts.reduce((acc, a) => acc + (a.price || 0), 0);
-                    const barTotal = counterSales.reduce((acc, s) => acc + (s.total || 0), 0);
+                    // Fechamento é do dia: só atendimentos e vendas de hoje
+                    const closingIso = getTodayDateISO();
+                    const completedAppts = appointments.filter(a =>
+                      a.status === 'concluido' && normalizeAppointmentDateISO(a.isoDate || a.date) === closingIso
+                    );
+                    const srvTotal = completedAppts.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+                    // Bar = produtos lançados nos atendimentos + vendas avulsas do balcão
+                    const barFromAppts = completedAppts.reduce((acc, a) => acc + Math.max(0, (Number(a.total || a.price) || 0) - (Number(a.price) || 0)), 0);
+                    const barCounter = counterSales
+                      .filter(s => s.isoDate === closingIso)
+                      .reduce((acc, s) => acc + (Number(s.total) || 0), 0);
+                    const barTotal = barFromAppts + barCounter;
                     const grossTotal = srvTotal + barTotal;
 
                     // Comissões calculadas com a taxa atual de cada barbeiro.
@@ -14220,6 +14531,17 @@
             )}
 
             {/* TOAST: CLIENTE / TELEFONE ATUALIZADO */}
+            {dbWriteFailed && (
+              <div role="alert" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-red-950 border-2 border-red-600 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 max-w-md w-[calc(100%-2rem)]">
+                <span className="text-xl">⚠️</span>
+                <div className="flex-1">
+                  <div className="font-serif font-bold text-xs text-red-300">Não foi possível salvar no sistema</div>
+                  <div className="text-[11px] text-gray-200">Verifique a internet e confira se a última alteração aparece ao recarregar a página. Se não aparecer, faça de novo.</div>
+                </div>
+                <button onClick={() => setDbWriteFailed(false)} aria-label="Fechar aviso" className="text-gray-300 hover:text-white p-1">✕</button>
+              </div>
+            )}
+
             {clientSavedToast && (
               <div className="fixed top-6 right-6 z-50 bg-[#161410] border-2 border-[#C9A356] text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in max-w-sm">
                 <div className="w-8 h-8 rounded-full bg-[#C9A356] text-black flex items-center justify-center font-bold shrink-0">
