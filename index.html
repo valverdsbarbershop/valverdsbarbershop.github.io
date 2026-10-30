@@ -997,13 +997,28 @@
         return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
       };
 
-      // Purga imediata de privacidade/LGPD no carregamento para evitar vazamento de dados em aparelhos compartilhados
+      // Privacidade/LGPD em aparelhos compartilhados (balcão, tablet, celular emprestado):
+      // a identidade do cliente (nome, CPF, WhatsApp) fica só na aba aberta (sessionStorage)
+      // e some ao fechar o navegador. Apaga o que versões antigas gravaram para sempre.
       try {
-        const _legacyId = localStorage.getItem('valverds_booking_identity');
-        if (_legacyId && (_legacyId.toLowerCase().includes('bernardo') || _legacyId.includes('168.101') || _legacyId.includes('99952'))) {
-          localStorage.removeItem('valverds_booking_identity');
+        localStorage.removeItem('valverds_booking_identity');
+        localStorage.removeItem('valverds_active_client');
+        if (!localStorage.getItem('valverds_session_token')) {
+          // Sem sessão da equipe, o aparelho não guarda lista de clientes nem agenda completa
+          localStorage.removeItem('valverds_clients');
+          localStorage.removeItem('valverds_appointments');
         }
       } catch(e) {}
+      const clientIdentityStore = {
+        get(key) { try { return sessionStorage.getItem(key); } catch(e) { return null; } },
+        set(key, value) { try { sessionStorage.setItem(key, value); } catch(e) {} },
+        remove(key) { try { sessionStorage.removeItem(key); } catch(e) {} }
+      };
+      // CPF na tela sem os dígitos do meio: 160.***.***-47
+      const maskCpfForDisplay = (cpf) => {
+        const d = String(cpf || '').replace(/\D/g, '');
+        return d.length === 11 ? `${d.slice(0, 3)}.***.***-${d.slice(9)}` : '';
+      };
 
           // =========================================================================
       // CONEXÃO COM BANCO DE DADOS EM NUVEM: NEON POSTGRESQL (SÃO PAULO)
@@ -1344,7 +1359,7 @@
           // Mantém a identificação do cliente neste dispositivo para que, no
           // próximo agendamento, ele não precise digitar tudo novamente.
           let savedIdentity = {};
-          try { savedIdentity = JSON.parse(localStorage.getItem('valverds_booking_identity') || '{}'); } catch(e) {}
+          try { savedIdentity = JSON.parse(clientIdentityStore.get('valverds_booking_identity') || '{}'); } catch(e) {}
           return {
             barberKey: 'luis',
             serviceId: 's1',
@@ -2107,7 +2122,7 @@
           // Perfil do cliente neste aparelho (para "Meu Corte" e para cancelar sem redigitar)
           registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
           try {
-            localStorage.setItem('valverds_booking_identity', JSON.stringify({
+            clientIdentityStore.set('valverds_booking_identity', JSON.stringify({
               name: newAppt.client,
               phone: newAppt.phone,
               cpf: newAppt.cpf
@@ -2155,13 +2170,15 @@
         });
 
         useEffect(() => {
+          // A lista de clientes (nomes, CPFs, telefones) só fica no aparelho da equipe logada
+          if (!getStaffToken()) return;
           try { localStorage.setItem('valverds_clients', JSON.stringify(registeredClients)); } catch(e){}
         }, [registeredClients]);
 
         // Estado do cliente autenticado via CPF
         const [clientProfile, setClientProfile] = useState(() => {
           try {
-            const s = localStorage.getItem('valverds_active_client');
+            const s = clientIdentityStore.get('valverds_active_client');
             if (s) {
               const savedProfile = JSON.parse(s);
               return {
@@ -2177,7 +2194,7 @@
         useEffect(() => {
           try {
             if (clientProfile && clientProfile.cpf) {
-              localStorage.setItem('valverds_active_client', JSON.stringify(clientProfile));
+              clientIdentityStore.set('valverds_active_client', JSON.stringify(clientProfile));
             }
           } catch(e) {}
         }, [clientProfile]);
@@ -2202,7 +2219,9 @@
         const [clientSearchFeedback, setClientSearchFeedback] = useState('');
 
         // Funcao que cadastra ou atualiza o cliente automaticamente ao usar o CPF
-        const registerOrUpdateClient = (rawCpf, name, phone) => {
+        // asDeviceClient=false quando é a equipe cadastrando outra pessoa (encaixe):
+        // nesse caso o cliente NÃO vira a identidade deste aparelho.
+        const registerOrUpdateClient = (rawCpf, name, phone, asDeviceClient = true) => {
           if (!rawCpf) return null;
           const formatted = maskCPF(rawCpf);
           if (!validateCPF(formatted)) return null;
@@ -2245,8 +2264,10 @@
             phone: phone ? maskPhone(phone) : ((profileObj && profileObj.phone) || ''),
             tier: 'Cliente Cadastrado'
           };
-          setClientProfile(activeObj);
-          try { localStorage.setItem('valverds_active_client', JSON.stringify(activeObj)); } catch(e){}
+          if (asDeviceClient) {
+            setClientProfile(activeObj);
+            clientIdentityStore.set('valverds_active_client', JSON.stringify(activeObj));
+          }
           // No agendamento online o próprio banco (api.public_book) cadastra o cliente
           if (getStaffToken()) neonQuery(`
             INSERT INTO clients (id, name, cpf, phone, tier, last_visit)
@@ -2326,7 +2347,7 @@
           };
           setClientOwnAppointments(ownAppts);
           setClientProfile(profile);
-          try { localStorage.setItem('valverds_active_client', JSON.stringify(profile)); } catch(e){}
+          try { clientIdentityStore.set('valverds_active_client', JSON.stringify(profile)); } catch(e){}
           setClientTab('meu_corte');
           setClientSearchFeedback(`Olá, ${cliName}! Encontramos seus dados com sucesso.`);
         };
@@ -2365,7 +2386,7 @@
 
         const handleClientLogoutSession = () => {
           setClientProfile(INITIAL_CLIENT_PROFILE);
-          try { localStorage.removeItem('valverds_active_client'); } catch(e){}
+          try { clientIdentityStore.remove('valverds_active_client'); } catch(e){}
           setClientCpfInput('');
           setClientSearchFeedback('');
           setClientOwnAppointments([]);
@@ -3447,7 +3468,11 @@
             sessionStorage.setItem('valverds_just_logged_out', 'true');
             localStorage.removeItem('valverds_auth');
             localStorage.removeItem('valverds_logged_user');
+            // Dados de clientes não ficam no aparelho depois que a equipe sai
+            localStorage.removeItem('valverds_clients');
+            localStorage.removeItem('valverds_appointments');
           } catch(e){}
+          setRegisteredClients([]);
           setIsAuthenticated(false);
           setCurrentUser({
             name: 'Visitante',
@@ -5214,8 +5239,8 @@
           setAppointments(prev => [newAppt, ...prev]);
           setIsBookingModalOpen(false);
           setConfirmedBookingModal(newAppt);
-          // Cadastro automático do cliente pelo CPF
-          registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone);
+          // Cadastro do cliente pelo CPF, sem transformá-lo no cliente deste aparelho da equipe
+          registerOrUpdateClient(newAppt.cpf, newAppt.client, newAppt.phone, false);
 
           // Gravação em Tempo Real no Neon Cloud
           neonQuery(`
@@ -10792,7 +10817,7 @@
                           {clientProfile && clientProfile.cpf ? (
                             <>
                               <span>Olá, <strong className="text-white">{clientProfile.name}</strong></span>
-                              <span className="text-[#C9A356]">• CPF: {clientProfile.cpf}</span>
+                              <span className="text-[#C9A356]">• CPF: {maskCpfForDisplay(clientProfile.cpf)}</span>
                               <button
                                 onClick={handleClientLogoutSession}
                                 className="text-[10px] text-red-400 hover:underline font-serif ml-1"
