@@ -1326,6 +1326,11 @@
           } catch(e) {}
           return {};
         });
+        // Calendário da aba "Escalas da Equipe": barbeiro, mês (AAAA-MM) e dia (AAAA-MM-DD) escolhidos
+        const [escalaCalBarber, setEscalaCalBarber] = useState('');
+        const [escalaCalMonth, setEscalaCalMonth] = useState(() => getTodayDateISO().slice(0, 7));
+        const [escalaCalDay, setEscalaCalDay] = useState(() => getTodayDateISO());
+
         const isBarberClosedOnDate = (barberKey, isoDate, closures = barberDateClosures) =>
           Boolean(isoDate) && Array.isArray(closures?.[barberKey]) && closures[barberKey].includes(isoDate);
 
@@ -5576,7 +5581,7 @@
                       >
                         Agendar
                       </button>
-                      {isAuthenticated && (
+                      {isAuthenticated ? (
                         <button
                           onClick={() => setCurrentView('reception')}
                           className="px-2.5 py-1.5 rounded-full bg-[#1E1A14] text-[#C9A356] border border-[#C9A356]/60 text-xs font-serif font-bold flex items-center gap-1"
@@ -5584,6 +5589,15 @@
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                           <span>Painel</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setIsLoginModalOpen(true)}
+                          className="p-2 rounded-full bg-[#161512] text-gray-300 border border-[#2A261F]"
+                          title="Login da equipe"
+                          aria-label="Login da equipe"
+                        >
+                          <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
                         </button>
                       )}
                     </div>
@@ -5720,7 +5734,16 @@
                             <span className="hidden sm:inline">Sair</span>
                           </button>
                         </div>
-                      ) : null}
+                      ) : (
+                        <button
+                          onClick={() => setIsLoginModalOpen(true)}
+                          className="px-3 py-1.5 rounded-full bg-[#161512] clean-toolbar-btn hover:bg-[#201E19] border border-[#2A261F] text-gray-300 hover:text-white transition-colors flex items-center gap-1.5 text-sm font-serif font-bold"
+                          title="Login da equipe"
+                        >
+                          <Icons.Lock className="w-3.5 h-3.5 text-[#C9A356]" />
+                          <span>Equipe</span>
+                        </button>
+                      )}
                     </div>
                   </header>
                   
@@ -9443,6 +9466,191 @@
                               <span>Editar Horários da Loja</span>
                             </button>
                           </div>
+
+                          {/* CALENDÁRIO DA ESCALA: escolhe o barbeiro, navega pelos meses e clica no dia */}
+                          {(() => {
+                            const calBarbers = (barbers || []).filter(b => b && b.barberKey);
+                            if (!calBarbers.length) return null;
+                            const bk = calBarbers.some(b => b.barberKey === escalaCalBarber)
+                              ? escalaCalBarber
+                              : (calBarbers.some(b => b.barberKey === currentUser.barberKey) ? currentUser.barberKey : calBarbers[0].barberKey);
+                            const barberObj = calBarbers.find(b => b.barberKey === bk);
+                            const todayIsoCal = getTodayDateISO();
+                            const [calY, calM] = escalaCalMonth.split('-').map(Number);
+                            const firstWeekday = new Date(calY, calM - 1, 1).getDay();
+                            const daysInMonth = new Date(calY, calM, 0).getDate();
+                            const monthLabel = new Date(calY, calM - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                            const shiftMonth = (delta) => {
+                              const d = new Date(calY, calM - 1 + delta, 1);
+                              setEscalaCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                            };
+
+                            // Situação do barbeiro num dia: loja fechada, folga semanal, agenda fechada na data ou aberto
+                            const dayInfo = (iso) => {
+                              const dayName = getWeekdayFromISO(iso);
+                              const weekly = (dailyBarberSettings[bk] && dailyBarberSettings[bk][dayName]) || { available: true, start: '09:00', end: '19:30' };
+                              const shopDay = shopHours.find(sh => sh.short === dayName);
+                              const shopClosed = shopDay ? shopDay.isOpen === false : dayName === 'Dom';
+                              const dateClosed = isBarberClosedOnDate(bk, iso);
+                              const dayAppts = appointments
+                                .filter(a => (a.barberKey === bk || (barberObj && a.barber === barberObj.name)) && !isAppointmentReleased(a)
+                                  && normalizeAppointmentDateISO(a.isoDate || a.date) === iso)
+                                .sort((x, y) => (x.time || '').localeCompare(y.time || ''));
+                              let status = 'aberto';
+                              if (shopClosed) status = 'loja_fechada';
+                              else if (weekly.available === false) status = 'folga';
+                              else if (dateClosed) status = 'fechado_data';
+                              const freeCount = status === 'aberto' && iso >= todayIsoCal
+                                ? getAvailableSlotsForBarberAndDay(bk, dayName, iso, 30).length
+                                : null;
+                              return { iso, dayName, weekly, status, dayAppts, freeCount };
+                            };
+
+                            const cells = [];
+                            for (let i = 0; i < firstWeekday; i++) cells.push(null);
+                            for (let d = 1; d <= daysInMonth; d++) {
+                              cells.push(`${calY}-${String(calM).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+                            }
+                            const selected = dayInfo(escalaCalDay);
+                            const selectedIsPast = escalaCalDay < todayIsoCal;
+                            const statusText = {
+                              aberto: `Atendendo das ${selected.weekly.start || '09:00'} às ${selected.weekly.end || '19:30'}`,
+                              loja_fechada: 'Barbearia fechada neste dia',
+                              folga: 'Folga semanal (todo ' + selected.dayName + '). Para mudar, use o controle por barbeiro abaixo.',
+                              fechado_data: 'Agenda fechada só nesta data'
+                            }[selected.status];
+
+                            return (
+                              <div className="bg-[#12110E] p-5 rounded-2xl border border-[#2A251C] space-y-5">
+                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                  <div>
+                                    <h4 className="font-serif text-lg font-bold text-[#C9A356]">Calendário da escala</h4>
+                                    <p className="text-sm text-[#A8A296] mt-0.5">Escolha o barbeiro e clique no dia para ver a agenda e fechar ou reabrir a data.</p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {calBarbers.map(b => (
+                                      <button
+                                        key={b.barberKey}
+                                        onClick={() => setEscalaCalBarber(b.barberKey)}
+                                        className={`px-4 py-2 rounded-full text-sm font-serif font-bold border transition-colors ${b.barberKey === bk ? 'bg-[#C9A356] text-black border-[#C9A356]' : 'bg-[#181612] text-gray-300 border-[#2E281D] hover:border-[#C9A356]/60'}`}
+                                      >
+                                        {(b.name || '').split(' ')[0]}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-5">
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <button onClick={() => shiftMonth(-1)} aria-label="Mês anterior" className="p-2 rounded-full bg-[#1B1914] border border-[#2E281D] text-[#C9A356] hover:border-[#C9A356]/60">
+                                        <Icons.ChevronLeft className="w-4 h-4" />
+                                      </button>
+                                      <div className="flex items-center gap-3">
+                                        <span className="font-serif text-base font-bold text-white capitalize">{monthLabel}</span>
+                                        <button
+                                          onClick={() => { setEscalaCalMonth(todayIsoCal.slice(0, 7)); setEscalaCalDay(todayIsoCal); }}
+                                          className="px-3 py-1 rounded-full text-xs border border-[#3A3222] text-[#C9A356] hover:bg-[#1E1A12]"
+                                        >
+                                          Hoje
+                                        </button>
+                                      </div>
+                                      <button onClick={() => shiftMonth(1)} aria-label="Próximo mês" className="p-2 rounded-full bg-[#1B1914] border border-[#2E281D] text-[#C9A356] hover:border-[#C9A356]/60">
+                                        <Icons.ChevronRight className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-1.5 text-center">
+                                      {WEEKDAY_NAMES_PT.map(w => (
+                                        <div key={w} className="text-xs text-[#8C877C] py-1">{w}</div>
+                                      ))}
+                                      {cells.map((iso, idx) => {
+                                        if (!iso) return <div key={`vazio-${idx}`} />;
+                                        const info = dayInfo(iso);
+                                        const isSel = iso === escalaCalDay;
+                                        const isToday = iso === todayIsoCal;
+                                        const isPast = iso < todayIsoCal;
+                                        const closed = info.status !== 'aberto';
+                                        return (
+                                          <button
+                                            key={iso}
+                                            onClick={() => setEscalaCalDay(iso)}
+                                            className={`min-h-[64px] rounded-xl border p-1.5 flex flex-col items-center justify-between transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A356] ${
+                                              isSel ? 'border-[#C9A356] bg-[#2A2316]' : closed ? 'border-[#2A1D1D] bg-[#161010]' : 'border-[#2A251C] bg-[#181612] hover:border-[#C9A356]/50'
+                                            } ${isPast && !isSel ? 'opacity-50' : ''}`}
+                                          >
+                                            <span className={`text-sm font-bold ${isToday ? 'text-black bg-[#C9A356] rounded-full w-6 h-6 flex items-center justify-center' : closed ? 'text-red-300/80' : 'text-white'}`}>
+                                              {Number(iso.slice(8, 10))}
+                                            </span>
+                                            <span className={`text-[10px] leading-tight ${closed ? 'text-red-300/70' : 'text-[#B9B3A6]'}`}>
+                                              {closed
+                                                ? (info.status === 'fechado_data' ? 'Fechado' : info.status === 'folga' ? 'Folga' : '—')
+                                                : (info.dayAppts.length ? `${info.dayAppts.length} agend.` : (info.freeCount !== null ? 'Livre' : ''))}
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-[#181612] rounded-2xl border border-[#2A251C] p-4 space-y-3">
+                                    <div>
+                                      <div className="font-serif text-base font-bold text-white capitalize">
+                                        {new Date(Number(escalaCalDay.slice(0, 4)), Number(escalaCalDay.slice(5, 7)) - 1, Number(escalaCalDay.slice(8, 10))).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                                      </div>
+                                      <div className="text-sm text-[#C9A356] mt-0.5">{barberObj ? barberObj.name : ''}</div>
+                                    </div>
+                                    <p className={`text-sm ${selected.status === 'aberto' ? 'text-emerald-300' : 'text-red-300'}`}>{statusText}</p>
+                                    {selected.status === 'aberto' && selected.freeCount !== null && (
+                                      <p className="text-sm text-[#B9B3A6]">{selected.freeCount} horário(s) de 30 min ainda livre(s) para clientes.</p>
+                                    )}
+
+                                    <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                                      {selected.dayAppts.length === 0 ? (
+                                        <p className="text-sm text-[#8C877C]">Nenhum agendamento neste dia.</p>
+                                      ) : selected.dayAppts.map(a => (
+                                        <div key={a.id} className="flex items-center justify-between gap-2 text-sm bg-[#12110E] border border-[#262118] rounded-lg px-3 py-2">
+                                          <span className="font-serif font-bold text-[#C9A356] w-12 shrink-0">{a.time}</span>
+                                          <span className="flex-1 min-w-0 truncate text-white">{a.client}</span>
+                                          <span className="text-xs text-[#A8A296] truncate max-w-[40%]">{a.service}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {!selectedIsPast && selected.status !== 'loja_fechada' && selected.status !== 'folga' && (
+                                      <div className="flex flex-wrap gap-2 pt-1">
+                                        <button
+                                          onClick={() => {
+                                            const closedHere = selected.status === 'fechado_data';
+                                            const msg = closedHere
+                                              ? `Reabrir a agenda de ${barberObj ? barberObj.name : ''} em ${formatDateBR(escalaCalDay)}?`
+                                              : `Fechar a agenda de ${barberObj ? barberObj.name : ''} SOMENTE em ${formatDateBR(escalaCalDay)}?${selected.dayAppts.length ? `\n\nAtenção: já existem ${selected.dayAppts.length} agendamento(s) neste dia; eles continuam marcados.` : ''}`;
+                                            if (confirm(msg)) toggleBarberDateClosure(bk, escalaCalDay);
+                                          }}
+                                          className={`px-4 py-2 rounded-full text-sm font-serif font-bold border ${selected.status === 'fechado_data' ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/50' : 'bg-[#1F1C16] text-red-300 border-red-900/50 hover:bg-red-950/40'}`}
+                                        >
+                                          {selected.status === 'fechado_data' ? 'Reabrir este dia' : 'Fechar este dia'}
+                                        </button>
+                                        {selected.status === 'aberto' && (
+                                          <button
+                                            onClick={() => handleOpenBookingModal({
+                                              barberKey: bk,
+                                              isoDate: escalaCalDay,
+                                              date: formatDateBR(escalaCalDay),
+                                              day: selected.dayName,
+                                              dayNum: Number(escalaCalDay.slice(8, 10))
+                                            })}
+                                            className="px-4 py-2 rounded-full text-sm font-serif font-bold bg-[#C9A356] text-black hover:bg-[#B59044]"
+                                          >
+                                            Encaixar cliente
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           <div className="space-y-6">
                             {/* 1. HORÁRIOS DA BARBEARIA (HORIZONTAL EM CIMA) */}
