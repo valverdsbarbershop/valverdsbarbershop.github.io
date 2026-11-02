@@ -3620,7 +3620,7 @@
             phone: '',
             cpf: '',
             serviceId: 's1',
-            barberKey: 'luis',
+            barberKey: '',
             isoDate: todayIso,
             date: formatDateBR(todayIso),
             day: wDay === 'Dom' ? 'Seg' : wDay,
@@ -3675,7 +3675,8 @@
             phone: defaultPhone,
             cpf: defaultCpf,
             serviceId: initialData.serviceId || 's1',
-            barberKey: initialData.barberKey || (currentUser?.barberKey || 'luis'),
+            // Barbeiro logado já vem marcado nele mesmo; dono/recepção escolhem (1º campo)
+            barberKey: initialData.barberKey || (currentUser?.role === 'barbeiro' ? (currentUser.barberKey || '') : ''),
             isoDate: initialData.isoDate || todayIso,
             date: initialData.date || formatDateBR(todayIso),
             day: initialData.day || (wDay === 'Dom' ? 'Seg' : wDay),
@@ -5138,6 +5139,10 @@
 
         const handleCreateBooking = (e) => {
           e.preventDefault();
+          if (!bookingForm.barberKey || !barbers.some(b => b.barberKey === bookingForm.barberKey)) {
+            alert('Escolha o barbeiro (primeiro campo) antes de confirmar.');
+            return;
+          }
           if (!bookingForm.client.trim()) {
             alert('Por favor informe o nome do cliente.');
             return;
@@ -5277,7 +5282,7 @@
             phone: '',
             cpf: '',
             serviceId: 's1',
-            barberKey: 'luis',
+            barberKey: '',
             isoDate: todayIsoReset,
             date: formatDateBR(todayIsoReset),
             day: getWeekdayFromISO(todayIsoReset),
@@ -12290,11 +12295,12 @@
             {/* ========================================================================= */}
             {isBookingModalOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-                <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6 sm:p-8 text-white shadow-2xl space-y-5 animate-modal">
-                  <div className="flex justify-between items-start pb-4 border-b border-[#2A261F]">
+                {/* Título e botões ficam fixos; só os campos rolam (os botões nunca cobrem um campo) */}
+                <div className="bg-[#161410] border border-[#2A261F] rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden p-5 sm:p-8 text-white shadow-2xl gap-4 animate-modal">
+                  <div className="flex justify-between items-start pb-3 border-b border-[#2A261F] shrink-0">
                     <div>
                       <span className="text-[10px] font-serif uppercase tracking-widest text-[#C9A356] font-bold">AGENDAMENTO & ENCAIXE</span>
-                      <h3 className="font-serif text-2xl font-bold text-white mt-1">Marcar Horário</h3>
+                      <h3 className="font-serif text-xl sm:text-2xl font-bold text-white mt-1">Marcar Horário</h3>
                     </div>
                     <button onClick={() => setIsBookingModalOpen(false)} aria-label="Fechar" className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
                       <Icons.X className="w-5 h-5" />
@@ -12332,7 +12338,34 @@
                     </div>
                   ) : null}
 
-                  <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
+                  <form onSubmit={handleCreateBooking} className="flex-1 min-h-0 flex flex-col text-xs">
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-3">
+                    {/* 1º: barbeiro */}
+                    <div>
+                      <label className="block text-gray-400 font-serif uppercase mb-1.5">Barbeiro *</label>
+                      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Barbeiro">
+                        {barbers.map(b => {
+                          const isSel = bookingForm.barberKey === b.barberKey;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              aria-pressed={isSel}
+                              onClick={() => setBookingForm(prev => ({ ...prev, barberKey: b.barberKey }))}
+                              className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-colors ${isSel ? 'bg-[#1F1C15] border-[#C9A356] ring-1 ring-[#C9A356]' : 'bg-[#0B0B0B] border-[#2A261F] hover:border-[#C9A356]/50'}`}
+                            >
+                              <img src={b.avatar} alt="" className="w-9 h-9 rounded-full object-cover border border-[#C9A356]" onError={(e) => { e.target.onerror = null; e.target.src = 'barbeiro_valverds.jpg'; }} />
+                              <span className="font-serif font-bold text-sm text-white">{(b.name || '').split(' ')[0]}</span>
+                              {isSel && <Icons.Check className="w-4 h-4 text-[#C9A356] ml-auto" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!bookingForm.barberKey && (
+                        <p className="text-[11px] text-[#DFBD78] mt-1.5 font-serif">Escolha o barbeiro para ver os horários livres dele.</p>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-gray-400 font-serif uppercase mb-1">Nome do Cliente *</label>
@@ -12406,20 +12439,7 @@
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-gray-400 font-serif uppercase mb-1">Barbeiro:</label>
-                        <select
-                          value={bookingForm.barberKey}
-                          onChange={e => setBookingForm({ ...bookingForm, barberKey: e.target.value })}
-                          className="w-full px-3 py-2 bg-[#0B0B0B] border border-[#2A261F] rounded-xl text-white text-xs focus:outline-none"
-                        >
-                          {barbers.map(b => (
-                            <option key={b.id} value={b.barberKey}>{b.name.split(' ')[0]}</option>
-                          ))}
-                        </select>
-                      </div>
-
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-gray-400 font-serif uppercase mb-1">Data:</label>
                         <input
@@ -12530,7 +12550,9 @@
                       />
                     </div>
 
-                    <div className="modal-sticky-actions pt-3 pb-1 flex gap-3 bg-[#161410] border-t border-[#2A261F]">
+                    </div>
+
+                    <div className="shrink-0 pt-3 flex gap-3 bg-[#161410] border-t border-[#2A261F]">
                       <button
                         type="button"
                         onClick={() => setIsBookingModalOpen(false)}
