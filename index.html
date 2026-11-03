@@ -2243,6 +2243,8 @@
 
         const [clientCpfInput, setClientCpfInput] = useState('');
         const [clientPhoneCheckInput, setClientPhoneCheckInput] = useState('');
+        // Preenchimento rápido no agendamento: CPF + 4 últimos dígitos do WhatsApp
+        const [quickFill, setQuickFill] = useState({ last4: '', msg: '', ok: false, loading: false });
         // Agendamentos do próprio cliente (vindos da api.client_lookup / api.public_book).
         // A lista geral de agendamentos do visitante não tem CPF nem nome de ninguém.
         const [clientOwnAppointments, setClientOwnAppointments] = useState([]);
@@ -2393,6 +2395,45 @@
             }
           });
         }, [clientProfile && clientProfile.cpf]);
+
+        // Cliente que já agendou antes: CPF + 4 últimos dígitos do WhatsApp preenchem nome e
+        // telefone (conferido no banco; só o CPF não basta, para ninguém ver dados de outra pessoa)
+        const handleQuickFillByCpf = async (last4) => {
+          const cpf = maskCPF(clientBookingFlow.clientCpf || '');
+          if (!validateCPF(cpf)) {
+            setQuickFill(prev => ({ ...prev, msg: 'Digite um CPF válido primeiro.', ok: false }));
+            return;
+          }
+          if (String(last4).replace(/\D/g, '').length !== 4) return;
+          setQuickFill(prev => ({ ...prev, loading: true, msg: '' }));
+          const found = await neonRpc('SELECT api.client_lookup($1, $2) AS r', [cpf, last4]);
+          if (!found) {
+            setQuickFill(prev => ({ ...prev, loading: false, ok: false, msg: 'Sem conexão agora. Preencha seus dados abaixo.' }));
+            return;
+          }
+          if (found.error) {
+            setQuickFill(prev => ({
+              ...prev, loading: false, ok: false,
+              msg: found.error === 'bloqueado'
+                ? 'Muitas tentativas. Aguarde 15 minutos ou preencha seus dados abaixo.'
+                : 'Não encontramos esse CPF com esses dígitos. Primeiro agendamento? Preencha seus dados abaixo.'
+            }));
+            return;
+          }
+          const lastAppt = (found.appointments || [])[0] || {};
+          const name = (found.client && found.client.name) || lastAppt.client_name || '';
+          const phone = (found.client && found.client.phone) || lastAppt.phone || '';
+          setClientBookingFlow(prev => ({ ...prev, clientCpf: cpf, clientName: name || prev.clientName, clientPhone: phone ? maskPhone(phone) : prev.clientPhone }));
+          setClientOwnAppointments((found.appointments || []).map(mapDbAppointmentRow));
+          // Neste aparelho, lembra para a próxima vez (no aparelho da equipe logada, não)
+          if (!getStaffToken()) {
+            const profile = { id: (found.client && found.client.id) || ('cli_' + Date.now()), cpf, name, phone: phone ? maskPhone(phone) : '', tier: 'Cliente Cadastrado' };
+            setClientProfile(profile);
+            clientIdentityStore.set('valverds_active_client', JSON.stringify(profile));
+            clientIdentityStore.set('valverds_booking_identity', JSON.stringify({ name, phone: profile.phone, cpf }));
+          }
+          setQuickFill({ last4: '', loading: false, ok: true, msg: `Pronto${name ? ', ' + name.split(' ')[0] : ''}! Seus dados foram preenchidos.` });
+        };
 
         // Cancelamento pelo próprio cliente (o banco confere CPF + 4 dígitos do WhatsApp)
         const handleClientCancelOwnBooking = async (appt) => {
@@ -11765,6 +11806,49 @@
                               </span>
                             </div>
                             <p className="text-[11px] text-gray-400 mt-1">Preencha seus dados para geração do voucher exclusivo de atendimento e reserva da cadeira.</p>
+                          </div>
+
+                          {/* Já agendou antes? CPF + 4 dígitos do WhatsApp preenchem o resto */}
+                          <div className="p-4 rounded-2xl border border-[#C9A356]/50 bg-[#1A1712] space-y-3">
+                            <div>
+                              <div className="font-serif font-bold text-sm text-[#DFBD78]">Já agendou antes? Preencha com seu CPF</div>
+                              <p className="text-[11px] text-gray-400 mt-0.5">Digite o CPF e os 4 últimos números do WhatsApp que você usou. Nome e telefone aparecem sozinhos.</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength="14"
+                                placeholder="Seu CPF"
+                                aria-label="CPF para preencher seus dados"
+                                value={clientBookingFlow.clientCpf}
+                                onChange={e => {
+                                  const masked = maskCPF(e.target.value);
+                                  setClientBookingFlow(prev => ({ ...prev, clientCpf: masked }));
+                                  setQuickFill(prev => ({ ...prev, msg: '', ok: false }));
+                                }}
+                                className="w-full px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-sm focus:outline-none focus:border-[#C9A356]"
+                              />
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength="4"
+                                placeholder="4 últimos do WhatsApp"
+                                aria-label="4 últimos números do WhatsApp"
+                                value={quickFill.last4}
+                                onChange={e => {
+                                  const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                  setQuickFill(prev => ({ ...prev, last4: v, msg: '', ok: false }));
+                                  if (v.length === 4) handleQuickFillByCpf(v);
+                                }}
+                                className="w-full sm:w-48 px-3.5 py-2.5 bg-[#0B0B0B] border border-[#2D271E] rounded-xl text-white text-sm focus:outline-none focus:border-[#C9A356]"
+                              />
+                            </div>
+                            {(quickFill.loading || quickFill.msg) && (
+                              <p className={`text-xs font-semibold ${quickFill.ok ? 'text-emerald-400' : 'text-[#DFBD78]'}`} role="status">
+                                {quickFill.loading ? 'Procurando seus dados...' : quickFill.msg}
+                              </p>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
