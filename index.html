@@ -1391,7 +1391,7 @@
             dayName: wDay === 'Dom' ? 'Seg' : wDay,
             dayFullName: wDay === 'Dom' ? 'Segunda-feira' : wDayFull,
             dayNum: dt.getDate(),
-            time: '10:30',
+            time: '', // o cliente escolhe na lista de horários livres
             clientName: savedIdentity.name || '',
             clientPhone: savedIdentity.phone || '',
             clientCpf: savedIdentity.cpf || '',
@@ -1954,6 +1954,10 @@
           if (!clientBookingFlow.barberKey || !barbers.some(b => b.barberKey === clientBookingFlow.barberKey)) {
             alert('Escolha o barbeiro antes de confirmar (Passo 1).');
             try { document.getElementById('passo-barbeiro')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            return;
+          }
+          if (!clientBookingFlow.time) {
+            alert('Escolha um dos horários livres (Passo 5).');
             return;
           }
           if (!clientBookingFlow.clientCpf || !validateCPF(clientBookingFlow.clientCpf)) {
@@ -11719,14 +11723,14 @@
                           </div>
                         </div>
 
-                        {/* PASSO 4: HORÁRIOS DISPONÍVEIS & GRADE COMPLETA (00:00 ÀS 23:30) */}
+                        {/* PASSO 5: HORÁRIOS LIVRES (só os que cabem o serviço inteiro) */}
                         <div className="space-y-4">
                           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1">
                             <label className="block text-xs font-serif uppercase tracking-wider text-[#C9A356] font-bold">
-                              Passo 5 • Escolha o Horário (Grade Completa 00:00 às 23:30)
+                              Passo 5 • Escolha o Horário
                             </label>
                             <span className="text-xs font-serif text-gray-400">
-                              Data &amp; Horário: <strong className="text-[#C9A356] text-sm">{clientBookingFlow.dateFormatted || formatDateBR(clientBookingFlow.selectedDate)} às {clientBookingFlow.time}</strong>
+                              Data &amp; Horário: <strong className="text-[#C9A356] text-sm">{clientBookingFlow.dateFormatted || formatDateBR(clientBookingFlow.selectedDate)}{clientBookingFlow.time ? ` às ${clientBookingFlow.time}` : ''}</strong>
                             </span>
                           </div>
 
@@ -11743,7 +11747,7 @@
                                     Serviço: <strong className="text-white font-medium">{currentSrv.name}</strong> • Duração: <strong className="text-[#C9A356] font-mono">{currentDuration} min</strong>
                                   </span>
                                   <span className="text-xs font-serif text-gray-300">
-                                    Término previsto: <strong className="text-[#C9A356] font-mono text-sm">{clientBookingFlow.time} às {endTime}</strong>
+                                    {clientBookingFlow.time ? <>Término previsto: <strong className="text-[#C9A356] font-mono text-sm">{clientBookingFlow.time} às {endTime}</strong></> : <span className="text-[#DFBD78]">Escolha um horário abaixo</span>}
                                   </span>
                                 </div>
 
@@ -11770,85 +11774,11 @@
                                   </div>
                                 )}
 
-                                <div className="p-4 bg-[#14120E] rounded-2xl border border-[#2A241A] space-y-3">
-                                  <div className="text-xs font-serif text-[#DFBD78] font-semibold flex items-center gap-2">
-                                    <Icons.Clock className="w-4 h-4 text-[#C9A356]" />
-                                    <span>Todos os 48 horários do dia (00:00 às 23:30) com validação de duração ({currentDuration} min):</span>
+                                {availableSlots.length === 0 && (
+                                  <div className="p-4 rounded-2xl border border-dashed border-[#C9A356]/50 bg-[#1A1712] text-sm text-[#DFBD78] font-serif" role="status">
+                                    Sem horário livre para este serviço neste dia. Escolha outra data acima ou o outro barbeiro.
                                   </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                      <label className="block text-[10px] uppercase font-serif text-gray-400 mb-1">Selecione na lista de 48 blocos (30 em 30 min):</label>
-                                      <select
-                                        value={clientBookingFlow.time}
-                                        onChange={e => setClientBookingFlow(prev => ({ ...prev, time: e.target.value }))}
-                                        className="w-full px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A356]"
-                                      >
-                                        {ALL_48_TIME_SLOTS.map(t => {
-                                          const currentDayConf = dailyBarberSettings[clientBookingFlow.barberKey]?.[flowDayName] || { start: '09:00', end: '22:00', blockedSlots: [] };
-                                          const isDayClosed = currentDayConf.available === false || isBarberClosedOnDate(clientBookingFlow.barberKey, clientBookingFlow.selectedDate);
-                                          const isBeforeStart = t < (currentDayConf.start || '09:00');
-                                          const isToday = (clientBookingFlow.selectedDate || getTodayDateISO()) === getTodayDateISO();
-                                          const isPastTime = isToday && t < getCurrentTimeHHMM();
-                                          const reqSlots = getSlotsForStartTimeAndDuration(t, currentDuration);
-                                          const isStartBlocked = Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(t);
-                                          
-                                          const bookedAppt = appointments.find(a => {
-                                            if (isAppointmentReleased(a)) return false;
-                                            const matchBarber = a.barberKey === clientBookingFlow.barberKey || (clientBookingFlow.barberKey === 'luis' && a.barber?.includes('Luis')) || (clientBookingFlow.barberKey === 'yago' && a.barber?.includes('Yago'));
-                                            if (!matchBarber) return false;
-                                            const aIso = a.isoDate || normalizeAppointmentDateISO(a.date);
-                                            const matchDate = clientBookingFlow.selectedDate
-                                              ? (aIso ? aIso === clientBookingFlow.selectedDate : a.day === clientBookingFlow.dayName)
-                                              : a.day === clientBookingFlow.dayName;
-                                            if (!matchDate) return false;
-                                            const aDur = getAppointmentDurationMinutes(a, services);
-                                            return isTimeIntervalColliding(t, currentDuration, a.time, aDur);
-                                          });
-
-                                          let clientBookedLabel = '';
-                                          if (bookedAppt) {
-                                            clientBookedLabel = '(👤 Ocupado)';
-                                          }
-
-                                          const hasBlockedConsecutive = reqSlots.some(s => Array.isArray(currentDayConf.blockedSlots) && currentDayConf.blockedSlots.includes(s));
-                                          const exceedsClosing = (timeToMinutes(t) + currentDuration) > timeToMinutes(currentDayConf.end || '22:00');
-                                          const isDisabled = isDayClosed || isBeforeStart || isPastTime || isStartBlocked || Boolean(bookedAppt) || hasBlockedConsecutive || exceedsClosing;
-                                          const endT = getEndTimeForStartTimeAndDuration(t, currentDuration);
-
-                                          return (
-                                            <option key={`slot-48-${t}`} value={t} disabled={isDisabled}>
-                                              {t} às {endT} {isDayClosed ? '(🔒 Agenda fechada)' : isBeforeStart ? '(🔒 Antes da abertura)' : isPastTime ? '(⏰ Já passou)' : isStartBlocked ? '(🔒 Pausa)' : clientBookedLabel ? clientBookedLabel : hasBlockedConsecutive ? '(🔒 Conflito com Pausa)' : exceedsClosing ? '(⏳ Excede Fechamento)' : '✓ Disponível'}
-                                            </option>
-                                          );
-                                        })}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] uppercase font-serif text-gray-400 mb-1">Ou digite um horário livre personalizado:</label>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="text"
-                                          placeholder="Ex: 08:15 ou 20:45"
-                                          value={clientBookingFlow.customTime || ''}
-                                          onChange={e => {
-                                            const val = e.target.value;
-                                            setClientBookingFlow(prev => ({ ...prev, time: val, customTime: val }));
-                                          }}
-                                          className="flex-1 px-3 py-2 bg-[#0E0D0A] border border-[#2E281F] rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#C9A356]"
-                                        />
-                                        {clientBookingFlow.customTime && (
-                                          <button
-                                            type="button"
-                                            onClick={() => setClientBookingFlow(prev => ({ ...prev, time: prev.customTime }))}
-                                            className="px-3 py-1 bg-[#C9A356] text-black font-serif text-xs font-bold rounded-xl"
-                                          >
-                                            Aplicar
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
+                                )}
                               </div>
                             );
                           })()}
@@ -12111,7 +12041,7 @@
                                 {clientApptsList.map((appItem, idx) => (
                                   <div key={idx} className="bg-[#12110E] p-3 rounded-xl border border-[#221E17] flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-3">
-                                      <span className="font-serif font-bold text-[#C9A356]">{appItem.day} às {appItem.time}</span>
+                                      <span className="font-serif font-bold text-[#C9A356]">{appItem.day} {String(appItem.date || '').slice(0, 5)} às {appItem.time}</span>
                                       <span className="text-gray-400">•</span>
                                       <span className="text-white">{appItem.service}</span>
                                       <span className="text-gray-400">•</span>
